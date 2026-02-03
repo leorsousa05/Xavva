@@ -1,4 +1,5 @@
 import { parseArgs } from "util";
+import { watch } from "fs";
 import { TomcatService } from "./services/TomcatService";
 import { BuildService } from "./services/BuildService";
 import { config as defaultConfig } from "../config";
@@ -13,6 +14,7 @@ const { values } = parseArgs({
 		"no-build": { type: "boolean", short: "s" },
 		clean: { type: "boolean", short: "c" },
 		help: { type: "boolean", short: "h" },
+		watch: { type: "boolean", short: "w" },
 	},
 	strict: false,
 	allowPositionals: true,
@@ -30,6 +32,7 @@ Opções:
   -s, --no-build Pula a etapa de compilação
   -c, --clean   Logs do Tomcat simplificados e coloridos
   -h, --help    Exibe este menu de ajuda
+  -w, --watch   Modo Watch (Hot Reload)
 	`);
 	process.exit(0);
 }
@@ -51,12 +54,19 @@ const activeConfig = {
 const tomcat = new TomcatService(activeConfig.tomcat);
 const builder = new BuildService(activeConfig.project, activeConfig.tomcat);
 
-async function main() {
+let isDeploying = false;
+
+async function deploy() {
+	if (isDeploying) return;
+	isDeploying = true;
+
 	console.log(`\n🛠️  Iniciando Deployer CLI`);
 	console.log(`--------------------------`);
 	console.log(`> Ferramenta: ${activeConfig.project.buildTool.toUpperCase()}`);
 	console.log(`> App Name:   ${activeConfig.project.appName}`);
-	console.log(`> Build:      ${activeConfig.project.skipBuild ? "PULADO" : "ATIVO"}\n`);
+	console.log(`> Build:      ${activeConfig.project.skipBuild ? "PULADO" : "ATIVO"}`);
+	if (values.watch) console.log(`> Modo Watch: ATIVO`);
+	console.log("");
 
 	try {
 		await tomcat.killConflict();
@@ -71,8 +81,30 @@ async function main() {
 		tomcat.start(activeConfig.project.cleanLogs);
 	} catch (error: any) {
 		console.error('\n❌ Erro:', error.message);
-		process.exit(1);
+		if (!values.watch) process.exit(1);
+	} finally {
+		isDeploying = false;
 	}
 }
 
-main();
+if (values.watch) {
+	console.log(`\n👀 Modo Watch ativado! Monitorando alterações em ${process.cwd()}...`);
+	deploy();
+
+	let debounceTimer: Timer;
+	watch(process.cwd(), { recursive: true }, (event, filename) => {
+		if (!filename) return;
+		if (filename.includes("target") || filename.includes("build") || filename.includes(".git") || filename.includes("node_modules")) return;
+
+		console.log(`\n[Watch] Alteração detectada em: ${filename}`);
+		clearTimeout(debounceTimer);
+		
+		// @ts-ignore
+		debounceTimer = setTimeout(() => {
+			tomcat.stop();
+			deploy();
+		}, 1000);
+	});
+} else {
+	deploy();
+}
