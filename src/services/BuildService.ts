@@ -4,12 +4,20 @@ import path from "path";
 export class BuildService {
 	constructor(private projectConfig: any, private tomcatConfig: any) { }
 
-	async runBuild() {
-		const command = this.projectConfig.buildTool === 'maven'
-			? ["mvn", "clean", "package", "-DskipTests"]
-			: ["gradle", "build", "-x", "test"];
+	async runBuild(incremental = false) {
+		const command = [];
+		
+		if (this.projectConfig.buildTool === 'maven') {
+			command.push("mvn");
+			if (!incremental) command.push("clean");
+			command.push("package", "-DskipTests");
+		} else {
+			command.push("gradle");
+			if (!incremental) command.push("clean");
+			command.push("build", "-x", "test");
+		}
 
-		console.log(`[Build] Executando ${this.projectConfig.buildTool}...`);
+		console.log(`[Build] Executando ${command.join(' ')}...`);
 
 		const proc = Bun.spawn(command, { stdout: "inherit" });
 		await proc.exited;
