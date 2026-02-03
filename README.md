@@ -73,6 +73,7 @@ xavva -w
 | `--port` | Porta do servidor | `xavva --port 8081` |
 | `-s`, `--no-build` | Pula a etapa de compilação (apenas deploy) | `xavva -s` |
 | `-c`, `--clean` | Logs do Tomcat simplificados e coloridos | `xavva -c` |
+| `-d`, `--debug` | Habilita debugger remoto na porta 5005 | `xavva -d` |
 
 ### Exemplos de Uso
 
