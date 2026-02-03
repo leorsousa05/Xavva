@@ -16,6 +16,7 @@ const { values } = parseArgs({
 		clean: { type: "boolean", short: "c" },
 		help: { type: "boolean", short: "h" },
 		version: { type: "boolean", short: "v" },
+		debug: { type: "boolean", short: "d" },
 		watch: { type: "boolean", short: "w" },
 	},
 	strict: false,
@@ -38,7 +39,9 @@ Opções:
   --port        Porta do servidor (padrão: 8080)
   -s, --no-build Pula a etapa de compilação
   -c, --clean   Logs do Tomcat simplificados e coloridos
+  -d, --debug   Habilita debugger Java na porta 5005
   -h, --help    Exibe este menu de ajuda
+  -v, --version Exibe a versão atual
   -w, --watch   Modo Watch (Hot Reload)
 	`);
 	process.exit(0);
@@ -55,6 +58,7 @@ const activeConfig = {
 		buildTool: (values.tool as "maven" | "gradle") || defaultConfig.project.buildTool,
 		skipBuild: !!values["no-build"],
 		cleanLogs: !!values.clean,
+		debug: !!values.debug,
 	}
 };
 
@@ -72,6 +76,7 @@ async function deploy(incremental = false) {
 	console.log(`> Ferramenta: ${activeConfig.project.buildTool.toUpperCase()}`);
 	console.log(`> App Name:   ${activeConfig.project.appName}`);
 	console.log(`> Build:      ${activeConfig.project.skipBuild ? "PULADO" : "ATIVO"}`);
+	if (activeConfig.project.debug) console.log(`> Debugger:   ATIVO (Porta 5005)`);
 	if (values.watch) console.log(`> Modo Watch: ATIVO`);
 	console.log("");
 
@@ -85,7 +90,7 @@ async function deploy(incremental = false) {
 		}
 
 		await builder.deployToWebapps();
-		tomcat.start(activeConfig.project.cleanLogs);
+		tomcat.start(activeConfig.project.cleanLogs, activeConfig.project.debug);
 	} catch (error: any) {
 		console.error('\n❌ Erro:', error.message);
 		if (!values.watch) process.exit(1);
@@ -96,7 +101,7 @@ async function deploy(incremental = false) {
 
 if (values.watch) {
 	console.log(`\n👀 Modo Watch ativado! Monitorando alterações em ${process.cwd()}...`);
-	deploy();
+	await deploy();
 
 	let debounceTimer: Timer;
 	watch(process.cwd(), { recursive: true }, (event, filename) => {

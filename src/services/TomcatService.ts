@@ -28,13 +28,23 @@ export class TomcatService {
 		}
 	}
 
-	start(cleanLogs: boolean = false) {
+	start(cleanLogs: boolean = false, debug: boolean = false) {
 		const binPath = `${this.activeConfig.path}\\bin\\catalina.bat`;
+		const args = debug ? ["jpda", "run"] : ["run"];
+		
+		if (debug) {
+			console.log(`\n🐛 Debugger habilitado na porta 5005!`);
+		}
 
-		this.currentProcess = Bun.spawn([binPath, "run"], {
+		this.currentProcess = Bun.spawn([binPath, ...args], {
 			stdout: "pipe",
 			stderr: "pipe",
-			env: { ...process.env, CATALINA_HOME: this.activeConfig.path }
+			env: { 
+				...process.env, 
+				CATALINA_HOME: this.activeConfig.path,
+				JPDA_ADDRESS: "5005",
+				JPDA_TRANSPORT: "dt_socket"
+			}
 		});
 
 		this.processLogStream(this.currentProcess.stdout, cleanLogs);
