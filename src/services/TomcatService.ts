@@ -2,6 +2,7 @@ import { config } from "../../config";
 
 export class TomcatService {
 	private activeConfig: any;
+	private currentProcess: any = null;
 
 	constructor(customConfig?: any) {
 		this.activeConfig = customConfig || config.tomcat;
@@ -19,17 +20,25 @@ export class TomcatService {
 		}
 	}
 
+	stop() {
+		if (this.currentProcess) {
+			console.log("[Tomcat] Parando servidor...");
+			this.currentProcess.kill();
+			this.currentProcess = null;
+		}
+	}
+
 	start(cleanLogs: boolean = false) {
 		const binPath = `${this.activeConfig.path}\\bin\\catalina.bat`;
 
-		const proc = Bun.spawn([binPath, "run"], {
+		this.currentProcess = Bun.spawn([binPath, "run"], {
 			stdout: "pipe",
 			stderr: "pipe",
 			env: { ...process.env, CATALINA_HOME: this.activeConfig.path }
 		});
 
-		this.processLogStream(proc.stdout, cleanLogs);
-		this.processLogStream(proc.stderr, cleanLogs);
+		this.processLogStream(this.currentProcess.stdout, cleanLogs);
+		this.processLogStream(this.currentProcess.stderr, cleanLogs);
 	}
 
 	private async processLogStream(stream: ReadableStream, clean: boolean) {

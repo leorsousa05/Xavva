@@ -1,71 +1,105 @@
-🚀 Tomcat Deployer CLI (Bun Edition)
-Uma ferramenta de automação de alto desempenho para desenvolvedores Java que precisam compilar, limpar portas e realizar o deploy de aplicações Spring Boot em servidores Apache Tomcat localmente.
+🚀 Xavva (Tomcat Deployer CLI)
+Uma ferramenta de automação de alto desempenho para desenvolvedores Java que precisam compilar, limpar portas e realizar o deploy de aplicações Spring Boot em servidores Apache Tomcat localmente, agora com suporte a **Hot Reload**.
 
 📁 Estrutura do Projeto
-Plaintext
-tomcat-deployer/
+```plaintext
+xavva/
 ├── src/
-│ ├── services/
-│ │ ├── BuildService.ts # Orquestra Maven/Gradle e manipulação de arquivos .war
-│ │ └── TomcatService.ts # Gerencia o processo do Tomcat e limpeza de portas
-│ └── index.ts # Ponto de entrada (Orquestrador)
-├── config.ts # Configurações de ambiente e caminhos
-├── package.json # Definições do projeto e scripts
-└── README.md # Documentação (este arquivo)
+│   ├── services/
+│   │   ├── BuildService.ts   # Orquestra Maven/Gradle e manipulação de arquivos .war
+│   │   └── TomcatService.ts  # Gerencia o processo do Tomcat, logs e limpeza de portas
+│   └── index.ts              # Ponto de entrada (Orquestrador)
+├── config.ts                 # Configurações padrão de ambiente
+├── package.json              # Definições do projeto e dependências
+└── README.md                 # Documentação
+```
+
 🛠️ Pré-requisitos
-Bun Runtime: Instalação via PowerShell
+- **Bun Runtime**: Instalação via PowerShell (`powershell -c "irm bun.sh/install.ps1 | iex"`)
+- **Java JDK & Maven/Gradle**: Configurados no seu PATH do Windows.
+- **Apache Tomcat**: Instalado localmente.
 
-Java JDK & Maven/Gradle: Configurados no seu PATH do Windows.
+⚙️ Configuração
+Você pode ajustar as configurações padrão no arquivo `config.ts` ou sobrescrevê-las via argumentos da CLI.
 
-Apache Tomcat: Instalado localmente.
-
-⚙️ Configuração (config.ts)
-Antes de rodar, ajuste os caminhos no arquivo de configuração raiz:
-
-TypeScript
+```typescript
 export const config = {
-tomcat: {
-path: 'C:\\Users\\guilh\\apache-tomcat', // Raiz do seu Tomcat
-port: 8080, // Porta padrão do conector HTTP
-webapps: 'webapps', // Pasta de destino
-},
-project: {
-appName: 'meu-projeto', // Nome final do arquivo no Tomcat (contexto)
-buildTool: 'maven', // Opções: 'maven' | 'gradle'
-}
+    tomcat: {
+        path: 'C:\\caminho\\para\\seu\\tomcat',
+        port: 8080,
+        webapps: 'webapps',
+    },
+    project: {
+        appName: 'meu-projeto',
+        buildTool: 'maven', // 'maven' ou 'gradle'
+    }
 };
-🔄 Fluxo de Funcionamento
-O deployer executa quatro etapas críticas em sequência:
-
-Kill Port: Executa um netstat para encontrar o PID que está utilizando a porta do Tomcat e encerra o processo (taskkill). Isso evita o erro java.net.BindException.
-
-Build: Invoca a ferramenta de build (mvn clean package) para gerar o artefato .war mais recente.
-
-Deploy: Localiza o arquivo na pasta target ou build/libs e o move para a pasta webapps do Tomcat, renomeando-o conforme a configuração.
-
-Start: Inicia o arquivo catalina.bat run e espelha os logs do servidor no seu terminal.
+```
 
 🚀 Como Usar
-Instalação de dependências
-Como o projeto usa apenas APIs nativas do Bun e módulos de compatibilidade do Node, basta iniciar o projeto:
 
-Bash
-bun init -y
-Executando o Deployer
-Para rodar o ciclo completo (Build + Deploy + Start):
+### Instalação
+Para instalar as dependências e linkar o executável globalmente (opcional):
+```bash
+bun install
+bun link
+```
 
-Bash
-bun src/index.ts
-Criando um Atalho (Windows)
-Crie um arquivo deploy.bat na raiz:
+### Comandos da CLI
+Você pode rodar a ferramenta diretamente com `bun src/index.ts` ou `xavva` (se linkado).
 
-Snippet de código
-@echo off
-bun src/index.ts
-pause
-⚠️ Observações Importantes (Troubleshooting)
-Permissões: Certifique-se de que o terminal tem permissão para executar o taskkill (pode exigir execução como Administrador se o Tomcat foi instalado em C:\Program Files).
+#### Ajuda
+Exibe todos os comandos disponíveis.
+```bash
+xavva --help
+```
 
-Spring Boot: Seu projeto Java deve estender SpringBootServletInitializer para ser compatível com o Tomcat externo.
+#### Hot Reload (Modo Watch) 🔥
+Monitora alterações nos arquivos do projeto Java e refaz o deploy automaticamente.
+```bash
+xavva --watch
+# ou
+xavva -w
+```
+*Ignora automaticamente pastas como `target`, `build`, `.git` e `node_modules`.*
 
-Conflitos de Arquivo: Se o arquivo .war estiver travado pelo Tomcat, o script de killConflict deve ser executado antes de qualquer tentativa de cópia.
+#### Outras Opções
+| Flag | Descrição | Exemplo |
+|------|-----------|---------|
+| `-p`, `--path` | Caminho base do Tomcat | `xavva -p "C:\Tomcat"` |
+| `-t`, `--tool` | Ferramenta de build | `xavva -t gradle` |
+| `-n`, `--name` | Nome do arquivo .war final | `xavva -n app-v2` |
+| `--port` | Porta do servidor | `xavva --port 8081` |
+| `-s`, `--no-build` | Pula a etapa de compilação (apenas deploy) | `xavva -s` |
+| `-c`, `--clean` | Logs do Tomcat simplificados e coloridos | `xavva -c` |
+
+### Exemplos de Uso
+
+**Ciclo Completo (Padrão)**
+Build + Kill Port + Deploy + Start
+```bash
+xavva
+```
+
+**Modo Desenvolvimento Rápido**
+Sem build (apenas deploy do war existente), logs limpos e hot reload.
+```bash
+xavva -s -c -w
+```
+
+**Sobrescrevendo Configurações**
+Deploy de um projeto Gradle em um Tomcat específico na porta 9090.
+```bash
+xavva -t gradle -p "D:\Servers\Tomcat9" --port 9090
+```
+
+🔄 Fluxo de Funcionamento Interno
+1. **Kill Port**: Verifica se a porta definida está em uso e mata o processo (evita `java.net.BindException`).
+2. **Build**: Executa `mvn clean package` ou `gradle build`.
+3. **Deploy**: Move o artefato gerado para a pasta `webapps` do Tomcat.
+4. **Start**: Inicia o Tomcat e redireciona a saída para o terminal.
+5. **Watch (Opcional)**: Se ativado, aguarda alterações no código fonte para reiniciar o ciclo a partir do passo 1 (parando o servidor atual antes).
+
+⚠️ Observações
+- **Permissões**: Certifique-se de ter permissões para matar processos (`taskkill`) e escrever na pasta do Tomcat.
+- **Spring Boot**: Para deploy em Tomcat externo, lembre-se de estender `SpringBootServletInitializer` na sua classe principal.
