@@ -56,6 +56,7 @@ xavva --help
 
 #### Hot Reload (Modo Watch) 🔥
 Monitora alterações nos arquivos do projeto Java e refaz o deploy automaticamente.
+**Agora com Builds Incrementais:** A primeira execução faz um build limpo (`clean package`), mas as recargas subsequentes pulam a etapa de limpeza para serem muito mais rápidas.
 ```bash
 xavva --watch
 # ou
@@ -95,7 +96,7 @@ xavva -t gradle -p "D:\Servers\Tomcat9" --port 9090
 
 🔄 Fluxo de Funcionamento Interno
 1. **Kill Port**: Verifica se a porta definida está em uso e mata o processo (evita `java.net.BindException`).
-2. **Build**: Executa `mvn clean package` ou `gradle build`.
+2. **Build**: Executa `mvn clean package` ou `gradle build`. No **Modo Watch**, builds subsequentes omitem o `clean` para performance.
 3. **Deploy**: Move o artefato gerado para a pasta `webapps` do Tomcat.
 4. **Start**: Inicia o Tomcat e redireciona a saída para o terminal.
 5. **Watch (Opcional)**: Se ativado, aguarda alterações no código fonte para reiniciar o ciclo a partir do passo 1 (parando o servidor atual antes).

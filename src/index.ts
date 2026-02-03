@@ -3,6 +3,7 @@ import { watch } from "fs";
 import { TomcatService } from "./services/TomcatService";
 import { BuildService } from "./services/BuildService";
 import { config as defaultConfig } from "../config";
+import pkg from "../package.json";
 
 const { values } = parseArgs({
 	args: Bun.argv,
@@ -14,11 +15,17 @@ const { values } = parseArgs({
 		"no-build": { type: "boolean", short: "s" },
 		clean: { type: "boolean", short: "c" },
 		help: { type: "boolean", short: "h" },
+		version: { type: "boolean", short: "v" },
 		watch: { type: "boolean", short: "w" },
 	},
 	strict: false,
 	allowPositionals: true,
 });
+
+if (values.version) {
+	console.log(`v${pkg.version}`);
+	process.exit(0);
+}
 
 if (values.help) {
 	console.log(`
@@ -56,7 +63,7 @@ const builder = new BuildService(activeConfig.project, activeConfig.tomcat);
 
 let isDeploying = false;
 
-async function deploy() {
+async function deploy(incremental = false) {
 	if (isDeploying) return;
 	isDeploying = true;
 
@@ -72,7 +79,7 @@ async function deploy() {
 		await tomcat.killConflict();
 
 		if (!activeConfig.project.skipBuild) {
-			await builder.runBuild();
+			await builder.runBuild(incremental);
 		} else {
 			console.log(`[Skip] Saltando etapa de build...`);
 		}
@@ -102,7 +109,7 @@ if (values.watch) {
 		// @ts-ignore
 		debounceTimer = setTimeout(() => {
 			tomcat.stop();
-			deploy();
+			deploy(true);
 		}, 1000);
 	});
 } else {
