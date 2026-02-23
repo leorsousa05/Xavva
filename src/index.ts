@@ -8,6 +8,7 @@ import { DoctorCommand } from "./commands/DoctorCommand";
 import { RunCommand } from "./commands/RunCommand";
 import { LogsCommand } from "./commands/LogsCommand";
 import { DocsCommand } from "./commands/DocsCommand";
+import { AuditCommand } from "./commands/AuditCommand";
 import { TomcatService } from "./services/TomcatService";
 import { EndpointService } from "./services/EndpointService";
 import pkg from "../package.json";
@@ -22,7 +23,7 @@ async function main() {
 		process.exit(0);
 	}
 
-	const commandNames = ["deploy", "build", "start", "dev", "doctor", "run", "debug", "logs", "docs"];
+	const commandNames = ["deploy", "build", "start", "dev", "doctor", "run", "debug", "logs", "docs", "audit"];
 	const commandName = positionals.find(p => commandNames.includes(p)) || "deploy";
 
 	if (!values.help) {
@@ -55,6 +56,9 @@ async function main() {
 			break;
 		case "docs":
 			await new DocsCommand().execute(config);
+			break;
+		case "audit":
+			await new AuditCommand().execute(config);
 			break;
 		case "dev":
 		case "deploy":

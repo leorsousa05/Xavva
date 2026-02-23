@@ -16,6 +16,8 @@ Comandos principais:
   start         Apenas inicia o servidor (útil quando o .war já foi gerado).
   build         Executa apenas a compilação (mvn package ou gradle build).
   doctor        🩺 Verifica o ambiente (Java, Tomcat, Maven, etc).
+  docs          📖 Swagger-like: Exibe endpoints e URLs de JSPs.
+  audit         🛡️ JAR Audit: Busca vulnerabilidades (CVEs) nas dependências.
   run           🚀 Executa uma classe main (Uso: xavva run NomeDaClasse).
   debug         🐞 Debuga uma classe main (Uso: xavva debug NomeDaClasse).
   logs          📋 Monitora o catalina.out do Tomcat em tempo real.
