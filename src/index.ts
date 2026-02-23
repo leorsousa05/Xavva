@@ -14,26 +14,26 @@ import pkg from "../package.json";
 import { Logger } from "./utils/ui";
 import path from "path";
 
-const { config, positionals, values } = ConfigManager.load();
-
-if (values.version) {
-	console.log(`v${pkg.version}`);
-	process.exit(0);
-}
-
-const commandNames = ["deploy", "build", "start", "dev", "doctor", "run", "debug", "logs", "docs"];
-const commandName = positionals.find(p => commandNames.includes(p)) || "deploy";
-
-if (!values.help) {
-	Logger.banner(commandName);
-}
-
-if (values.help) {
-	new HelpCommand().execute(config);
-	process.exit(0);
-}
-
 async function main() {
+	const { config, positionals, values } = await ConfigManager.load();
+
+	if (values.version) {
+		console.log(`v${pkg.version}`);
+		process.exit(0);
+	}
+
+	const commandNames = ["deploy", "build", "start", "dev", "doctor", "run", "debug", "logs", "docs"];
+	const commandName = positionals.find(p => commandNames.includes(p)) || "deploy";
+
+	if (!values.help) {
+		Logger.banner(commandName);
+	}
+
+	if (values.help) {
+		new HelpCommand().execute(config);
+		process.exit(0);
+	}
+
 	switch (commandName) {
 		case "build":
 			await new BuildCommand().execute(config);
@@ -58,7 +58,7 @@ async function main() {
 			break;
 		case "dev":
 		case "deploy":
-			await handleDeploy();
+			await handleDeploy(config, values);
 			break;
 		default:
 			console.error(`Comando desconhecido: ${commandName}`);
@@ -67,7 +67,7 @@ async function main() {
 	}
 }
 
-async function handleDeploy() {
+async function handleDeploy(config: any, values: any) {
 	const tomcat = new TomcatService(config.tomcat);
 	const deployCmd = new DeployCommand(tomcat);
 	
