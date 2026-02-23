@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 
 export class DoctorCommand implements Command {
-    async execute(config: AppConfig): Promise<void> {
+    async execute(config: AppConfig, values: any = {}): Promise<void> {
         Logger.section("Xavva Doctor - Ambiente");
 
         this.check("JAVA_HOME", !!process.env.JAVA_HOME, process.env.JAVA_HOME || "Não definido");
@@ -27,7 +27,50 @@ export class DoctorCommand implements Command {
         const gitOk = this.checkBinary("git");
         this.check("Git", gitOk, gitOk ? "Disponível" : "Não encontrado no PATH");
 
+        Logger.section("Xavva Doctor - Integridade de Arquivos");
+        await this.checkBOM(values.fix);
+
         console.log("");
+    }
+
+    private async checkBOM(fix: boolean) {
+        const srcPath = path.join(process.cwd(), "src");
+        if (!fs.existsSync(srcPath)) return;
+
+        const filesWithBOM: string[] = [];
+        const scan = (dir: string) => {
+            const list = fs.readdirSync(dir, { withFileTypes: true });
+            for (const item of list) {
+                const res = path.resolve(dir, item.name);
+                if (item.isDirectory()) {
+                    scan(res);
+                } else if (item.name.endsWith(".java")) {
+                    const buffer = fs.readFileSync(res);
+                    if (buffer[0] === 0xEF && buffer[1] === 0xBB && buffer[2] === 0xBF) {
+                        filesWithBOM.push(res);
+                    }
+                }
+            }
+        };
+
+        scan(srcPath);
+
+        if (filesWithBOM.length > 0) {
+            this.check("Encoding BOM", false, `${filesWithBOM.length} arquivos com BOM (UTF-8 com assinatura)`);
+            if (fix) {
+                for (const file of filesWithBOM) {
+                    const buffer = fs.readFileSync(file);
+                    const cleanBuffer = buffer.subarray(3);
+                    fs.writeFileSync(file, cleanBuffer);
+                    console.log(`    \x1b[32m✔\x1b[0m Corrigido: ${path.basename(file)}`);
+                }
+                Logger.success("BOM removido de todos os arquivos!");
+            } else {
+                Logger.warn("Use 'xavva doctor --fix' para remover o BOM automaticamente.");
+            }
+        } else {
+            this.check("Encoding BOM", true, "Nenhum arquivo com BOM detectado.");
+        }
     }
 
     private check(label: string, ok: boolean, detail: string) {

@@ -25,6 +25,7 @@ export class ConfigManager {
                 profile: { type: "string", short: "P" },
                 grep: { type: "string", short: "G" },
                 verbose: { type: "boolean", short: "V" },
+                fix: { type: "boolean" },
             },
             strict: false,
             allowPositionals: true,

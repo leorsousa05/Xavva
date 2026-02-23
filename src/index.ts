@@ -43,7 +43,7 @@ async function main() {
 			await new StartCommand().execute(config);
 			break;
 		case "doctor":
-			await new DoctorCommand().execute(config);
+			await new DoctorCommand().execute(config, values);
 			break;
 		case "run":
 			await new RunCommand(false).execute(config);

@@ -30,6 +30,7 @@ Opções:
   -V, --verbose 📣 Mostra logs completos do Maven/Gradle.
   -s, --no-build Pula o build (usa o que já estiver na pasta target/build).
   -P, --profile Define o profile (ex: -P prod).
+  --fix         🔧 Corrige problemas automaticamente no 'doctor'.
 
 Exemplos de uso:
   xavva dev           A melhor experiência de dev local.
