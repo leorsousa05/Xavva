@@ -15,27 +15,25 @@ Xavva é uma CLI de alto desempenho construída com **Bun** para automatizar o c
 - **📈 JVM & Memory Monitor**: Exibe o consumo de RAM (Working Set) do processo do Tomcat em tempo real.
 - **🩺 Doctor Mode**: Diagnostica rapidamente o ambiente (Java, Tomcat, Maven, Gradle) para garantir que tudo está configurado corretamente.
 
-## 🚀 Como Instalar e Usar
+## 🚀 Zero Config & Auto-Detection
 
-O Xavva pode ser baixado como um executável único na aba **Releases** do GitHub ou rodado via Bun.
+O Xavva foi evoluído para um modelo **Zero Config**. Você não precisa mais de arquivos de configuração para começar.
+
+- **Auto-Detecção:** O Xavva identifica automaticamente se seu projeto usa **Maven** (`pom.xml`) ou **Gradle** (`build.gradle`) ao ser executado na raiz.
+- **Ambiente Inteligente:** Ele utiliza as variáveis de ambiente `TOMCAT_HOME` ou `CATALINA_HOME` para localizar o servidor.
+- **Prioridade CLI:** Qualquer parâmetro passado via linha de comando (como `--path` ou `--port`) tem precedência total sobre o ambiente.
 
 ### Comandos Principais
 
 ```bash
-# Inicializa um arquivo de configuração no projeto atual
-xavva --init
-
-# Inicia o modo de desenvolvimento completo (Build + Deploy + Watch + Logs)
+# Inicia o modo de desenvolvimento completo (Auto-detecta Maven/Gradle)
 xavva dev
 
-# Exibe a documentação da API e URLs de JSPs
+# Define o Tomcat e o Profile manualmente via CLI
+xavva dev -p C:\tomcat-9 -P production
+
+# Exibe a documentação da API
 xavva docs
-
-# Executa uma classe Main específica
-xavva run br.com.meu.AppMain
-
-# Monitora logs do Tomcat com filtros inteligentes
-xavva logs -G "NullPointer"
 
 # Diagnostica o ambiente
 xavva doctor
@@ -43,35 +41,12 @@ xavva doctor
 
 ### Opções Úteis
 
+- `-p, --path <path>`: Caminho customizado do Tomcat (Sobrescreve TOMCAT_HOME).
+- `-P, --profile <nome>`: Define o profile do Maven/Gradle (ex: dev, prod).
+- `-t, --tool <maven|gradle>`: Força o uso de uma ferramenta específica.
+- `-n, --name <nome>`: Define o nome do contexto da aplicação.
 - `-w, --watch`: Ativa o monitoramento de arquivos para hot-reload.
-- `-d, --debug`: Habilita o Java Debugger (JPDA) na porta 5005.
-- `-c, --clean`: Ativa limpeza de cache do Tomcat antes de subir.
-- `-q, --quiet`: Mostra apenas mensagens essenciais e erros.
-- `-V, --verbose`: Exibe o output completo do Maven/Gradle para debug.
-- `-G, --grep <termo>`: Filtra logs em tempo real por uma palavra-chave.
-- `-P, --profile <nome>`: Define o profile do Maven/Gradle para o build.
-
-## ⚙️ Configuração
-
-O Xavva busca automaticamente por um arquivo `xavva.config.ts` ou `xavva.json` na raiz do seu projeto Java.
-
-Exemplo de `xavva.config.ts`:
-
-```typescript
-export const config = {
-    tomcat: {
-        path: 'C:\\apache-tomcat-9.0', // Caminho raiz do Tomcat
-        port: 8080,                    // Porta do servidor
-        webapps: 'webapps',            // Pasta de deploy
-    },
-    project: {
-        appName: 'meu-sistema',        // Nome do contexto (opcional)
-        buildTool: 'maven',            // 'maven' ou 'gradle'
-        profile: 'dev',                // Profile do build tool
-        skipScan: true,                // Pula o TLD scan do Tomcat (mais rápido)
-    }
-};
-```
+- `-d, --debug`: Habilita o Java Debugger na porta 5005.
 
 ## 📦 Stack Tecnológica
 
