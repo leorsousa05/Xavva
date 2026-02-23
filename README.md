@@ -1,78 +1,84 @@
-# XAVVA 🚀
+# XAVVA 🚀 (Windows Only)
 
-Xavva é uma CLI de alto desempenho para automatizar o ciclo de desenvolvimento de aplicações Java (Maven/Gradle) rodando no Apache Tomcat.
+Xavva é uma CLI de alto desempenho construída com **Bun** para automatizar o ciclo de desenvolvimento de aplicações Java (Maven/Gradle) rodando no Apache Tomcat. Ela foi desenhada especificamente para desenvolvedores que buscam a velocidade de ambientes modernos (como Node.js/Vite) dentro do ecossistema Java Enterprise.
 
-## 🛠️ Funcionalidades
+> [!IMPORTANT]
+> **Compatibilidade:** Atualmente, o Xavva é exclusivo para **Windows**, utilizando integrações nativas com PowerShell e CMD para automação de browser e gerenciamento de processos.
 
-- **Ultra-Fast Hot Swap**: Compilação incremental e injeção direta de `.class` no Tomcat sem reiniciá-lo.
-- **Modo Dev Inteligente**: `xavva dev` ativa hot-reload, logs limpos, debugger e monitoramento de memória em um único comando.
-- **Live Reload**: Atualiza automaticamente as abas do Chrome/Edge (Windows) após o deploy ou sincronização de arquivos JSP/CSS.
-- **Interactive Run/Debug**: `xavva run` executa uma classe Main isolada. `xavva debug` abre um Socket JDWP (porta 5005) para você anexar seu IDE preferido.
-- **Real-time Logs**: `xavva logs` monitora o `catalina.out` do Tomcat com colorização de erros e suporte a filtros.
-- **Endpoint Scanner**: Mapeia todas as URLs (@Path, @RequestMapping) da sua aplicação durante o startup.
-- **JVM Monitor**: Exibe o consumo de RAM em tempo real do processo do Tomcat.
-- **Git Context**: Banner informativo com a Branch atual e autor do último commit.
-- **Clean Logs**: Filtra ruídos do Tomcat/Jersey/SLF4J e destaca erros Java com dicas de solução.
+## 🛠️ Funcionalidades de Elite
 
-## 🚀 Como Usar
+- **⚡ Ultra-Fast Hot Swap**: Compilação incremental e injeção direta de arquivos `.class` e recursos (JSP, HTML, CSS, JS) no Tomcat em execução sem necessidade de restart.
+- **🛠️ Modo Dev Inteligente**: O comando `xavva dev` ativa hot-reload, logs limpos, debugger (JPDA) e monitoramento de memória em um único fluxo.
+- **🌐 Live Reload Automático**: Atualiza automaticamente as abas do Chrome ou Edge após o deploy ou sincronização de arquivos, mantendo o foco no código.
+- **🔍 API Documentation (Swagger-like)**: O comando `xavva docs` mapeia estaticamente sua API, exibindo endpoints, métodos HTTP e parâmetros (Query, Path, Body) diretamente no terminal.
+- **📊 Real-time Log Filtering**: Filtra ruídos excessivos do Tomcat/Jersey/SLF4J, destacando erros Java com dicas de solução e tempo de startup.
+- **📈 JVM & Memory Monitor**: Exibe o consumo de RAM (Working Set) do processo do Tomcat em tempo real.
+- **🩺 Doctor Mode**: Diagnostica rapidamente o ambiente (Java, Tomcat, Maven, Gradle) para garantir que tudo está configurado corretamente.
+
+## 🚀 Como Instalar e Usar
+
+O Xavva pode ser baixado como um executável único na aba **Releases** do GitHub ou rodado via Bun.
 
 ### Comandos Principais
 
 ```bash
-# Inicia o modo de desenvolvimento completo (recomendado)
+# Inicializa um arquivo de configuração no projeto atual
+xavva --init
+
+# Inicia o modo de desenvolvimento completo (Build + Deploy + Watch + Logs)
 xavva dev
 
-# Executa uma classe Main
+# Exibe a documentação da API e URLs de JSPs
+xavva docs
+
+# Executa uma classe Main específica
 xavva run br.com.meu.AppMain
 
-# Depura uma classe Main (Aguarda conexão na porta 5005)
-xavva debug br.com.meu.AppMain
-
-# Monitora logs do Tomcat em tempo real
-xavva logs
-
-# Monitora logs filtrando por erro
+# Monitora logs do Tomcat com filtros inteligentes
 xavva logs -G "NullPointer"
 
-# Diagnostica o ambiente (Java, Tomcat, Maven, etc)
+# Diagnostica o ambiente
 xavva doctor
-
-# Apenas builda o projeto
-xavva build
-
-# Inicia o Tomcat sem recompilar
-xavva start
 ```
 
 ### Opções Úteis
 
 - `-w, --watch`: Ativa o monitoramento de arquivos para hot-reload.
 - `-d, --debug`: Habilita o Java Debugger (JPDA) na porta 5005.
-- `-c, --clean`: Logs simplificados e coloridos.
-- `-q, --quiet`: Mostra apenas mensagens essenciais.
+- `-c, --clean`: Ativa limpeza de cache do Tomcat antes de subir.
+- `-q, --quiet`: Mostra apenas mensagens essenciais e erros.
+- `-V, --verbose`: Exibe o output completo do Maven/Gradle para debug.
 - `-G, --grep <termo>`: Filtra logs em tempo real por uma palavra-chave.
-- `-P, --profile <nome>`: Define o profile do Maven/Gradle.
+- `-P, --profile <nome>`: Define o profile do Maven/Gradle para o build.
 
 ## ⚙️ Configuração
 
-As configurações padrões ficam no arquivo `config.ts` na raiz do projeto:
+O Xavva busca automaticamente por um arquivo `xavva.config.ts` ou `xavva.json` na raiz do seu projeto Java.
+
+Exemplo de `xavva.config.ts`:
 
 ```typescript
 export const config = {
     tomcat: {
-        path: 'C:\\caminho\\para\\tomcat',
-        port: 8080,
-        webapps: 'webapps',
+        path: 'C:\\apache-tomcat-9.0', // Caminho raiz do Tomcat
+        port: 8080,                    // Porta do servidor
+        webapps: 'webapps',            // Pasta de deploy
     },
     project: {
-        appName: 'meu-app', // Opcional (se vazio usa o nome original do .war)
-        buildTool: 'maven', // 'maven' ou 'gradle'
+        appName: 'meu-sistema',        // Nome do contexto (opcional)
+        buildTool: 'maven',            // 'maven' ou 'gradle'
+        profile: 'dev',                // Profile do build tool
+        skipScan: true,                // Pula o TLD scan do Tomcat (mais rápido)
     }
 };
 ```
 
-## 📦 Tecnologias
+## 📦 Stack Tecnológica
 
-- [Bun](https://bun.sh/)
-- [TypeScript](https://www.typescriptlang.org/)
-- [JDB (Java Debugger)](https://docs.oracle.com/javase/8/docs/technotes/tools/windows/jdb.html)
+- **Runtime:** [Bun](https://bun.sh/) (Engine de alta performance)
+- **Linguagem:** [TypeScript](https://www.typescriptlang.org/)
+- **Automação:** PowerShell & CMD (Integração nativa Windows)
+- **CI/CD:** GitHub Actions para geração de binários multi-plataforma (via Bun Compile)
+
+---
+*Desenvolvido para transformar a experiência de desenvolvimento Java Legacy em algo ágil e produtivo.*
