@@ -22,10 +22,10 @@ Você pode instalar o Xavva globalmente usando o NPM (requer [Bun](https://bun.s
 
 ```bash
 # Instalação global
-npm install -g xavva
+npm install -g @archznn/xavva
 
 # Ou rodar sem instalar via npx
-npx xavva dev
+npx @archznn/xavva dev
 ```
 
 ## ⚙️ Zero Config & Auto-Detection
