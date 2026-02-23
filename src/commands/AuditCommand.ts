@@ -10,23 +10,33 @@ export class AuditCommand implements Command {
         Logger.section("Vulnerability & JAR Audit");
 
         let appName = config.project.appName;
+        
+        // 1. Tentar inferir do diretório atual se não foi passado via config
+        if (!appName) {
+            appName = this.inferFromArtifacts();
+        }
+
+        // 2. Se ainda não tem nome, tenta inferir do Tomcat
         if (!appName) {
             const webappsPath = path.join(config.tomcat.path, "webapps");
             if (fs.existsSync(webappsPath)) {
                 const folders = fs.readdirSync(webappsPath, { withFileTypes: true })
-                    .filter(dirent => dirent.isDirectory() && !["ROOT", "manager", "host-manager"].includes(dirent.name));
+                    .filter(dirent => dirent.isDirectory() && !["ROOT", "manager", "host-manager", "docs", "examples"].includes(dirent.name));
                 
                 if (folders.length === 1) {
                     appName = folders[0].name;
-                } else {
-                    Logger.error("Vários apps encontrados. Use -n <nome> para especificar qual auditar.");
+                } else if (folders.length > 1) {
+                    Logger.error("Vários apps encontrados no Tomcat:");
+                    folders.forEach(f => console.log(`    ${"\x1b[90m"}➜${"\x1b[0m"} ${f.name}`));
+                    console.log(`\n  Use ${"\x1b[33m"}xavva audit -n <nome>${"\x1b[0m"} para especificar.`);
                     return;
                 }
             }
         }
 
         if (!appName) {
-            Logger.error("Nome da aplicação não definido e não pôde ser inferido.");
+            Logger.error("Não foi possível identificar o app automaticamente.");
+            Logger.warn("Certifique-se de que o projeto foi buildado ou use -n <nome>.");
             return;
         }
 
@@ -55,6 +65,27 @@ export class AuditCommand implements Command {
         } catch (e: any) {
             Logger.error(e.message);
         }
+    }
+
+    private inferFromArtifacts(): string | undefined {
+        // Busca .war no target (Maven) ou build/libs (Gradle)
+        const paths = ["target", "build/libs"];
+        for (const p of paths) {
+            const fullPath = path.join(process.cwd(), p);
+            if (fs.existsSync(fullPath)) {
+                const wars = fs.readdirSync(fullPath).filter(f => f.endsWith(".war"));
+                if (wars.length > 0) {
+                    // Retorna o nome do .war mais recente sem a extensão
+                    const latest = wars.map(name => ({
+                        name,
+                        time: fs.statSync(path.join(fullPath, name)).mtimeMs
+                    })).sort((a, b) => b.time - a.time)[0];
+                    
+                    return latest.name.replace(".war", "");
+                }
+            }
+        }
+        return undefined;
     }
 
     private renderResult(res: JarAuditResult) {

@@ -142,7 +142,11 @@ export class Logger {
             if (msg.includes("unmappable character") || msg.includes("encoding")) {
                 contextTip = `\n      ${this.C.yellow}💡 Dica: Erro de encoding detectado. O arquivo parece usar um charset (como UTF-8) diferente do configurado no Maven.${this.C.reset}`;
             } else if (msg.includes("illegal character")) {
-                contextTip = `\n      ${this.C.yellow}💡 Dica: Caractere invisível ou inválido. Tente remover espaços ou quebras de linha estranhas no topo do arquivo.${this.C.reset}`;
+                if (msg.includes("\\u00bb") || msg.includes("\\u00bf") || msg.includes("\\u00ef")) {
+                    contextTip = `\n      ${this.C.yellow}💡 Dica: UTF-8 BOM detectado! O arquivo tem caracteres invisíveis no início que o Java não aceita. Use 'xavva doctor' para corrigir.${this.C.reset}`;
+                } else {
+                    contextTip = `\n      ${this.C.yellow}💡 Dica: Caractere invisível ou inválido. Tente remover espaços ou quebras de linha estranhas no topo do arquivo.${this.C.reset}`;
+                }
             } else if (msg.includes("cannot find symbol")) {
                 contextTip = `\n      ${this.C.yellow}💡 Dica: Símbolo não encontrado. Verifique se o import está correto ou se a dependência existe.${this.C.reset}`;
             }
