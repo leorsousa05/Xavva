@@ -3,25 +3,6 @@ import path from "path";
 import fs from "fs";
 import type { AppConfig } from "../types/config";
 
-const DEFAULT_CONFIG: AppConfig = {
-    tomcat: {
-        path: "C:\\apache-tomcat",
-        port: 8080,
-        webapps: "webapps",
-    },
-    project: {
-        appName: "",
-        buildTool: "maven",
-        profile: "",
-        skipBuild: false,
-        skipScan: false,
-        cleanLogs: false,
-        quiet: false,
-        verbose: false,
-        debug: false,
-    }
-};
-
 export class ConfigManager {
     static async load(): Promise<{ config: AppConfig, positionals: string[], values: any }> {
         const args = Bun.argv.slice(Bun.argv[0].endsWith("bun.exe") || Bun.argv[0].endsWith("bun") ? 2 : 1);
@@ -44,22 +25,16 @@ export class ConfigManager {
                 profile: { type: "string", short: "P" },
                 grep: { type: "string", short: "G" },
                 verbose: { type: "boolean", short: "V" },
-                init: { type: "boolean" },
             },
             strict: false,
             allowPositionals: true,
         });
 
-        if (values.init) {
-            await this.initConfigFile();
-            process.exit(0);
-        }
-
-        const externalConfig = await this.loadExternalConfig();
-        const baseConfig = externalConfig || DEFAULT_CONFIG;
-
         const isDev = positionals.includes("dev");
         const isRun = positionals.includes("run") || positionals.includes("debug");
+        
+        const envTomcatPath = process.env.TOMCAT_HOME || process.env.CATALINA_HOME || "C:\\apache-tomcat";
+        const detectedTool = this.detectBuildTool();
 
         let runClass = "";
         if (isRun) {
@@ -71,22 +46,22 @@ export class ConfigManager {
 
         const config: AppConfig = {
             tomcat: {
-                path: String(values.path || baseConfig.tomcat.path),
-                port: parseInt(String(values.port || baseConfig.tomcat.port)),
-                webapps: baseConfig.tomcat.webapps,
-                grep: values.grep ? String(values.grep) : (baseConfig.tomcat.grep || ""),
+                path: String(values.path || envTomcatPath),
+                port: parseInt(String(values.port || "8080")),
+                webapps: "webapps",
+                grep: values.grep ? String(values.grep) : "",
             },
             project: {
-                appName: values.name ? String(values.name) : (baseConfig.project.appName || ""),
-                buildTool: (values.tool as "maven" | "gradle") || baseConfig.project.buildTool,
-                profile: String(values.profile || baseConfig.project.profile || ""),
-                skipBuild: !!(values["no-build"] || baseConfig.project.skipBuild),
-                skipScan: values.scan !== undefined ? !values.scan : (baseConfig.project.skipScan ?? true),
-                cleanLogs: !!(values.clean || isDev || baseConfig.project.cleanLogs),
-                quiet: !!(values.quiet || isDev || baseConfig.project.quiet),
-                verbose: !!(values.verbose || baseConfig.project.verbose),
-                debug: !!(values.debug || isDev || isRun || baseConfig.project.debug),
-                grep: runClass || (values.grep ? String(values.grep) : (baseConfig.project.grep || "")),
+                appName: values.name ? String(values.name) : "",
+                buildTool: (values.tool as "maven" | "gradle") || detectedTool,
+                profile: String(values.profile || ""),
+                skipBuild: !!values["no-build"],
+                skipScan: values.scan !== undefined ? !values.scan : true,
+                cleanLogs: !!(values.clean || isDev),
+                quiet: !!(values.quiet || isDev),
+                verbose: !!values.verbose,
+                debug: !!(values.debug || isDev || isRun),
+                grep: runClass || (values.grep ? String(values.grep) : ""),
             }
         };
 
@@ -97,48 +72,14 @@ export class ConfigManager {
         return { config, positionals, values };
     }
 
-    private static async loadExternalConfig(): Promise<AppConfig | null> {
-        const configPath = path.join(process.cwd(), "xavva.config.ts");
-        const jsonPath = path.join(process.cwd(), "xavva.json");
-
-        try {
-            if (fs.existsSync(configPath)) {
-                const module = await import(configPath);
-                return module.config || module.default || null;
-            }
-            if (fs.existsSync(jsonPath)) {
-                const content = fs.readFileSync(jsonPath, "utf8");
-                return JSON.parse(content);
-            }
-        } catch (e) {
-            console.error(`\x1b[31mError loading configuration file:\x1b[0m`, e);
+    private static detectBuildTool(): "maven" | "gradle" {
+        if (fs.existsSync(path.join(process.cwd(), "pom.xml"))) {
+            return "maven";
         }
-
-        return null;
-    }
-
-    private static async initConfigFile() {
-        const configPath = path.join(process.cwd(), "xavva.config.ts");
-        if (fs.existsSync(configPath)) {
-            console.log("\x1b[33mConfiguration file 'xavva.config.ts' already exists.\x1b[0m");
-            return;
+        if (fs.existsSync(path.join(process.cwd(), "build.gradle")) || fs.existsSync(path.join(process.cwd(), "build.gradle.kts"))) {
+            return "gradle";
         }
-
-        const content = `export const config = {
-    tomcat: {
-        path: "C:\\\\apache-tomcat",
-        port: 8080,
-        webapps: "webapps",
-    },
-    project: {
-        appName: "",
-        buildTool: "maven",
-        profile: "",
-    },
-};
-`;
-        fs.writeFileSync(configPath, content);
-        console.log("\x1b[32m✔ Created 'xavva.config.ts' with default values.\x1b[0m");
+        return "maven"; // Default to maven if not found
     }
 
     private static ensureGitIgnore() {
