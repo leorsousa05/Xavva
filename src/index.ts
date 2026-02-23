@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 import { watch } from "fs";
 import { ConfigManager } from "./utils/config";
 import { BuildCommand } from "./commands/BuildCommand";

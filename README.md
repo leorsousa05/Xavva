@@ -16,7 +16,19 @@ Xavva é uma CLI de alto desempenho construída com **Bun** para automatizar o c
 - **🩺 Doctor Mode**: Diagnostica o ambiente (Java, Tomcat, Maven, Gradle) e corrige automaticamente problemas de **Encoding (UTF-8 BOM)** que podem causar falhas silenciosas no Java.
 - **🛡️ JAR Audit**: O comando `xavva audit` analisa todas as dependências (`.jar`) da sua aplicação e verifica vulnerabilidades conhecidas (CVEs) usando o banco de dados **OSV.dev**.
 
-## 🚀 Zero Config & Auto-Detection
+## 🚀 Instalação e Uso
+
+Você pode instalar o Xavva globalmente usando o NPM (requer [Bun](https://bun.sh/) instalado no sistema):
+
+```bash
+# Instalação global
+npm install -g xavva
+
+# Ou rodar sem instalar via npx
+npx xavva dev
+```
+
+## ⚙️ Zero Config & Auto-Detection
 
 O Xavva foi evoluído para um modelo **Zero Config**. Você não precisa mais de arquivos de configuração para começar.
 
