@@ -1,107 +1,78 @@
-🚀 Xavva (Tomcat Deployer CLI)
-Uma ferramenta de automação de alto desempenho para desenvolvedores Java que precisam compilar, limpar portas e realizar o deploy de aplicações Spring Boot em servidores Apache Tomcat localmente, agora com suporte a **Hot Reload**.
+# XAVVA 🚀
 
-📁 Estrutura do Projeto
-```plaintext
-xavva/
-├── src/
-│   ├── services/
-│   │   ├── BuildService.ts   # Orquestra Maven/Gradle e manipulação de arquivos .war
-│   │   └── TomcatService.ts  # Gerencia o processo do Tomcat, logs e limpeza de portas
-│   └── index.ts              # Ponto de entrada (Orquestrador)
-├── config.ts                 # Configurações padrão de ambiente
-├── package.json              # Definições do projeto e dependências
-└── README.md                 # Documentação
+Xavva é uma CLI de alto desempenho para automatizar o ciclo de desenvolvimento de aplicações Java (Maven/Gradle) rodando no Apache Tomcat.
+
+## 🛠️ Funcionalidades
+
+- **Ultra-Fast Hot Swap**: Compilação incremental e injeção direta de `.class` no Tomcat sem reiniciá-lo.
+- **Modo Dev Inteligente**: `xavva dev` ativa hot-reload, logs limpos, debugger e monitoramento de memória em um único comando.
+- **Live Reload**: Atualiza automaticamente as abas do Chrome/Edge (Windows) após o deploy ou sincronização de arquivos JSP/CSS.
+- **Interactive Run/Debug**: `xavva run` executa uma classe Main isolada. `xavva debug` abre um Socket JDWP (porta 5005) para você anexar seu IDE preferido.
+- **Real-time Logs**: `xavva logs` monitora o `catalina.out` do Tomcat com colorização de erros e suporte a filtros.
+- **Endpoint Scanner**: Mapeia todas as URLs (@Path, @RequestMapping) da sua aplicação durante o startup.
+- **JVM Monitor**: Exibe o consumo de RAM em tempo real do processo do Tomcat.
+- **Git Context**: Banner informativo com a Branch atual e autor do último commit.
+- **Clean Logs**: Filtra ruídos do Tomcat/Jersey/SLF4J e destaca erros Java com dicas de solução.
+
+## 🚀 Como Usar
+
+### Comandos Principais
+
+```bash
+# Inicia o modo de desenvolvimento completo (recomendado)
+xavva dev
+
+# Executa uma classe Main
+xavva run br.com.meu.AppMain
+
+# Depura uma classe Main (Aguarda conexão na porta 5005)
+xavva debug br.com.meu.AppMain
+
+# Monitora logs do Tomcat em tempo real
+xavva logs
+
+# Monitora logs filtrando por erro
+xavva logs -G "NullPointer"
+
+# Diagnostica o ambiente (Java, Tomcat, Maven, etc)
+xavva doctor
+
+# Apenas builda o projeto
+xavva build
+
+# Inicia o Tomcat sem recompilar
+xavva start
 ```
 
-🛠️ Pré-requisitos
-- **Bun Runtime**: Instalação via PowerShell (`powershell -c "irm bun.sh/install.ps1 | iex"`)
-- **Java JDK & Maven/Gradle**: Configurados no seu PATH do Windows.
-- **Apache Tomcat**: Instalado localmente.
+### Opções Úteis
 
-⚙️ Configuração
-Você pode ajustar as configurações padrão no arquivo `config.ts` ou sobrescrevê-las via argumentos da CLI.
+- `-w, --watch`: Ativa o monitoramento de arquivos para hot-reload.
+- `-d, --debug`: Habilita o Java Debugger (JPDA) na porta 5005.
+- `-c, --clean`: Logs simplificados e coloridos.
+- `-q, --quiet`: Mostra apenas mensagens essenciais.
+- `-G, --grep <termo>`: Filtra logs em tempo real por uma palavra-chave.
+- `-P, --profile <nome>`: Define o profile do Maven/Gradle.
+
+## ⚙️ Configuração
+
+As configurações padrões ficam no arquivo `config.ts` na raiz do projeto:
 
 ```typescript
 export const config = {
     tomcat: {
-        path: 'C:\\caminho\\para\\seu\\tomcat',
+        path: 'C:\\caminho\\para\\tomcat',
         port: 8080,
         webapps: 'webapps',
     },
     project: {
-        appName: 'meu-projeto',
+        appName: 'meu-app', // Opcional (se vazio usa o nome original do .war)
         buildTool: 'maven', // 'maven' ou 'gradle'
     }
 };
 ```
 
-🚀 Como Usar
+## 📦 Tecnologias
 
-### Instalação
-Para instalar as dependências e linkar o executável globalmente (opcional):
-```bash
-bun install
-bun link
-```
-
-### Comandos da CLI
-Você pode rodar a ferramenta diretamente com `bun src/index.ts` ou `xavva` (se linkado).
-
-#### Ajuda
-Exibe todos os comandos disponíveis.
-```bash
-xavva --help
-```
-
-#### Hot Reload (Modo Watch) 🔥
-Monitora alterações nos arquivos do projeto Java e refaz o deploy automaticamente.
-**Agora com Builds Incrementais:** A primeira execução faz um build limpo (`clean package`), mas as recargas subsequentes pulam a etapa de limpeza para serem muito mais rápidas.
-```bash
-xavva --watch
-# ou
-xavva -w
-```
-*Ignora automaticamente pastas como `target`, `build`, `.git` e `node_modules`.*
-
-#### Outras Opções
-| Flag | Descrição | Exemplo |
-|------|-----------|---------|
-| `-p`, `--path` | Caminho base do Tomcat | `xavva -p "C:\Tomcat"` |
-| `-t`, `--tool` | Ferramenta de build | `xavva -t gradle` |
-| `-n`, `--name` | Nome do arquivo .war final | `xavva -n app-v2` |
-| `--port` | Porta do servidor | `xavva --port 8081` |
-| `-s`, `--no-build` | Pula a etapa de compilação (apenas deploy) | `xavva -s` |
-| `-c`, `--clean` | Logs do Tomcat simplificados e coloridos | `xavva -c` |
-| `-d`, `--debug` | Habilita debugger remoto na porta 5005 | `xavva -d` |
-
-### Exemplos de Uso
-
-**Ciclo Completo (Padrão)**
-Build + Kill Port + Deploy + Start
-```bash
-xavva
-```
-
-**Modo Desenvolvimento Rápido**
-Sem build (apenas deploy do war existente), logs limpos e hot reload.
-```bash
-xavva -s -c -w
-```
-
-**Sobrescrevendo Configurações**
-Deploy de um projeto Gradle em um Tomcat específico na porta 9090.
-```bash
-xavva -t gradle -p "D:\Servers\Tomcat9" --port 9090
-```
-
-🔄 Fluxo de Funcionamento Interno
-1. **Kill Port**: Verifica se a porta definida está em uso e mata o processo (evita `java.net.BindException`).
-2. **Build**: Executa `mvn clean package` ou `gradle build`. No **Modo Watch**, builds subsequentes omitem o `clean` para performance.
-3. **Deploy**: Move o artefato gerado para a pasta `webapps` do Tomcat.
-4. **Start**: Inicia o Tomcat e redireciona a saída para o terminal.
-5. **Watch (Opcional)**: Se ativado, aguarda alterações no código fonte para reiniciar o ciclo a partir do passo 1 (parando o servidor atual antes).
-
-⚠️ Observações
-- **Permissões**: Certifique-se de ter permissões para matar processos (`taskkill`) e escrever na pasta do Tomcat.
-- **Spring Boot**: Para deploy em Tomcat externo, lembre-se de estender `SpringBootServletInitializer` na sua classe principal.
+- [Bun](https://bun.sh/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [JDB (Java Debugger)](https://docs.oracle.com/javase/8/docs/technotes/tools/windows/jdb.html)

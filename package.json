@@ -1,16 +1,23 @@
 {
 	"name": "xavva",
-	"version": "1.0.2",
+	"version": "1.3.0",
 	"module": "src/index.ts",
 	"type": "module",
 	"private": true,
 	"bin": {
 		"xavva": "src/index.ts"
 	},
+	"scripts": {
+		"build": "bun build --compile --minify --sourcemap ./src/index.ts --outfile xavva",
+		"compile": "bun build --compile --minify ./src/index.ts --target bun-windows-x64 --outfile bin/xavva-windows.exe && bun build --compile --minify ./src/index.ts --target bun-linux-x64 --outfile bin/xavva-linux && bun build --compile --minify ./src/index.ts --target bun-macos-x64 --outfile bin/xavva-macos"
+	},
 	"devDependencies": {
 		"@types/bun": "latest"
 	},
 	"peerDependencies": {
 		"typescript": "^5"
+	},
+	"dependencies": {
+		"glob": "^13.0.6"
 	}
 }
