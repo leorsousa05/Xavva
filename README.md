@@ -1,4 +1,4 @@
-# XAVVA 🚀 (Windows Only)
+# XAVVA 🚀 (Windows Only) `v1.6.5`
 
 Xavva é uma CLI de alto desempenho construída com **Bun** para automatizar o ciclo de desenvolvimento de aplicações Java (Maven/Gradle) rodando no Apache Tomcat. Ela foi desenhada especificamente para desenvolvedores que buscam a velocidade de ambientes modernos (como Node.js/Vite) dentro do ecossistema Java Enterprise.
 
@@ -13,7 +13,7 @@ Xavva é uma CLI de alto desempenho construída com **Bun** para automatizar o c
 - **🔍 API Documentation (Swagger-like)**: O comando `xavva docs` mapeia estaticamente sua API, exibindo endpoints, métodos HTTP e parâmetros (Query, Path, Body) diretamente no terminal.
 - **📊 Real-time Log Filtering**: Filtra ruídos excessivos do Tomcat/Jersey/SLF4J, destacando erros Java com dicas de solução e tempo de startup.
 - **📈 JVM & Memory Monitor**: Exibe o consumo de RAM (Working Set) do processo do Tomcat em tempo real.
-- **🩺 Doctor Mode**: Diagnostica rapidamente o ambiente (Java, Tomcat, Maven, Gradle).
+- **🩺 Doctor Mode**: Diagnostica o ambiente (Java, Tomcat, Maven, Gradle) e corrige automaticamente problemas de **Encoding (UTF-8 BOM)** que podem causar falhas silenciosas no Java.
 - **🛡️ JAR Audit**: O comando `xavva audit` analisa todas as dependências (`.jar`) da sua aplicação e verifica vulnerabilidades conhecidas (CVEs) usando o banco de dados **OSV.dev**.
 
 ## 🚀 Zero Config & Auto-Detection
@@ -39,8 +39,8 @@ xavva docs
 # Audita vulnerabilidades nas dependências JAR do app
 xavva audit
 
-# Diagnostica o ambiente
-xavva doctor
+# Diagnostica o ambiente e limpa arquivos com BOM (UTF-8 signature)
+xavva doctor --fix
 ```
 
 ### Opções Úteis
