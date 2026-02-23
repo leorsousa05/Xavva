@@ -1,122 +1,150 @@
-import { parseArgs } from "util";
 import { watch } from "fs";
+import { ConfigManager } from "./utils/config";
+import { BuildCommand } from "./commands/BuildCommand";
+import { DeployCommand } from "./commands/DeployCommand";
+import { StartCommand } from "./commands/StartCommand";
+import { HelpCommand } from "./commands/HelpCommand";
+import { DoctorCommand } from "./commands/DoctorCommand";
+import { RunCommand } from "./commands/RunCommand";
+import { LogsCommand } from "./commands/LogsCommand";
+import { DocsCommand } from "./commands/DocsCommand";
 import { TomcatService } from "./services/TomcatService";
-import { BuildService } from "./services/BuildService";
-import { config as defaultConfig } from "../config";
+import { EndpointService } from "./services/EndpointService";
 import pkg from "../package.json";
+import { Logger } from "./utils/ui";
+import path from "path";
 
-const { values } = parseArgs({
-	args: Bun.argv,
-	options: {
-		path: { type: "string", short: "p" },
-		tool: { type: "string", short: "t" },
-		name: { type: "string", short: "n" },
-		port: { type: "string" },
-		"no-build": { type: "boolean", short: "s" },
-		clean: { type: "boolean", short: "c" },
-		help: { type: "boolean", short: "h" },
-		version: { type: "boolean", short: "v" },
-		debug: { type: "boolean", short: "d" },
-		watch: { type: "boolean", short: "w" },
-	},
-	strict: false,
-	allowPositionals: true,
-});
+const { config, positionals, values } = ConfigManager.load();
 
 if (values.version) {
 	console.log(`v${pkg.version}`);
 	process.exit(0);
 }
 
+const commandNames = ["deploy", "build", "start", "dev", "doctor", "run", "debug", "logs", "docs"];
+const commandName = positionals.find(p => commandNames.includes(p)) || "deploy";
+
+if (!values.help) {
+	Logger.banner(commandName);
+}
+
 if (values.help) {
-	console.log(`
-🛠️  Deployer CLI - Manual de Uso
--------------------------------
-Opções:
-  -p, --path    Caminho base do Tomcat
-  -t, --tool    Ferramenta de build (maven/gradle)
-  -n, --name    Nome customizado para o arquivo .war
-  --port        Porta do servidor (padrão: 8080)
-  -s, --no-build Pula a etapa de compilação
-  -c, --clean   Logs do Tomcat simplificados e coloridos
-  -d, --debug   Habilita debugger Java na porta 5005
-  -h, --help    Exibe este menu de ajuda
-  -v, --version Exibe a versão atual
-  -w, --watch   Modo Watch (Hot Reload)
-	`);
+	new HelpCommand().execute(config);
 	process.exit(0);
 }
 
-const activeConfig = {
-	tomcat: {
-		path: String(values.path || defaultConfig.tomcat.path),
-		port: parseInt(String(values.port || defaultConfig.tomcat.port)),
-		webapps: defaultConfig.tomcat.webapps,
-	},
-	project: {
-		appName: String(values.name || defaultConfig.project.appName),
-		buildTool: (values.tool as "maven" | "gradle") || defaultConfig.project.buildTool,
-		skipBuild: !!values["no-build"],
-		cleanLogs: !!values.clean,
-		debug: !!values.debug,
-	}
-};
-
-const tomcat = new TomcatService(activeConfig.tomcat);
-const builder = new BuildService(activeConfig.project, activeConfig.tomcat);
-
-let isDeploying = false;
-
-async function deploy(incremental = false) {
-	if (isDeploying) return;
-	isDeploying = true;
-
-	console.log(`\n🛠️  Iniciando Deployer CLI`);
-	console.log(`--------------------------`);
-	console.log(`> Ferramenta: ${activeConfig.project.buildTool.toUpperCase()}`);
-	console.log(`> App Name:   ${activeConfig.project.appName}`);
-	console.log(`> Build:      ${activeConfig.project.skipBuild ? "PULADO" : "ATIVO"}`);
-	if (activeConfig.project.debug) console.log(`> Debugger:   ATIVO (Porta 5005)`);
-	if (values.watch) console.log(`> Modo Watch: ATIVO`);
-	console.log("");
-
-	try {
-		await tomcat.killConflict();
-
-		if (!activeConfig.project.skipBuild) {
-			await builder.runBuild(incremental);
-		} else {
-			console.log(`[Skip] Saltando etapa de build...`);
-		}
-
-		await builder.deployToWebapps();
-		tomcat.start(activeConfig.project.cleanLogs, activeConfig.project.debug);
-	} catch (error: any) {
-		console.error('\n❌ Erro:', error.message);
-		if (!values.watch) process.exit(1);
-	} finally {
-		isDeploying = false;
+async function main() {
+	switch (commandName) {
+		case "build":
+			await new BuildCommand().execute(config);
+			break;
+		case "start":
+			await new StartCommand().execute(config);
+			break;
+		case "doctor":
+			await new DoctorCommand().execute(config);
+			break;
+		case "run":
+			await new RunCommand(false).execute(config);
+			break;
+		case "debug":
+			await new RunCommand(true).execute(config);
+			break;
+		case "logs":
+			await new LogsCommand().execute(config);
+			break;
+		case "docs":
+			await new DocsCommand().execute(config);
+			break;
+		case "dev":
+		case "deploy":
+			await handleDeploy();
+			break;
+		default:
+			console.error(`Comando desconhecido: ${commandName}`);
+			new HelpCommand().execute(config);
+			process.exit(1);
 	}
 }
 
-if (values.watch) {
-	console.log(`\n👀 Modo Watch ativado! Monitorando alterações em ${process.cwd()}...`);
-	await deploy();
+async function handleDeploy() {
+	const tomcat = new TomcatService(config.tomcat);
+	const deployCmd = new DeployCommand(tomcat);
+	
+	if (values.watch) {
+		let isDeploying = false;
 
-	let debounceTimer: Timer;
-	watch(process.cwd(), { recursive: true }, (event, filename) => {
-		if (!filename) return;
-		if (filename.includes("target") || filename.includes("build") || filename.includes(".git") || filename.includes("node_modules")) return;
+		const run = async (incremental = false) => {
+			if (isDeploying) return;
+			isDeploying = true;
+			try {
+				await deployCmd.execute(config, incremental, true);
+			} catch (e) {
+			} finally {
+				isDeploying = false;
+			}
+		};
 
-		console.log(`\n[Watch] Alteração detectada em: ${filename}`);
-		clearTimeout(debounceTimer);
-		
-		// @ts-ignore
-		debounceTimer = setTimeout(() => {
-			tomcat.stop();
-			deploy(true);
-		}, 1000);
-	});
-} else {
-	deploy();
+		await run(false);
+
+		let debounceTimer: Timer;
+		watch(process.cwd(), { recursive: true }, async (event, filename) => {
+			if (!filename) return;
+
+			const isJava = filename.endsWith(".java") || filename === "pom.xml" || filename === "build.gradle";
+			const isResource = filename.endsWith(".jsp") || filename.endsWith(".html") || 
+							   filename.endsWith(".css") || filename.endsWith(".js") || 
+							   filename.endsWith(".xml") || filename.endsWith(".properties");
+			
+			const isIgnored = filename.includes("target") || 
+							  filename.includes("build") || 
+							  filename.includes("node_modules") || 
+							  filename.split(/[/\\]/).some(part => part.startsWith("."));
+
+			if (isIgnored) return;
+
+			if (isResource && !isJava) {
+				const isJsp = filename.endsWith(".jsp");
+				let jspUrl = "";
+				let isPrivate = false;
+
+				if (isJsp) {
+					const parts = filename.split(/[/\\]/);
+					const webappIndex = parts.indexOf("webapp");
+					if (webappIndex !== -1) {
+						const relPath = parts.slice(webappIndex + 1).join("/");
+						isPrivate = relPath.startsWith("WEB-INF") || relPath.startsWith("META-INF");
+						const contextPath = (config.project.appName || "").replace(".war", "");
+						jspUrl = `http://localhost:${config.tomcat.port}${contextPath ? "/" + contextPath : ""}/${relPath}`;
+					}
+				}
+
+				if (isJsp && isPrivate) {
+					console.log(`\n  ${"\x1b[33m"}🔒${"\x1b[0m"} JSP Privado alterado (WEB-INF): ${filename}`);
+					console.log(`     ${"\x1b[90m"}Nota: Este arquivo não é acessível via URL direta.${"\x1b[0m"}`);
+				} else if (isJsp && jspUrl) {
+					console.log(`\n  ${"\x1b[32m"}📄${"\x1b[0m"} JSP Atualizado: ${"\x1b[4m"}${jspUrl}${"\x1b[0m"}`);
+				} else {
+					console.log(`\n  ${"\x1b[35m"}⚡${"\x1b[0m"} Recurso alterado: ${filename}`);
+				}
+
+				await deployCmd.syncResource(config, filename);
+				return;
+			}
+
+			if (!isJava) return;
+
+			console.log(`\n  ${"\x1b[33m"}👀${"\x1b[0m"} Alteração detectada em: ${filename}`);
+			clearTimeout(debounceTimer);
+			
+			debounceTimer = setTimeout(() => {
+				run(true);
+			}, 1000);
+		});
+
+	} else {
+		await deployCmd.execute(config, false, false);
+	}
 }
+
+main().catch(console.error);

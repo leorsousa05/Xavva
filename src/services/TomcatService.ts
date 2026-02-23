@@ -1,11 +1,26 @@
-import { config } from "../../config";
+import type { TomcatConfig } from "../types/config";
+import { Logger } from "../utils/ui";
 
 export class TomcatService {
-	private activeConfig: any;
+	private activeConfig: TomcatConfig;
 	private currentProcess: any = null;
+	private stopStartupSpinner?: (success?: boolean) => void;
+	public onReady?: () => void;
+	private pid: number | null = null;
 
-	constructor(customConfig?: any) {
-		this.activeConfig = customConfig || config.tomcat;
+	constructor(customConfig: TomcatConfig) {
+		this.activeConfig = customConfig;
+	}
+
+	async getMemoryUsage(): Promise<string> {
+		if (!this.pid) return "0 MB";
+		try {
+			const { stdout } = Bun.spawnSync(["powershell", "-command", `(Get-Process -Id ${this.pid}).WorkingSet64 / 1MB`]);
+			const mem = await new Response(stdout).text();
+			return `${Math.round(parseFloat(mem))} MB`;
+		} catch (e) {
+			return "N/A";
+		}
 	}
 
 	async killConflict() {
@@ -15,43 +30,92 @@ export class TomcatService {
 		if (output) {
 			const lines = output.trim().split('\n');
 			const pid = lines[0].trim().split(/\s+/).pop();
-			console.log(`[Tomcat] Liberando porta ${this.activeConfig.port}...`);
+			Logger.step(`Freeing port ${this.activeConfig.port}`);
 			Bun.spawnSync(["taskkill", "/F", "/PID", pid]);
+		}
+	}
+
+	clearWebapps(appName?: string) {
+		const fs = require("fs");
+		const path = require("path");
+		const webappsPath = path.join(this.activeConfig.path, "webapps");
+		const workPath = path.join(this.activeConfig.path, "work");
+		const tempPath = path.join(this.activeConfig.path, "temp");
+
+		try {
+			[workPath, tempPath].forEach(p => {
+				if (fs.existsSync(p)) {
+					fs.rmSync(p, { recursive: true, force: true });
+					fs.mkdirSync(p);
+				}
+			});
+
+			const files = fs.readdirSync(webappsPath);
+			for (const file of files) {
+				const fullPath = path.join(webappsPath, file);
+				if (file === "ROOT" || file === "manager" || file === "host-manager") continue;
+				
+				fs.rmSync(fullPath, { recursive: true, force: true });
+			}
+		} catch (e) {
+			Logger.warn("Não foi possível limpar totalmente a pasta webapps ou cache.");
 		}
 	}
 
 	stop() {
 		if (this.currentProcess) {
-			console.log("[Tomcat] Parando servidor...");
+			Logger.warn("Stopping active server...");
 			this.currentProcess.kill();
 			this.currentProcess = null;
 		}
 	}
 
-	start(cleanLogs: boolean = false, debug: boolean = false) {
+	start(cleanLogs: boolean = false, debug: boolean = false, skipScan: boolean = false, quiet: boolean = false) {
 		const binPath = `${this.activeConfig.path}\\bin\\catalina.bat`;
 		const args = debug ? ["jpda", "run"] : ["run"];
 		
+		const catalinaOpts = [process.env.CATALINA_OPTS || ""];
+		
+		if (skipScan) {
+			catalinaOpts.push(
+				"-Dtomcat.util.scan.StandardJarScanFilter.jarsToSkip=*.jar",
+				"-Dtomcat.util.scan.StandardJarScanFilter.jarsToScan=",
+				"-Dorg.apache.catalina.startup.ContextConfig.jarsToSkip=*.jar",
+				"-Dorg.apache.catalina.startup.TldConfig.jarsToSkip=*.jar",
+				"-Dorg.apache.tomcat.util.scan.StandardJarScanFilter.jarsToSkip=*.jar",
+				"-Dorg.apache.catalina.startup.ContextConfig.jarsToScan=" 
+			);
+		}
+
+		const env: any = { 
+			...process.env, 
+			CATALINA_HOME: this.activeConfig.path,
+			CATALINA_OPTS: catalinaOpts.join(" ").trim()
+		};
+
 		if (debug) {
-			console.log(`\n🐛 Debugger habilitado na porta 5005!`);
+			Logger.warn("🐞 Java Debugger habilitado na porta 5005");
+			env.JPDA_ADDRESS = "5005";
+			env.JPDA_TRANSPORT = "dt_socket";
+		}
+
+		if (cleanLogs || quiet) {
+			this.stopStartupSpinner = Logger.spinner("Starting Tomcat server");
 		}
 
 		this.currentProcess = Bun.spawn([binPath, ...args], {
 			stdout: "pipe",
 			stderr: "pipe",
-			env: { 
-				...process.env, 
-				CATALINA_HOME: this.activeConfig.path,
-				JPDA_ADDRESS: "5005",
-				JPDA_TRANSPORT: "dt_socket"
-			}
+			env: env
 		});
 
-		this.processLogStream(this.currentProcess.stdout, cleanLogs);
-		this.processLogStream(this.currentProcess.stderr, cleanLogs);
+		this.pid = this.currentProcess.pid;
+
+		this.processLogStream(this.currentProcess.stdout, cleanLogs, quiet);
+		this.processLogStream(this.currentProcess.stderr, cleanLogs, quiet);
 	}
 
-	private async processLogStream(stream: ReadableStream, clean: boolean) {
+	private async processLogStream(stream: ReadableStream, clean: boolean, quiet: boolean) {
 		const reader = stream.getReader();
 		const decoder = new TextDecoder();
 
@@ -60,42 +124,41 @@ export class TomcatService {
 			if (done) break;
 
 			const chunk = decoder.decode(value);
-			const lines = chunk.split('\n');
+			const lines = chunk.split(/[\r\n]+/);
 
 			for (const line of lines) {
 				const cleanLine = line.trim();
-				if (!cleanLine) continue;
+				if (!cleanLine || cleanLine.startsWith("Listening for transport")) continue;
+
+				if (cleanLine.includes("Server startup in") || cleanLine.includes("SEVERE") || cleanLine.includes("Exception")) {
+					const isSuccess = cleanLine.includes("Server startup in");
+					if (this.stopStartupSpinner) {
+						this.stopStartupSpinner(isSuccess);
+						this.stopStartupSpinner = undefined;
+					}
+					if (isSuccess && this.onReady) {
+						this.onReady();
+					}
+				}
 
 				if (clean) {
-					if (this.isSystemNoise(cleanLine)) continue;
-					console.log(this.summarize(cleanLine));
+					if (quiet && !Logger.isEssential(cleanLine)) {
+						if (Logger.isSystemNoise(cleanLine)) continue;
+						if (cleanLine.includes("INFO")) continue;
+					} else if (Logger.isSystemNoise(cleanLine)) {
+						continue;
+					}
+
+					if (this.activeConfig.grep && !cleanLine.toLowerCase().includes(this.activeConfig.grep.toLowerCase())) {
+						if (!Logger.isEssential(cleanLine)) continue;
+					}
+					
+					const summarized = Logger.summarize(cleanLine);
+					console.log(summarized);
 				} else {
 					console.log(cleanLine);
 				}
 			}
 		}
-	}
-
-	private isSystemNoise(line: string): boolean {
-		return line.startsWith("Using ") || line.includes("Command line argument") || line.includes("VersionLoggerListener");
-	}
-
-	private summarize(line: string): string {
-		let color = "";
-		let label = "";
-
-		if (line.includes("INFO")) { color = "\x1b[32m"; label = "INFO"; }
-		else if (line.includes("WARNING")) { color = "\x1b[33m"; label = "WARN"; }
-		else if (line.includes("SEVERE") || line.includes("ERROR")) { color = "\x1b[31m"; label = "ERR "; }
-		else return line;
-
-		const parts = line.split(/INFO|WARNING|SEVERE|ERROR/);
-		if (parts.length > 1) {
-			let msg = parts[1].split("] ").pop() || parts[1];
-			msg = msg.replace(/^org\.apache\..*?\s/, "");
-			return `${color}[${label}]\x1b[0m ${msg.trim()}`;
-		}
-
-		return line;
 	}
 }
