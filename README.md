@@ -2,40 +2,93 @@
 
 Xavva é uma CLI de alto desempenho construída com **Bun** para automatizar o ciclo de desenvolvimento de aplicações Java (Maven/Gradle) rodando no Apache Tomcat. Ela foi desenhada especificamente para desenvolvedores que buscam a velocidade de ambientes modernos (como Node.js/Vite) dentro do ecossistema Java Enterprise.
 
-## 🛠️ Funcionalidades de Elite
+---
 
-- **⚡ Ultra-Fast Hot Swap**: Compilação incremental e injeção direta de arquivos `.class` e recursos (JSP, HTML, CSS, JS) no Tomcat em execução sem necessidade de restart.
-- **📦 Multi-Module Support**: Detecção recursiva de diretórios de classes em projetos complexos, garantindo que o Hot-Reload funcione entre diferentes módulos.
-- **🛠️ Modo Dev Inteligente**: O comando `xavva dev` ativa hot-reload, logs limpos, debugger (JPDA) e monitoramento de memória em um único fluxo.
-- **🌐 Live Reload Automático**: Atualiza automaticamente as abas do Chrome ou Edge após o deploy ou sincronização de arquivos, mantendo o foco no código.
-- **🔍 API Documentation (Swagger-like)**: O comando `xavva docs` mapeia estaticamente sua API, exibindo endpoints, métodos HTTP e parâmetros diretamente no terminal.
-- **📊 Real-time Log Filtering**: Filtra ruídos excessivos do Tomcat/Jersey/SLF4J, destacando erros Java com dicas de solução.
-- **📈 JVM & Memory Monitor**: Exibe o consumo de RAM do processo do Tomcat em tempo real.
-- **🩺 Doctor Mode**: Diagnostica o ambiente e corrige automaticamente problemas de **Encoding (UTF-8 BOM)**.
-- **🛡️ JAR Audit**: Analisa todas as dependências (`.jar`) da sua aplicação em busca de vulnerabilidades (CVEs).
+## 🛠️ Por que Xavva?
 
-## 🚀 Instalação e Uso
+Desenvolver para Java/Tomcat tradicionalmente envolve ciclos lentos de `clean install`, `war deploy` e restarts de servidor. O Xavva quebra esse paradigma ao introduzir um fluxo de **Hot-Reload incremental**, onde apenas o que mudou é enviado ao servidor.
 
-```bash
-# Instalação global
+### ⚡ Funcionalidades de Elite
+
+- **Ultra-Fast Hot Swap**: Compilação incremental e injeção direta de arquivos `.class` e recursos (JSP, HTML, CSS, JS) no Tomcat em execução sem restart.
+- **DCEVM Integration**: O Xavva pode baixar e configurar automaticamente uma JDK com DCEVM (JetBrains Runtime), permitindo mudanças estruturais em classes (novos métodos/campos) em tempo real.
+- **API Documentation (Swagger-like)**: Mapeamento estático de endpoints, métodos HTTP e parâmetros diretamente no terminal via `xavva docs`.
+- **Live Reload Automático**: Sincronização inteligente que atualiza o browser (Chrome/Edge) após mudanças em JSPs ou recursos estáticos.
+- **Segurança Proativa**: Auditoria de dependências (`.jar`) em busca de vulnerabilidades conhecidas (CVEs).
+- **Auto-Healing**: Diagnóstico e reparo automático de problemas comuns de ambiente, como encoding UTF-8 com BOM.
+
+---
+
+## 🚀 Começo Rápido
+
+### Pré-requisitos
+- **Windows** (Otimizado para PowerShell)
+- **Bun** instalado (`powershell -c "irm bun.sh/install.ps1 | iex"`)
+- **Tomcat** configurado via variável de ambiente `TOMCAT_HOME` ou `CATALINA_HOME`.
+
+### Instalação
+```powershell
+# Instalação global via NPM
 npm install -g @archznn/xavva
 
-# Ou rodar sem instalar via npx
+# Ou use diretamente via npx
 npx @archznn/xavva dev
 ```
 
-## ⚙️ Zero Config & Auto-Detection
+---
 
-O Xavva identifica automaticamente se seu projeto usa **Maven** (`pom.xml`) ou **Gradle** (`build.gradle`) e localiza o Tomcat através das variáveis `TOMCAT_HOME` ou `CATALINA_HOME`.
+## 📖 Referência de Comandos
 
-### Comandos Principais
+O Xavva é inteligente: ele detecta automaticamente se seu projeto usa **Maven** (`pom.xml`) ou **Gradle** (`build.gradle`).
 
-```bash
-xavva dev          # Modo desenvolvimento completo com Hot-Reload
-xavva docs         # Documentação estática de endpoints
-xavva audit        # Auditoria de segurança de dependências
-xavva doctor --fix # Diagnóstico e reparo de ambiente
-```
+### 1. Modo Desenvolvimento (`xavva dev`)
+O comando principal para o dia a dia. Ativa o monitoramento de arquivos e o Hot-Reload.
+- **O que faz**: Compila Java, sincroniza recursos, limpa logs, inicia o Tomcat e monitora mudanças.
+- **Flags úteis**: 
+  - `--no-build`: Pula o build inicial.
+  - `--port 8081`: Define uma porta específica para o Tomcat.
+
+### 2. Documentação de API (`xavva docs`)
+Gera uma documentação instantânea dos seus controladores Jersey/Spring no terminal.
+- Mostra a URL completa, método HTTP e parâmetros (Path, Query, Body).
+
+### 3. Diagnóstico e Reparo (`xavva doctor`)
+Verifica se o seu ambiente está saudável.
+- **`xavva doctor --fix`**:
+  - Instala o **JetBrains Runtime (DCEVM)** se necessário.
+  - Remove automaticamente o **BOM (Byte Order Mark)** de arquivos Java que causam erros de compilação.
+  - Configura o `JAVA_HOME` do sistema.
+
+### 4. Auditoria de Segurança (`xavva audit`)
+Analisa a pasta `WEB-INF/lib` em busca de JARs vulneráveis. Essencial para manter a integridade do projeto antes de deploys em produção.
+
+### 5. Debug Mode (`xavva debug`)
+Inicia o Tomcat com a porta de debug JPDA ativa (padrão 8000), permitindo que você anexe seu Eclipse/IntelliJ/VS Code instantaneamente.
+
+### 6. Logs em Tempo Real (`xavva logs`)
+Exibe os logs do Tomcat filtrando ruídos excessivos e destacando StackTraces importantes. Use `--grep "NomeDaClasse"` para focar em logs específicos.
 
 ---
-*Desenvolvido para transformar a experiência de desenvolvimento Java Legacy em algo ágil e produtivo.*
+
+## ⚙️ Configuração (Zero Config)
+
+O Xavva funciona sem arquivos de configuração externos, baseando-se no ambiente:
+
+| Variável | Descrição |
+|----------|-----------|
+| `TOMCAT_HOME` | Caminho raiz do seu Apache Tomcat. |
+| `JAVA_HOME` | JDK utilizada para compilação e execução. |
+
+**Dica**: O Xavva cria automaticamente uma pasta `.xavva` no seu projeto para cache e logs, e a adiciona ao seu `.gitignore`.
+
+---
+
+## 🧩 Sincronização de Recursos
+
+Ao editar um arquivo, o Xavva decide a melhor estratégia:
+- **`.java`**: Compila apenas a classe e injeta o bytecode.
+- **`.jsp` / `.html` / `.css`**: Sincroniza o arquivo diretamente na pasta de deploy do Tomcat e avisa o browser para atualizar.
+- **`pom.xml`**: Identifica que uma mudança estrutural ocorreu e sugere um rebuild completo.
+
+---
+*Desenvolvido para transformar o legado em produtivo. 🚀*
