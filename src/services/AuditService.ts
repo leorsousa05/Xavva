@@ -34,7 +34,6 @@ export class AuditService {
 
         const stopSpinner = Logger.spinner(`Auditando ${jars.length} dependências`);
 
-        // Process in chunks to avoid overwhelming the API
         const chunkSize = 10;
         for (let i = 0; i < jars.length; i += chunkSize) {
             const chunk = jars.slice(i, i + chunkSize);
@@ -52,7 +51,6 @@ export class AuditService {
         const info = await this.extractJarInfo(jarPath);
         
         if (!info.artifactId || !info.version) {
-            // Fallback to filename parsing if pom.properties is missing
             const match = jarName.match(/(.+)-([\d\.]+.*)\.jar/);
             if (match) {
                 info.artifactId = info.artifactId || match[1];
@@ -70,8 +68,6 @@ export class AuditService {
     }
 
     private async extractJarInfo(jarPath: string): Promise<{ groupId?: string, artifactId?: string, version?: string }> {
-        // We use PowerShell to quickly peek inside the JAR for pom.properties
-        // This is faster than extracting the whole JAR
         const normalizedPath = jarPath.split(path.sep).join("/");
         const psCommand = `
             Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -137,7 +133,6 @@ export class AuditService {
     private extractSeverity(vuln: any): string {
         if (vuln.database_specific?.severity) return vuln.database_specific.severity;
         if (vuln.advisories?.[0]?.url?.includes("github.com/advisories")) {
-            // Try to infer from details if common keywords exist
             const d = (vuln.details || "").toLowerCase();
             if (d.includes("critical")) return "CRITICAL";
             if (d.includes("high")) return "HIGH";

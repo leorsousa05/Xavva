@@ -49,7 +49,8 @@ export class RunCommand implements Command {
 
         if (this.debug) {
             Logger.warn(`🚀 Aguardando debugger na porta 5005 para ${className}...`);
-            Logger.log(`${"\x1b[36m"}Dica:${"\x1b[0m"} No VS Code ou IntelliJ, use 'Attach to Remote JVM' na porta 5005.\n`);
+            Logger.log(`${Logger.C.cyan}Dica:${Logger.C.reset} No VS Code ou IntelliJ, use 'Attach to Remote JVM' na porta 5005.`);
+            Logger.newline();
         } else {
             Logger.warn(`🚀 Executando ${className}...`);
         }
@@ -140,7 +141,7 @@ export class RunCommand implements Command {
         });
 
         return new Promise((resolve) => {
-            readline.question(`\n  Escolha a classe (1-${uniqueClasses.length}) ou [C]ancelar: `, (answer: string) => {
+            readline.question(`  Escolha a classe (1-${uniqueClasses.length}) ou [C]ancelar: `, (answer: string) => {
                 readline.close();
                 const idx = parseInt(answer) - 1;
                 if (!isNaN(idx) && uniqueClasses[idx]) {
@@ -175,7 +176,7 @@ export class RunCommand implements Command {
             });
 
             return new Promise((resolve) => {
-                readline.question(`\n  Escolha a classe (1-${Math.min(history.length, 5)}) ou [C]ancelar: `, (answer: string) => {
+                readline.question(`  Escolha a classe (1-${Math.min(history.length, 5)}) ou [C]ancelar: `, (answer: string) => {
                     readline.close();
                     if (!answer.trim()) {
                         resolve(history[0]);

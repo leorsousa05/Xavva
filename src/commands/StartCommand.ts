@@ -15,7 +15,7 @@ export class StartCommand implements Command {
             Logger.step("Checking ports");
             await tomcat.killConflict();
             Logger.step("Starting Tomcat");
-            tomcat.start(config.project.cleanLogs, config.project.debug, config.project.skipScan, config.project.quiet);
+            tomcat.start(config, false);
             
             await new Promise(() => {}); 
         } catch (error: any) {

@@ -51,7 +51,7 @@ export class BuildService {
 		if (proc.exitCode !== 0) {
             if (!this.projectConfig.verbose) {
                 const err = await new Response(proc.stderr).text();
-                console.log(err);
+                Logger.log(err);
             }
             Logger.error(`${this.projectConfig.buildTool.toUpperCase()} build failed!`);
             throw new Error("Falha no build do Java!");
@@ -79,7 +79,7 @@ export class BuildService {
 					errorCount++;
 					if (errorCount > maxErrors && !this.projectConfig.verbose) {
 						if (errorCount === maxErrors + 1) {
-							console.log(`\n  ${"\x1b[31m"}... e mais erros ocultos. Use -V para ver todos.${"\x1b[0m"}`);
+							Logger.warn("... e mais erros ocultos. Use -V para ver todos.");
 						}
 						continue;
 					}
@@ -92,7 +92,7 @@ export class BuildService {
 				}
 
 				const summarized = Logger.summarize(cleanLine);
-				if (summarized) console.log(summarized);
+				if (summarized) Logger.log(summarized);
 			}
 		}
 	}
@@ -105,7 +105,7 @@ export class BuildService {
 
 		if (!appFolder && fs.existsSync(webappsPath)) {
 			const folders = fs.readdirSync(webappsPath, { withFileTypes: true })
-				.filter((dirent: any) => dirent.isDirectory() && !["ROOT", "manager", "host-manager", "docs"].includes(dirent.name));
+				.filter((dirent: any) => dirent.isDirectory() && !["ROOT", "manager", "host-manager", "docs", "examples"].includes(dirent.name));
 			
 			if (folders.length === 1) {
 				appFolder = folders[0].name;
@@ -124,7 +124,6 @@ export class BuildService {
 		if (!fs.existsSync(sourceDir)) return null;
 		
 		if (!appFolder || !fs.existsSync(destDir)) {
-			Logger.warn("Pasta descompactada no Tomcat não encontrada. Hot Swap impossível.");
 			return null;
 		}
 
@@ -145,11 +144,10 @@ export class BuildService {
 		};
 
 		copyDir(sourceDir, destDir);
-		Logger.success("Classes swapped in running Tomcat");
 		return appFolder;
 	}
 
-	async deployToWebapps(): Promise<string> {
+	async deployToWebapps(): Promise<{ path: string, finalName: string }> {
 		const destDir = path.join(this.tomcatConfig.path, this.tomcatConfig.webapps);
 		
 		Logger.step("Searching for generated artifacts");
@@ -187,12 +185,10 @@ export class BuildService {
 			Logger.info("Artifact", warFile.name);
 			if (this.projectConfig.appName) Logger.info("Deploy as", finalName);
 		} else {
-			const displayName = this.projectConfig.appName ? `${this.projectConfig.appName}` : warFile.name.replace(".war", "");
-			process.stdout.write(`  ${"\x1b[90m"}➜${"\x1b[0m"} Deploying ${"\x1b[1m"}${displayName}${"\x1b[0m"}...\n`);
+			Logger.process(`Deploying ${this.projectConfig.appName ? this.projectConfig.appName : warFile.name.replace(".war", "")}...`);
 		}
 		
-		copyFileSync(warFile.path, path.join(destDir, finalName));
 		this.inferredAppName = finalName.replace(".war", "");
-		return finalName;
+		return { path: warFile.path, finalName };
 	}
 }

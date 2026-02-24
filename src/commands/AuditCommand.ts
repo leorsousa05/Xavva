@@ -11,12 +11,10 @@ export class AuditCommand implements Command {
 
         let appName = config.project.appName;
         
-        // 1. Tentar inferir do diretório atual se não foi passado via config
         if (!appName) {
             appName = this.inferFromArtifacts();
         }
 
-        // 2. Se ainda não tem nome, tenta inferir do Tomcat
         if (!appName) {
             const webappsPath = path.join(config.tomcat.path, "webapps");
             if (fs.existsSync(webappsPath)) {
@@ -68,14 +66,12 @@ export class AuditCommand implements Command {
     }
 
     private inferFromArtifacts(): string | undefined {
-        // Busca .war no target (Maven) ou build/libs (Gradle)
         const paths = ["target", "build/libs"];
         for (const p of paths) {
             const fullPath = path.join(process.cwd(), p);
             if (fs.existsSync(fullPath)) {
                 const wars = fs.readdirSync(fullPath).filter(f => f.endsWith(".war"));
                 if (wars.length > 0) {
-                    // Retorna o nome do .war mais recente sem a extensão
                     const latest = wars.map(name => ({
                         name,
                         time: fs.statSync(path.join(fullPath, name)).mtimeMs

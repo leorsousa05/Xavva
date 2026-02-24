@@ -49,12 +49,12 @@ export class DocsCommand implements Command {
 
     private renderEndpoint(ep: ApiEndpoint, port: number) {
         const methodColors: Record<string, string> = {
-            GET: "\x1b[32m",    // Green
-            POST: "\x1b[33m",   // Yellow
-            PUT: "\x1b[34m",    // Blue
-            DELETE: "\x1b[31m", // Red
-            PATCH: "\x1b[35m",  // Magenta
-            ALL: "\x1b[37m"     // White
+            GET: "\x1b[32m",
+            POST: "\x1b[33m",
+            PUT: "\x1b[34m",
+            DELETE: "\x1b[31m",
+            PATCH: "\x1b[35m",
+            ALL: "\x1b[37m"
         };
 
         const color = methodColors[ep.method] || "\x1b[37m";
@@ -75,11 +75,11 @@ export class DocsCommand implements Command {
 
     private renderParameter(param: ApiParam) {
         const sourceColors: Record<string, string> = {
-            PATH: "\x1b[35m",   // Magenta
-            QUERY: "\x1b[36m",  // Cyan
-            BODY: "\x1b[33m",   // Yellow
-            HEADER: "\x1b[32m", // Green
-            FORM: "\x1b[34m"    // Blue
+            PATH: "\x1b[35m",
+            QUERY: "\x1b[36m",
+            BODY: "\x1b[33m",
+            HEADER: "\x1b[32m",
+            FORM: "\x1b[34m"
         };
 
         const color = sourceColors[param.source] || "\x1b[37m";

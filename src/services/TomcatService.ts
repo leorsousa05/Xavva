@@ -70,13 +70,129 @@ export class TomcatService {
 		}
 	}
 
-	start(cleanLogs: boolean = false, debug: boolean = false, skipScan: boolean = false, quiet: boolean = false) {
+	private async ensureHotswapAgent(): Promise<string | null> {
+		const fs = require("fs");
+		const path = require("path");
+		const os = require("os");
+		const agentDir = path.join(os.homedir(), ".xavva", "agents");
+		const agentPath = path.join(agentDir, "hotswap-agent-2.0.3.jar");
+
+		if (fs.existsSync(agentPath) && fs.statSync(agentPath).size > 1000) return agentPath;
+
+		try {
+			if (!fs.existsSync(agentDir)) fs.mkdirSync(agentDir, { recursive: true });
+			
+			Logger.step("Downloading HotswapAgent v2.0.3 (Global)...");
+			const url = "https://github.com/HotswapProjects/HotswapAgent/releases/download/RELEASE-2.0.3/hotswap-agent-2.0.3.jar";
+			const response = await fetch(url);
+			if (!response.ok) throw new Error(`Status: ${response.status}`);
+			
+			const buffer = await response.arrayBuffer();
+			fs.writeFileSync(agentPath, Buffer.from(buffer));
+			Logger.success("HotswapAgent v2.0.3 installed globally!");
+			return agentPath;
+		} catch (e) {
+			Logger.warn("Falha ao baixar HotswapAgent. Usando hot swap padrão da JVM.");
+			return null;
+		}
+	}
+
+	private findAllClassPaths(buildTool: 'maven' | 'gradle'): string[] {
+		const fs = require("fs");
+		const path = require("path");
+		const results: string[] = [];
+		const root = process.cwd();
+
+		const scan = (dir: string) => {
+			try {
+				const files = fs.readdirSync(dir, { withFileTypes: true });
+				for (const file of files) {
+					if (!file.isDirectory()) continue;
+					
+					const name = file.name;
+					if (name.startsWith('.') || ['node_modules', 'out', 'bin', 'src', 'webapps', '.xavva'].includes(name)) continue;
+
+					const fullPath = path.join(dir, name);
+					
+					const isMavenClasses = buildTool === 'maven' && name === 'classes' && dir.endsWith('target');
+					const isGradleClasses = buildTool === 'gradle' && name === 'main' && dir.endsWith(path.join('classes', 'java'));
+					
+					if (isMavenClasses || isGradleClasses) {
+						results.push(fullPath.replace(/\\/g, "/"));
+					} else {
+						scan(fullPath);
+					}
+				}
+			} catch (e) {}
+		};
+
+		scan(root);
+		
+		if (results.length === 0) {
+			const defaultPath = buildTool === 'maven' 
+				? path.join(root, "target", "classes")
+				: path.join(root, "build", "classes", "java", "main");
+			results.push(defaultPath.replace(/\\/g, "/"));
+		}
+
+		return results;
+	}
+
+	async start(config: any, isWatching: boolean = false) {
 		const binPath = `${this.activeConfig.path}\\bin\\catalina.bat`;
-		const args = debug ? ["jpda", "run"] : ["run"];
+		const args = (config.project.debug || isWatching) ? ["jpda", "run"] : ["run"];
 		
 		const catalinaOpts = [process.env.CATALINA_OPTS || ""];
 		
-		if (skipScan) {
+		if (config.project.debug || isWatching) {
+			const agentPath = await this.ensureHotswapAgent();
+			if (agentPath) {
+				catalinaOpts.push(`-javaagent:${agentPath}`);
+				
+				let javaBin = "java";
+				if (process.env.JAVA_HOME) {
+					javaBin = require("path").join(process.env.JAVA_HOME, "bin", "java.exe");
+				}
+
+				const javaVer = Bun.spawnSync([javaBin, "-version"]);
+				const output = (javaVer.stderr.toString() + javaVer.stdout.toString()).toLowerCase();
+				
+				if (output.includes("dcevm") || output.includes("jbr") || output.includes("trava")) {
+					catalinaOpts.push("-XX:+AllowEnhancedClassRedefinition");
+				}
+
+				catalinaOpts.push(
+					"--add-opens=java.base/jdk.internal.loader=ALL-UNNAMED",
+					"--add-opens=java.base/java.lang=ALL-UNNAMED",
+					"--add-opens=java.base/java.io=ALL-UNNAMED",
+					"--add-opens=java.base/java.net=ALL-UNNAMED",
+					"--add-opens=java.base/java.util=ALL-UNNAMED",
+					"--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
+					"--add-opens=java.base/java.security=ALL-UNNAMED",
+					"--add-opens=java.base/jdk.internal.reflect=ALL-UNNAMED",
+					"--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
+					"--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+					"--add-opens=java.base/java.util.jar=ALL-UNNAMED",
+					"--add-opens=java.desktop/java.beans=ALL-UNNAMED"
+				);
+				
+				const fs = require("fs");
+				const path = require("path");
+				const xavvaDir = path.join(process.cwd(), ".xavva");
+				if (!fs.existsSync(xavvaDir)) fs.mkdirSync(xavvaDir, { recursive: true });
+				
+				const classPaths = this.findAllClassPaths(config.project.buildTool);
+				const extraClasspath = classPaths.join(",");
+
+				const propsPath = path.join(xavvaDir, "hotswap-agent.properties");
+				const propsContent = `autoHotswap=true\nautoHotswap.delay=3000\nwatchResources=false\nextraClasspath=${extraClasspath}\nLOGGER=info`;
+				fs.writeFileSync(propsPath, propsContent);
+				
+				catalinaOpts.push(`-Dhotswap-agent.properties.path=${propsPath}`);
+			}
+		}
+
+		if (config.project.skipScan) {
 			catalinaOpts.push(
 				"-Dtomcat.util.scan.StandardJarScanFilter.jarsToSkip=*.jar",
 				"-Dtomcat.util.scan.StandardJarScanFilter.jarsToScan=",
@@ -93,13 +209,18 @@ export class TomcatService {
 			CATALINA_OPTS: catalinaOpts.join(" ").trim()
 		};
 
-		if (debug) {
-			Logger.warn("🐞 Java Debugger habilitado na porta 5005");
+		if (process.env.JAVA_HOME) {
+			env.JAVA_HOME = process.env.JAVA_HOME;
+			env.JRE_HOME = process.env.JAVA_HOME;
+		}
+
+		if (config.project.debug) {
+			Logger.debug("Java Debugger habilitado na porta 5005");
 			env.JPDA_ADDRESS = "5005";
 			env.JPDA_TRANSPORT = "dt_socket";
 		}
 
-		if (cleanLogs || quiet) {
+		if ((config.project.cleanLogs || config.project.quiet) && !config.project.verbose) {
 			this.stopStartupSpinner = Logger.spinner("Starting Tomcat server");
 		}
 
@@ -111,11 +232,11 @@ export class TomcatService {
 
 		this.pid = this.currentProcess.pid;
 
-		this.processLogStream(this.currentProcess.stdout, cleanLogs, quiet);
-		this.processLogStream(this.currentProcess.stderr, cleanLogs, quiet);
+		this.processLogStream(this.currentProcess.stdout, config.project.cleanLogs, config.project.quiet, config.project.verbose, config.tomcat.grep);
+		this.processLogStream(this.currentProcess.stderr, config.project.cleanLogs, config.project.quiet, config.project.verbose, config.tomcat.grep);
 	}
 
-	private async processLogStream(stream: ReadableStream, clean: boolean, quiet: boolean) {
+	private async processLogStream(stream: ReadableStream, clean: boolean, quiet: boolean, verbose: boolean, grep: string) {
 		const reader = stream.getReader();
 		const decoder = new TextDecoder();
 
@@ -141,6 +262,11 @@ export class TomcatService {
 					}
 				}
 
+				if (verbose) {
+					Logger.log(cleanLine);
+					continue;
+				}
+
 				if (clean) {
 					if (quiet && !Logger.isEssential(cleanLine)) {
 						if (Logger.isSystemNoise(cleanLine)) continue;
@@ -149,14 +275,14 @@ export class TomcatService {
 						continue;
 					}
 
-					if (this.activeConfig.grep && !cleanLine.toLowerCase().includes(this.activeConfig.grep.toLowerCase())) {
+					if (grep && !cleanLine.toLowerCase().includes(grep.toLowerCase())) {
 						if (!Logger.isEssential(cleanLine)) continue;
 					}
 					
 					const summarized = Logger.summarize(cleanLine);
-					console.log(summarized);
+					if (summarized) Logger.log(summarized);
 				} else {
-					console.log(cleanLine);
+					Logger.log(cleanLine);
 				}
 			}
 		}

@@ -32,16 +32,27 @@ export class DeployCommand implements Command {
         const builder = this.builder || new BuildService(config.project, config.tomcat);
 
         if (!incremental) {
-            Logger.section("Deploy Configuration");
-            if (config.project.quiet) {
-                Logger.info("App", `${config.project.appName} (${config.project.buildTool.toUpperCase()}${config.project.profile ? ` - ${config.project.profile}` : ""})`);
-                Logger.info("Status", `Watch: ${isWatching ? "ON" : "OFF"} | Debug: ${config.project.debug ? "ON" : "OFF"}`);
-            } else {
-                Logger.info("Tool", config.project.buildTool.toUpperCase());
-                Logger.info("App Name", config.project.appName);
-                if (config.project.profile) Logger.info("Profile", config.project.profile);
-                Logger.info("Watch Mode", isWatching ? "Active" : "Inactive");
-                Logger.info("Debug Mode", config.project.debug ? "Active" : "Inactive");
+            Logger.config("Runtime", config.project.buildTool.toUpperCase());
+            Logger.config("Watch Mode", isWatching ? "ON" : "OFF");
+            Logger.config("Debug", config.project.debug ? "ON (Port 5005)" : "OFF");
+
+            let javaBin = "java";
+            if (process.env.JAVA_HOME) {
+                const homeBin = path.join(process.env.JAVA_HOME, "bin", "java.exe");
+                if (fs.existsSync(homeBin)) javaBin = homeBin;
+            }
+            
+            const javaVer = Bun.spawnSync([javaBin, "-version"]);
+            const output = (javaVer.stderr.toString() + javaVer.stdout.toString()).toLowerCase();
+            const hasDcevm = output.includes("dcevm") || 
+                             output.includes("jetbrains") || 
+                             output.includes("trava") || 
+                             output.includes("jbr");
+            
+            if (!hasDcevm && isWatching) {
+                Logger.config("Hot Reload", "Standard (No structural changes)");
+            } else if (hasDcevm) {
+                Logger.config("Hot Reload", "Advanced (DCEVM Active)");
             }
 
             const srcPath = path.join(process.cwd(), "src");
@@ -49,12 +60,11 @@ export class DeployCommand implements Command {
                 const contextPath = (config.project.appName || "").replace(".war", "");
                 const endpoints = EndpointService.scan(srcPath, contextPath);
                 if (endpoints.length > 0) {
-                    Logger.info("Endpoints", endpoints.length);
+                    Logger.config("Endpoints", endpoints.length);
                 }
             }
         } else {
-            console.log("");
-            Logger.warn("Re-deploying detected changes...");
+            Logger.watcher("Change detected", "change");
         }
         
         try {
@@ -65,45 +75,64 @@ export class DeployCommand implements Command {
             }
 
             if (!config.project.skipBuild) {
+                if (incremental) Logger.watcher("Incremental compilation", "start");
                 await builder.runBuild(incremental);
+                if (!incremental) Logger.build("Full project build");
             }
 
             if (incremental) {
-                const appFolder = await builder.syncClasses();
-                const actualContextPath = contextPath || appFolder || "";
-                if (actualContextPath) {
-                    const actualAppUrl = `http://localhost:${config.tomcat.port}/${actualContextPath}`;
-                    await this.reloadBrowser(actualAppUrl);
-                }
+                const actualAppFolder = await builder.syncClasses(true); 
+                const actualContextPath = contextPath || actualAppFolder || "";
+                const actualAppUrl = `http://localhost:${config.tomcat.port}/${actualContextPath}`;
+                await this.reloadBrowser(actualAppUrl);
+                Logger.watcher("Redeploy completed", "success");
                 return;
             }
 
-            Logger.step("Cleaning webapps and cache");
-            tomcat.clearWebapps();
-
-            Logger.step("Moving artifacts to webapps");
-            const artifact = await builder.deployToWebapps();
+            Logger.build("Webapps cleaned");
+            const artifactInfo = await builder.deployToWebapps();
+            Logger.build("Artifacts generated");
             
-            const finalContextPath = contextPath || artifact.replace(".war", "");
+            const finalContextPath = contextPath || artifactInfo.finalName.replace(".war", "");
+            const appWebappPath = path.join(config.tomcat.path, "webapps", finalContextPath);
+
+            if (!fs.existsSync(appWebappPath)) fs.mkdirSync(appWebappPath, { recursive: true });
+
+            try {
+                Bun.spawnSync(["jar", "xf", artifactInfo.path], { cwd: appWebappPath });
+                Logger.build("Artifacts deployed");
+            } catch (e: any) {
+                const extractCmd = `powershell -command "Expand-Archive -Path '${artifactInfo.path}' -DestinationPath '${appWebappPath}' -Force"`;
+                Bun.spawnSync(["powershell", "-command", extractCmd]);
+                Logger.build("Artifacts deployed (legacy mode)");
+            }
+
+            const webInfClassesDir = path.join(appWebappPath, "WEB-INF", "classes");
+            if (!fs.existsSync(webInfClassesDir)) fs.mkdirSync(webInfClassesDir, { recursive: true });
+            
+            const xavvaProps = path.join(process.cwd(), ".xavva", "hotswap-agent.properties");
+            if (fs.existsSync(xavvaProps)) {
+                fs.copyFileSync(xavvaProps, path.join(webInfClassesDir, "hotswap-agent.properties"));
+            }
+
             const finalAppUrl = `http://localhost:${config.tomcat.port}/${finalContextPath}`;
             
             tomcat.onReady = async () => {
-                Logger.step(`Checking health at ${finalAppUrl}`);
-                
                 try {
                     await new Promise(r => setTimeout(r, 1500));
-                    
                     const response = await fetch(finalAppUrl);
                     if (response.status < 500) {
                         const memory = await tomcat.getMemoryUsage();
-                        Logger.success(`App is UP! (Status: ${response.status} | RAM: ${memory})`);
+                        Logger.health(finalAppUrl, "success");
+                        Logger.health(`Status ${response.status}`, "success");
+                        Logger.health(`Memory ${memory}`, "success");
 
                         if (!config.project.quiet) {
                             const endpoints = EndpointService.scan(path.join(process.cwd(), "src"), finalContextPath);
                             if (endpoints.length > 0) {
-                                console.log(`\n  ${"\x1b[36m"}◈ ENDPOINT MAP:${"\x1b[0m"}`);
-                                endpoints.forEach(e => console.log(`    ${"\x1b[90m"}➜${"\x1b[0m"} http://localhost:${config.tomcat.port}${e.fullPath}`));
-                                console.log("");
+                                Logger.newline();
+                                Logger.log(`${Logger.C.cyan}◈ ENDPOINT MAP:${Logger.C.reset}`);
+                                endpoints.forEach(e => Logger.log(`${Logger.C.dim}➜ ${Logger.C.reset}http://localhost:${config.tomcat.port}${e.fullPath}`));
                             }
                         }
                         
@@ -118,14 +147,14 @@ export class DeployCommand implements Command {
                             }
                         }
                     } else {
-                        Logger.warn(`App is starting, but returned status ${response.status}. Check your logs.`);
+                        Logger.health(`App returned status ${response.status}`, "warn");
                     }
                 } catch (e) {
-                    Logger.error(`Health check failed: Could not connect to ${finalAppUrl}`);
+                    Logger.health(`Could not connect to ${finalAppUrl}`, "error");
                 }
             };
 
-            tomcat.start(config.project.cleanLogs, config.project.debug, config.project.skipScan, config.project.quiet);
+            tomcat.start(config, isWatching);
         } catch (error: any) {
             Logger.error(error.message);
             throw error;
@@ -133,26 +162,40 @@ export class DeployCommand implements Command {
     }
 
     async syncResource(config: AppConfig, filename: string): Promise<void> {
-        const appName = config.project.appName || "";
-        const explodedPath = path.join(config.tomcat.path, "webapps", appName);
+        const contextPath = (config.project.appName || "").replace(".war", "");
         
-        if (!fs.existsSync(explodedPath)) {
+        const webappsPath = path.join(config.tomcat.path, "webapps");
+        let appFolder = contextPath;
+        
+        if (!appFolder && fs.existsSync(webappsPath)) {
+            const folders = fs.readdirSync(webappsPath, { withFileTypes: true })
+                .filter(dirent => dirent.isDirectory() && !["ROOT", "manager", "host-manager", "docs"].includes(dirent.name));
+            if (folders.length === 1) appFolder = folders[0].name;
+        }
+
+        const explodedPath = path.join(webappsPath, appFolder);
+        
+        if (!appFolder || !fs.existsSync(explodedPath)) {
             return;
         }
 
         const parts = filename.split(/[/\\]/);
         const webappIndex = parts.indexOf("webapp");
+        const webContentIndex = parts.indexOf("WebContent");
+        const rootIndex = webappIndex !== -1 ? webappIndex : webContentIndex;
         
-        if (webappIndex !== -1) {
-            const relPath = parts.slice(webappIndex + 1).join(path.sep);
+        if (rootIndex !== -1) {
+            const relPath = parts.slice(rootIndex + 1).join(path.sep);
             const targetPath = path.join(explodedPath, relPath);
             
             try {
+                const targetDir = path.dirname(targetPath);
+                if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
                 fs.copyFileSync(filename, targetPath);
                 if (!config.project.quiet) Logger.success(`Synced ${path.basename(filename)} directly to Tomcat!`);
                 
-                const contextPath = config.project.appName || "";
-                const appUrl = `http://localhost:${config.tomcat.port}/${contextPath}`;
+                const appUrl = `http://localhost:${config.tomcat.port}/${appFolder}`;
                 await this.reloadBrowser(appUrl);
             } catch (e) {
                 Logger.error(`Failed to sync resource: ${filename}`);

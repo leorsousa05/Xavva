@@ -80,7 +80,7 @@ export class ConfigManager {
         if (fs.existsSync(path.join(process.cwd(), "build.gradle")) || fs.existsSync(path.join(process.cwd(), "build.gradle.kts"))) {
             return "gradle";
         }
-        return "maven"; // Default to maven if not found
+        return "maven";
     }
 
     private static ensureGitIgnore() {

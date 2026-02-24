@@ -33,11 +33,9 @@ export class EndpointService {
         const endpoints: ApiEndpoint[] = [];
         const className = fileName.replace(".java", "");
 
-        // Find class-level mapping
         const classPathMatch = content.match(/@(Path|RequestMapping)\s*\(\s*["'](.*?)["']\s*\)/);
         const basePath = classPathMatch ? this.normalizePath(classPathMatch[2]) : "";
 
-        // Common mapping annotations
         const methodRegex = /@(GET|POST|PUT|DELETE|PATCH|Path|RequestMapping|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\s*(\(\s*["'](.*?)["']\s*\))?\s*([\s\S]*?)\s+([a-zA-Z0-9_]+)\s*\(([\s\S]*?)\)/g;
         
         let match;
@@ -98,7 +96,6 @@ export class EndpointService {
         for (const p of individualParams) {
             const trimmed = p.trim();
             
-            // Check for annotations
             const pathParam = trimmed.match(/@PathParam\s*\(\s*["'](.*?)["']\s*\)\s*(\w+)\s+(\w+)/);
             const pathVariable = trimmed.match(/@PathVariable\s*\(\s*["'](.*?)["']\s*\)\s*(\w+)\s+(\w+)/);
             const queryParam = trimmed.match(/@QueryParam\s*\(\s*["'](.*?)["']\s*\)\s*(\w+)\s+(\w+)/);

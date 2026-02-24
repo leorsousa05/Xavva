@@ -20,7 +20,7 @@ async function main() {
 	const { config, positionals, values } = await ConfigManager.load();
 
 	if (values.version) {
-		console.log(`v${pkg.version}`);
+		Logger.log(`v${pkg.version}`);
 		process.exit(0);
 	}
 
@@ -66,7 +66,7 @@ async function main() {
 			await handleDeploy(config, values);
 			break;
 		default:
-			console.error(`Comando desconhecido: ${commandName}`);
+			Logger.error(`Comando desconhecido: ${commandName}`);
 			new HelpCommand().execute(config);
 			process.exit(1);
 	}
@@ -93,8 +93,14 @@ async function handleDeploy(config: any, values: any) {
 		await run(false);
 
 		let debounceTimer: Timer;
+		const coolingFiles = new Set<string>();
+
 		watch(process.cwd(), { recursive: true }, async (event, filename) => {
 			if (!filename) return;
+
+			if (coolingFiles.has(filename)) return;
+			coolingFiles.add(filename);
+			setTimeout(() => coolingFiles.delete(filename), 500);
 
 			const isJava = filename.endsWith(".java") || filename === "pom.xml" || filename === "build.gradle";
 			const isResource = filename.endsWith(".jsp") || filename.endsWith(".html") || 
@@ -116,21 +122,34 @@ async function handleDeploy(config: any, values: any) {
 				if (isJsp) {
 					const parts = filename.split(/[/\\]/);
 					const webappIndex = parts.indexOf("webapp");
-					if (webappIndex !== -1) {
-						const relPath = parts.slice(webappIndex + 1).join("/");
+					const webContentIndex = parts.indexOf("WebContent");
+					const rootIndex = webappIndex !== -1 ? webappIndex : webContentIndex;
+
+					if (rootIndex !== -1) {
+						const relPath = parts.slice(rootIndex + 1).join("/");
 						isPrivate = relPath.startsWith("WEB-INF") || relPath.startsWith("META-INF");
-						const contextPath = (config.project.appName || "").replace(".war", "");
+						
+						let contextPath = (config.project.appName || "").replace(".war", "");
+						if (!contextPath) {
+							const webappsPath = require("path").join(config.tomcat.path, "webapps");
+							if (require("fs").existsSync(webappsPath)) {
+								const folders = require("fs").readdirSync(webappsPath, { withFileTypes: true })
+									.filter((dirent: any) => dirent.isDirectory() && !["ROOT", "manager", "host-manager", "docs"].includes(dirent.name));
+								if (folders.length === 1) contextPath = folders[0].name;
+							}
+						}
+
 						jspUrl = `http://localhost:${config.tomcat.port}${contextPath ? "/" + contextPath : ""}/${relPath}`;
 					}
 				}
 
 				if (isJsp && isPrivate) {
-					console.log(`\n  ${"\x1b[33m"}🔒${"\x1b[0m"} JSP Privado alterado (WEB-INF): ${filename}`);
-					console.log(`     ${"\x1b[90m"}Nota: Este arquivo não é acessível via URL direta.${"\x1b[0m"}`);
+					Logger.watcher(`JSP Private (WEB-INF): ${filename}`, 'change');
+					Logger.dim(`Nota: Este arquivo não é acessível via URL direta.`);
 				} else if (isJsp && jspUrl) {
-					console.log(`\n  ${"\x1b[32m"}📄${"\x1b[0m"} JSP Atualizado: ${"\x1b[4m"}${jspUrl}${"\x1b[0m"}`);
+					Logger.watcher(`JSP Updated: ${jspUrl}`, 'success');
 				} else {
-					console.log(`\n  ${"\x1b[35m"}⚡${"\x1b[0m"} Recurso alterado: ${filename}`);
+					Logger.watcher(`Resource altered: ${filename}`, 'change');
 				}
 
 				await deployCmd.syncResource(config, filename);
@@ -139,7 +158,7 @@ async function handleDeploy(config: any, values: any) {
 
 			if (!isJava) return;
 
-			console.log(`\n  ${"\x1b[33m"}👀${"\x1b[0m"} Alteração detectada em: ${filename}`);
+			Logger.watcher(filename, 'watch');
 			clearTimeout(debounceTimer);
 			
 			debounceTimer = setTimeout(() => {

@@ -1,6 +1,6 @@
 {
 	"name": "@archznn/xavva",
-	"version": "1.6.5",
+	"version": "1.7.0",
 	"description": "Ultra-fast CLI tool for Java/Tomcat development on Windows with Hot-Reload and Zero Config.",
 	"module": "src/index.ts",
 	"type": "module",
