@@ -1,14 +1,30 @@
-import { readdirSync, copyFileSync, existsSync, statSync, mkdirSync } from "fs";
+import { readdirSync, existsSync, statSync, mkdirSync, promises as fs } from "fs";
 import path from "path";
 import type { ProjectConfig, TomcatConfig } from "../types/config";
 import { Logger } from "../utils/ui";
+import { BuildCacheService } from "./BuildCacheService";
+import { ProjectService } from "./ProjectService";
 
 export class BuildService {
-	private inferredAppName: string | null = null;
-
-	constructor(private projectConfig: ProjectConfig, private tomcatConfig: TomcatConfig) { }
+	constructor(
+		private projectConfig: ProjectConfig, 
+		private tomcatConfig: TomcatConfig,
+		private projectService: ProjectService,
+		private cache: BuildCacheService
+	) { }
 
 	async runBuild(incremental = false) {
+		if (this.projectConfig.clean) {
+			this.cache.clearCache();
+		}
+
+		if (!incremental && !this.projectConfig.skipBuild) {
+			if (!this.projectConfig.clean && !this.cache.shouldRebuild(this.projectConfig.buildTool)) {
+				Logger.success("Build cache hit! Skipping full build.");
+				return;
+			}
+		}
+
 		const command = [];
 		
 		if (this.projectConfig.buildTool === 'maven') {
@@ -16,18 +32,22 @@ export class BuildService {
 			if (incremental) {
 				command.push("compile");
 			} else {
-				command.push("clean", "package");
+				if (this.projectConfig.clean) command.push("clean");
+				command.push("compile", "war:exploded");
+				command.push("-T", "1C");
 			}
-			command.push("-DskipTests");
+			command.push("-Dmaven.test.skip=true", "-Dmaven.javadoc.skip=true");
 			if (this.projectConfig.profile) command.push(`-P${this.projectConfig.profile}`);
 		} else {
 			command.push("gradle");
 			if (incremental) {
 				command.push("classes");
 			} else {
-				command.push("clean", "build");
+				if (this.projectConfig.clean) command.push("clean");
+				command.push("war");
+				command.push("--parallel", "--build-cache");
 			}
-			command.push("-x", "test");
+			command.push("-x", "test", "-x", "javadoc");
 			if (this.projectConfig.profile) command.push(`-Pprofile=${this.projectConfig.profile}`);
 		}
 
@@ -40,8 +60,8 @@ export class BuildService {
 
 		if (this.projectConfig.verbose) {
 			await Promise.all([
-				this.processBuildLogs(proc.stdout, false),
-				this.processBuildLogs(proc.stderr, false)
+				this.processBuildLogs(proc.stdout as ReadableStream, false),
+				this.processBuildLogs(proc.stderr as ReadableStream, false)
 			]);
 		}
 
@@ -56,6 +76,10 @@ export class BuildService {
             Logger.error(`${this.projectConfig.buildTool.toUpperCase()} build failed!`);
             throw new Error("Falha no build do Java!");
         }
+
+		if (!incremental) {
+			this.cache.saveCache(this.projectConfig.buildTool);
+		}
 	}
 
 	private async processBuildLogs(stream: ReadableStream, quiet: boolean) {
@@ -97,98 +121,86 @@ export class BuildService {
 		}
 	}
 
-	async syncClasses(): Promise<string | null> {
-		const fs = require("fs");
-		let appFolder = this.projectConfig.appName || this.inferredAppName || "";
-
+	async syncClasses(customSrc?: string): Promise<string | null> {
+		const appFolder = this.projectService.getInferredAppName();
 		const webappsPath = path.join(this.tomcatConfig.path, this.tomcatConfig.webapps);
 
-		if (!appFolder && fs.existsSync(webappsPath)) {
-			const folders = fs.readdirSync(webappsPath, { withFileTypes: true })
-				.filter((dirent: any) => dirent.isDirectory() && !["ROOT", "manager", "host-manager", "docs", "examples"].includes(dirent.name));
-			
-			if (folders.length === 1) {
-				appFolder = folders[0].name;
-			} else if (folders.length > 1) {
-				const sorted = folders.map((f: any) => ({
-					name: f.name,
-					time: fs.statSync(path.join(webappsPath, f.name)).mtimeMs
-				})).sort((a: any, b: any) => b.time - a.time);
-				appFolder = sorted[0].name;
+		const sourceDir = customSrc || this.projectService.getClassesDir();
+		const destDir = customSrc ? path.join(webappsPath, appFolder) : path.join(webappsPath, appFolder, "WEB-INF", "classes");
+
+		if (!existsSync(sourceDir)) return null;
+		if (!appFolder || !existsSync(destDir)) {
+			if (customSrc && appFolder) {
+				mkdirSync(destDir, { recursive: true });
+			} else {
+				return null;
 			}
 		}
 
-		const sourceDir = this.projectConfig.buildTool === 'maven' ? 'target/classes' : 'build/classes/java/main';
-		const destDir = path.join(webappsPath, appFolder, "WEB-INF", "classes");
-
-		if (!fs.existsSync(sourceDir)) return null;
-		
-		if (!appFolder || !fs.existsSync(destDir)) {
-			return null;
-		}
-
-		const copyDir = (src: string, dest: string) => {
-			if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
-			const list = fs.readdirSync(src, { withFileTypes: true });
-			for (const item of list) {
+		const fastSync = async (src: string, dest: string) => {
+			if (!existsSync(dest)) await fs.mkdir(dest, { recursive: true });
+			const list = await fs.readdir(src, { withFileTypes: true });
+			
+			const tasks = list.map(async (item) => {
 				const s = path.join(src, item.name);
 				const d = path.join(dest, item.name);
+				
 				if (item.isDirectory()) {
-					copyDir(s, d);
+					await fastSync(s, d);
 				} else {
-					if (!fs.existsSync(d) || fs.statSync(s).mtimeMs > fs.statSync(d).mtimeMs) {
-						fs.copyFileSync(s, d);
+					const sStat = await fs.stat(s);
+					let shouldCopy = false;
+
+					if (!existsSync(d)) {
+						shouldCopy = true;
+					} else {
+						const dStat = await fs.stat(d);
+						if (sStat.mtimeMs > dStat.mtimeMs || dStat.size === 0) {
+							shouldCopy = true;
+						}
+					}
+
+					if (shouldCopy) {
+						let retries = 3;
+						while (retries > 0) {
+							try {
+								await fs.copyFile(s, d);
+								const finalStat = await fs.stat(d);
+								if (item.name.endsWith(".jar") && finalStat.size === 0 && sStat.size > 0) {
+									throw new Error("Zero byte copy detected");
+								}
+								await fs.utimes(d, sStat.atime, sStat.mtime);
+								break;
+							} catch (e) {
+								retries--;
+								if (retries === 0) {
+									Logger.warn(`Failed to copy ${item.name} after retries.`);
+								} else {
+									await new Promise(r => setTimeout(r, 100));
+								}
+							}
+						}
 					}
 				}
-			}
+			});
+
+			await Promise.all(tasks);
 		};
 
-		copyDir(sourceDir, destDir);
+		await fastSync(sourceDir, destDir);
 		return appFolder;
 	}
 
-	async deployToWebapps(): Promise<{ path: string, finalName: string }> {
-		const destDir = path.join(this.tomcatConfig.path, this.tomcatConfig.webapps);
-		
+	async deployToWebapps(): Promise<{ path: string, finalName: string, isDirectory: boolean }> {
 		Logger.step("Searching for generated artifacts");
 		
-		const findWars = (dir: string): string[] => {
-			let results: string[] = [];
-			const list = readdirSync(dir, { withFileTypes: true });
-			for (const item of list) {
-				const res = path.resolve(dir, item.name);
-				if (item.isDirectory()) {
-					if (item.name === 'target' || item.name === 'build') {
-						results = results.concat(findWars(res));
-					} else if (!['node_modules', '.git', 'src', 'webapps', 'bin', 'conf', 'lib', 'logs', 'temp', 'work'].includes(item.name)) {
-						results = results.concat(findWars(res));
-					}
-				} else if (item.name.endsWith('.war')) {
-					results.push(res);
-				}
-			}
-			return results;
-		};
-
-		const allWars = findWars(process.cwd())
-			.map(f => ({ path: f, name: path.basename(f), time: statSync(f).mtime.getTime() }))
-			.sort((a, b) => b.time - a.time);
-
-		if (allWars.length === 0) {
-			throw new Error('Nenhum arquivo .war encontrado! Verifique se o build realmente gerou um artefato.');
-		}
-
-		const warFile = allWars[0];
-		const finalName = this.projectConfig.appName ? `${this.projectConfig.appName}.war` : warFile.name;
+		const artifact = this.projectService.getArtifact();
 
 		if (!this.projectConfig.quiet) {
-			Logger.info("Artifact", warFile.name);
-			if (this.projectConfig.appName) Logger.info("Deploy as", finalName);
-		} else {
-			Logger.process(`Deploying ${this.projectConfig.appName ? this.projectConfig.appName : warFile.name.replace(".war", "")}...`);
+			Logger.info(artifact.isDirectory ? "Exploded Dir" : "Artifact", path.basename(artifact.path));
+			if (this.projectConfig.appName) Logger.info("Deploy as", artifact.name);
 		}
 		
-		this.inferredAppName = finalName.replace(".war", "");
-		return { path: warFile.path, finalName };
+		return { path: artifact.path, finalName: artifact.name, isDirectory: artifact.isDirectory };
 	}
 }

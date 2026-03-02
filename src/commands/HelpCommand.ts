@@ -24,7 +24,8 @@ Comandos principais:
 
 Opções:
   -w, --watch   👀 Hot Reload: monitora arquivos e redeploya automaticamente.
-  -d, --debug   🐞 Habilita debug Java (JPDA) na porta 5005.
+  -d, --debug   🐞 Habilita debug Java (JPDA).
+  --dp [porta]  🔌 Porta do Debugger (padrão: 5005).
   -c, --clean   🧹 Logs coloridos e simplificados (recomendado).
   -q, --quiet   🤫 Mostra apenas mensagens essenciais nos logs.
   -V, --verbose 📣 Mostra logs completos do Maven/Gradle.

@@ -1,10 +1,10 @@
 import { parseArgs } from "util";
 import path from "path";
 import fs from "fs";
-import type { AppConfig } from "../types/config";
+import type { AppConfig, CLIArguments, CommandContext } from "../types/config";
 
 export class ConfigManager {
-    static async load(): Promise<{ config: AppConfig, positionals: string[], values: any }> {
+    static async load(): Promise<CommandContext> {
         const args = Bun.argv.slice(Bun.argv[0].endsWith("bun.exe") || Bun.argv[0].endsWith("bun") ? 2 : 1);
         
         const { values, positionals } = parseArgs({
@@ -25,12 +25,14 @@ export class ConfigManager {
                 profile: { type: "string", short: "P" },
                 grep: { type: "string", short: "G" },
                 verbose: { type: "boolean", short: "V" },
+                dp: { type: "string" },
                 fix: { type: "boolean" },
             },
             strict: false,
             allowPositionals: true,
         });
 
+        const cliValues = values as CLIArguments;
         const isDev = positionals.includes("dev");
         const isRun = positionals.includes("run") || positionals.includes("debug");
         
@@ -47,30 +49,32 @@ export class ConfigManager {
 
         const config: AppConfig = {
             tomcat: {
-                path: String(values.path || envTomcatPath),
-                port: parseInt(String(values.port || "8080")),
+                path: String(cliValues.path || envTomcatPath),
+                port: parseInt(String(cliValues.port || "8080")),
                 webapps: "webapps",
-                grep: values.grep ? String(values.grep) : "",
+                grep: cliValues.grep ? String(cliValues.grep) : "",
             },
             project: {
-                appName: values.name ? String(values.name) : "",
-                buildTool: (values.tool as "maven" | "gradle") || detectedTool,
-                profile: String(values.profile || ""),
-                skipBuild: !!values["no-build"],
-                skipScan: values.scan !== undefined ? !values.scan : true,
-                cleanLogs: !!(values.clean || isDev),
-                quiet: !!(values.quiet || isDev),
-                verbose: !!values.verbose,
-                debug: !!(values.debug || isDev || isRun),
-                grep: runClass || (values.grep ? String(values.grep) : ""),
+                appName: cliValues.name ? String(cliValues.name) : "",
+                buildTool: (cliValues.tool as "maven" | "gradle") || detectedTool,
+                profile: String(cliValues.profile || ""),
+                skipBuild: !!cliValues["no-build"],
+                skipScan: cliValues.scan !== undefined ? !cliValues.scan : true,
+                clean: !!cliValues.clean,
+                cleanLogs: cliValues.verbose ? false : true,
+                quiet: cliValues.verbose ? false : true,
+                verbose: !!cliValues.verbose,
+                debug: !!(cliValues.debug || isDev || isRun),
+                debugPort: parseInt(String(cliValues.dp || "5005")),
+                grep: runClass || (cliValues.grep ? String(cliValues.grep) : ""),
             }
         };
 
-        if (isDev) values.watch = true;
+        if (isDev) cliValues.watch = true;
 
         this.ensureGitIgnore();
 
-        return { config, positionals, values };
+        return { config, positionals, values: cliValues };
     }
 
     private static detectBuildTool(): "maven" | "gradle" {

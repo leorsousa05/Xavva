@@ -4,8 +4,10 @@ import { TomcatService } from "../services/TomcatService";
 import { Logger } from "../utils/ui";
 
 export class StartCommand implements Command {
+    constructor(private tomcat: TomcatService) {}
+
     async execute(config: AppConfig): Promise<void> {
-        const tomcat = new TomcatService(config.tomcat);
+        const tomcat = this.tomcat;
         
         Logger.section("Start Only");
         Logger.info("Port", config.tomcat.port);

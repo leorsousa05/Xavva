@@ -71,7 +71,7 @@ export class AuditService {
         const normalizedPath = jarPath.split(path.sep).join("/");
         const psCommand = `
             Add-Type -AssemblyName System.IO.Compression.FileSystem
-            $zip = [System.IO.Compression.ZipFile]::OpenRead("${normalizedPath}")
+            $zip = [System.IO.Compression.ZipFile]::OpenRead($env:JAR_PATH)
             $entry = $zip.Entries | Where-Object { $_.FullName -match "pom.properties$" } | Select-Object -First 1
             if ($entry) {
                 $stream = $entry.Open()
@@ -85,7 +85,12 @@ export class AuditService {
         `;
 
         try {
-            const proc = Bun.spawn(["powershell", "-command", psCommand]);
+            const proc = Bun.spawn(["powershell", "-command", psCommand], {
+                env: {
+                    ...process.env,
+                    JAR_PATH: normalizedPath
+                }
+            });
             const output = await new Response(proc.stdout).text();
             
             const groupId = output.match(/groupId=(.*)/)?.[1]?.trim();

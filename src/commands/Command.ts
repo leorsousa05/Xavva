@@ -1,5 +1,5 @@
-import type { AppConfig } from "../types/config";
+import type { AppConfig, CLIArguments } from "../types/config";
 
 export interface Command {
-    execute(config: AppConfig): Promise<void>;
+    execute(config: AppConfig, args?: CLIArguments): Promise<void>;
 }

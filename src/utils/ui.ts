@@ -54,21 +54,21 @@ export class Logger {
     static banner(command?: string) {
         console.clear();
         const git = this.getGitContext();
-        const name = (process.cwd().split(/[/\\]/).pop() || "JAVA").toUpperCase();
+        const name = (process.cwd().split(/[/\\]/).pop() || "PROJECT").toUpperCase();
+        const version = `v${pkg.version}`;
         
-        const width = 62;
-        const line = "─".repeat(width);
+        const mode = command?.toUpperCase() || "DEPLOY";
+        const modeColor = mode === "DEV" ? this.C.green : this.C.blue;
+        const modeIcon = mode === "DEV" ? "⚡" : "🚀";
+
+        console.log("");
+        console.log(`  ${this.C.bold}${this.C.cyan}X A V V A${this.C.reset} ${this.C.dim}─${this.C.reset} ${this.C.bold}${this.C.white}${name}${this.C.reset}`);
         
-        this.write(`${this.C.gray}╭${line}╮`);
-        this.write(`${this.C.gray}│  ${this.C.bold}${this.C.blue}${name} CLI${this.C.reset}${" ".repeat(width - name.length - 6)} ${this.C.gray}│`);
+        const gitInfo = git.branch ? `${this.C.magenta}🌿 ${git.branch}${this.C.reset} ${this.C.dim}•${this.C.reset} ${this.C.yellow}${git.hash}${this.C.reset}` : "";
+        console.log(`  ${this.C.dim}📦 ${version}${gitInfo ? `  ${this.C.dim}•${this.C.reset}  ${gitInfo}` : ""}${this.C.reset}`);
         
-        const info = `Version: ${pkg.version}  |  Branch: ${git.branch}  |  ${git.hash}`;
-        this.write(`${this.C.gray}│  ${this.C.dim}${info}${" ".repeat(width - info.length - 2)}${this.C.gray}│`);
-        
-        const modeLine = `Mode: ${command?.toUpperCase() || "DEPLOY"}`;
-        const status = command === 'dev' ? `${this.C.green}🟢` : `${this.C.blue}🔵`;
-        this.write(`${this.C.gray}│  ${this.C.yellow}${this.C.bold}${modeLine}${" ".repeat(width - modeLine.length - 5)}${status}   ${this.C.gray}│`);
-        this.write(`${this.C.gray}╰${line}╯${this.C.reset}`);
+        console.log(`  ${modeColor}${this.C.bold}⬢ ${modeIcon} ${mode} MODE${this.C.reset}`);
+        console.log(`  ${this.C.dim}─────────────────────────────────────────────────${this.C.reset}`);
     }
 
     static section(title: string) {
@@ -162,7 +162,9 @@ export class Logger {
             "org.apache.catalina.core.StandardContext.setPath", "milliseconds",
             "org.apache.catalina.startup.HostConfig.deployWAR", "org.apache.catalina.startup.HostConfig.deployDirectory",
             "Deployment of web application", "Deploying web application archive", "at org.apache",
-            "Registering directory"
+            "Registering directory", "initialized in ClassLoader", "Discovered plugins:",
+            "enhanced with plugin initialization", "registerJerseyContainer", "JasperLoader@",
+            "Hotswap ready (Plugins:", "autoHotswap.delay", "watchResources=false"
         ];
         return noise.some(n => line.includes(n));
     }

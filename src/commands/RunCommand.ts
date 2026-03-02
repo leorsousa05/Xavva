@@ -1,19 +1,18 @@
 import type { Command } from "./Command";
-import type { AppConfig } from "../types/config";
+import type { AppConfig, CLIArguments } from "../types/config";
 import { Logger } from "../utils/ui";
 import { spawn } from "child_process";
 import path from "path";
 
 export class RunCommand implements Command {
-    constructor(private debug: boolean = true) {}
-
-    async execute(config: AppConfig): Promise<void> {
+    async execute(config: AppConfig, args?: CLIArguments): Promise<void> {
+        const isDebug = args?.debug !== false; // Default to true if not specified, matching previous behavior
         let className = config.project.grep;
         
         if (!className) {
             className = await this.loadFromHistory();
             if (!className) {
-                Logger.error(`Uso: xavva ${this.debug ? "debug" : "run"} NomeDaClasse`);
+                Logger.error(`Uso: xavva ${isDebug ? "debug" : "run"} NomeDaClasse`);
                 return;
             }
         }
@@ -26,7 +25,7 @@ export class RunCommand implements Command {
 
         this.saveToHistory(className);
 
-        if (this.debug) {
+        if (isDebug) {
             Logger.section(`Interactive Debug: ${className}`);
         } else {
             Logger.section(`Running: ${className}`);
@@ -37,17 +36,17 @@ export class RunCommand implements Command {
         
         const finalCp = `${localCp};${pathingJar}`;
 
-        const args = [
+        const javaArgs = [
             "-classpath", finalCp,
         ];
 
-        if (this.debug) {
-            args.push("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005");
+        if (isDebug) {
+            javaArgs.push("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005");
         }
 
-        args.push(className);
+        javaArgs.push(className);
 
-        if (this.debug) {
+        if (isDebug) {
             Logger.warn(`🚀 Aguardando debugger na porta 5005 para ${className}...`);
             Logger.log(`${Logger.C.cyan}Dica:${Logger.C.reset} No VS Code ou IntelliJ, use 'Attach to Remote JVM' na porta 5005.`);
             Logger.newline();
@@ -55,16 +54,16 @@ export class RunCommand implements Command {
             Logger.warn(`🚀 Executando ${className}...`);
         }
 
-        const bin = "java";
+        const bin = process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, "bin", "java") : "java";
         
         return new Promise((resolve) => {
-            const child = spawn(bin, args, {
+            const child = spawn(bin, javaArgs, {
                 stdio: "inherit",
-                shell: true
+                shell: false
             });
 
             child.on("exit", () => {
-                Logger.log(`Sessão de ${this.debug ? "debug" : "execução"} encerrada.`);
+                Logger.log(`Sessão de ${isDebug ? "debug" : "execução"} encerrada.`);
                 resolve();
             });
         });
@@ -222,22 +221,62 @@ export class RunCommand implements Command {
         const paths = dependencyCp.split(";").filter(p => p.trim());
         const relativePaths = paths.map(p => {
             let rel = path.relative(xavvaDir, p).replace(/\\/g, "/");
-            if (fs.statSync(p).isDirectory() && !rel.endsWith("/")) rel += "/";
-            return rel;
+            if (fs.existsSync(p) && fs.statSync(p).isDirectory() && !rel.endsWith("/")) rel += "/";
+            // Robust URL encoding for Class-Path as per Java Spec
+            return encodeURI(rel)
+                .replace(/#/g, '%23')
+                .replace(/\?/g, '%3F')
+                .replace(/%5B/g, '[')
+                .replace(/%5D/g, ']');
         }).join(" ");
 
-        let wrappedCp = "";
-        const maxLen = 70;
-        for (let i = 0; i < relativePaths.length; i += maxLen) {
-            const chunk = relativePaths.substring(i, i + maxLen);
-            if (i === 0) {
-                wrappedCp += chunk;
+        const header = "Class-Path: ";
+        let manifestContent = "Manifest-Version: 1.0\r\n";
+        
+        let currentLine = header;
+        const parts = relativePaths.split(" ");
+        
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i] + (i < parts.length - 1 ? " " : "");
+            
+            // Se adicionar o próximo 'part' exceder 70 bytes (margem de segurança antes do CRLF)
+            if (Buffer.from(currentLine + part).length > 70) {
+                // Se a parte em si for muito longa, precisamos quebrá-la
+                if (Buffer.from(" " + part).length > 70) {
+                    let remainingPart = part;
+                    while (remainingPart.length > 0) {
+                        const spaceLeft = 70 - Buffer.from(currentLine).length;
+                        
+                        // Encontra quantos caracteres de 'remainingPart' cabem no espaço restante
+                        let fitCount = 0;
+                        let fitBytes = 0;
+                        for (let j = 0; j < remainingPart.length; j++) {
+                            const charBytes = Buffer.from(remainingPart[j]).length;
+                            if (fitBytes + charBytes > spaceLeft) break;
+                            fitBytes += charBytes;
+                            fitCount++;
+                        }
+
+                        if (fitCount > 0) {
+                            currentLine += remainingPart.substring(0, fitCount);
+                            remainingPart = remainingPart.substring(fitCount);
+                        }
+
+                        if (remainingPart.length > 0) {
+                            manifestContent += currentLine + "\r\n";
+                            currentLine = " ";
+                        }
+                    }
+                } else {
+                    manifestContent += currentLine + "\r\n";
+                    currentLine = " " + part;
+                }
             } else {
-                wrappedCp += "\r\n " + chunk;
+                currentLine += part;
             }
         }
+        manifestContent += currentLine + "\r\n\r\n";
 
-        const manifestContent = `Manifest-Version: 1.0\r\nClass-Path: ${wrappedCp}\r\n\r\n`;
         const manifestPath = path.join(xavvaDir, "MANIFEST.MF");
         fs.writeFileSync(manifestPath, manifestContent);
 
@@ -255,22 +294,59 @@ export class RunCommand implements Command {
         if (!fs.existsSync(cpFile)) {
             const stopSpinner = Logger.spinner("Generating project classpath");
             try {
-                if (config.project.buildTool === 'maven') {
+                if (config.project.buildTool === "maven") {
                     Bun.spawnSync(["mvn", "dependency:build-classpath", `-Dmdep.outputFile=${cpFile}`]);
+                } else if (config.project.buildTool === "gradle") {
+                    const initScriptPath = path.join(xavvaDir, "init-cp.gradle");
+                    const normalizedCpFile = cpFile.replace(/\\/g, "/");
+                    const initScriptContent = `
+                        allprojects {
+                            afterEvaluate { project ->
+                                if (project.plugins.hasPlugin('java')) {
+                                    tasks.register('printClasspath') {
+                                        doLast {
+                                            def cp = project.sourceSets.main.runtimeClasspath.asPath
+                                            def file = new File("${normalizedCpFile}")
+                                            if (!file.exists()) {
+                                                file.text = cp
+                                            } else {
+                                                file.text = file.text + File.pathSeparator + cp
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    `.trim().replace(/^ {24}/gm, ""); // Remove excess indentation
+                    fs.writeFileSync(initScriptPath, initScriptContent);
+                    Bun.spawnSync(["gradle", "-q", "printClasspath", "-I", initScriptPath]);
+                    if (fs.existsSync(initScriptPath)) fs.unlinkSync(initScriptPath);
                 } else {
                     fs.writeFileSync(cpFile, "."); 
                 }
-            } catch (e) {}
+            } catch (e) {
+                Logger.error(`Falha ao gerar classpath: ${e}`);
+            }
             stopSpinner();
         }
 
-        const dependencyCp = fs.existsSync(cpFile) ? fs.readFileSync(cpFile, "utf8").trim() : "";
+        let dependencyCp = fs.existsSync(cpFile) ? fs.readFileSync(cpFile, "utf8").trim() : "";
         
+        // Normalize platform specific separators to semicolon for consistency
+        if (path.delimiter !== ";") {
+            dependencyCp = dependencyCp.split(path.delimiter).join(";");
+        }
+
         const localFolders = [
             "target/classes",
             "target/test-classes",
             "build/classes/java/main",
             "build/classes/java/test",
+            "build/classes/kotlin/main",
+            "build/resources/main",
+            "build/resources/test",
+            "bin/main",
+            "bin/test",
             "."
         ];
         

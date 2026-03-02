@@ -63,9 +63,96 @@ export class DoctorCommand implements Command {
 		this.check("Git", gitOk, gitOk ? "Disponível" : "Não encontrado no PATH");
 
 		Logger.section("Xavva Doctor - Integridade de Arquivos");
+		await this.checkJarIntegrity(values.fix, config);
 		await this.checkBOM(values.fix);
 
 		console.log("");
+	}
+
+	private async checkJarIntegrity(fix: boolean, config: AppConfig) {
+		const searchPaths = [
+			path.join(process.cwd(), "target"),
+			path.join(process.cwd(), "build"),
+			path.join(config.tomcat.path, "webapps")
+		].filter(p => fs.existsSync(p));
+
+		const corruptedJars: string[] = [];
+		const zipEndSignature = Buffer.from([0x50, 0x4b, 0x05, 0x06]);
+
+		const scan = (dir: string) => {
+			try {
+				const list = fs.readdirSync(dir, { withFileTypes: true });
+				for (const item of list) {
+					const res = path.resolve(dir, item.name);
+					if (item.isDirectory()) {
+						if (item.name === "node_modules" || item.name === ".git") continue;
+						scan(res);
+					} else if (item.name.endsWith(".jar")) {
+						try {
+							const stats = fs.statSync(res);
+							if (stats.size < 22) {
+								corruptedJars.push(res);
+								continue;
+							}
+
+							// Lê os últimos 1024 bytes para encontrar a assinatura EOCD do ZIP
+							const readSize = Math.min(stats.size, 1024);
+							const buffer = Buffer.alloc(readSize);
+							const fd = fs.openSync(res, "r");
+							fs.readSync(fd, buffer, 0, readSize, stats.size - readSize);
+							fs.closeSync(fd);
+
+							if (!buffer.includes(zipEndSignature)) {
+								corruptedJars.push(res);
+							}
+						} catch (e) {
+							corruptedJars.push(res);
+						}
+					}
+				}
+			} catch (e) {}
+		};
+
+		for (const p of searchPaths) {
+			scan(p);
+		}
+
+		if (corruptedJars.length > 0) {
+			this.check(
+				"Integridade JAR",
+				false,
+				`${corruptedJars.length} arquivos corrompidos detectados.`,
+			);
+			if (fix) {
+				for (const file of corruptedJars) {
+					try {
+						fs.unlinkSync(file);
+						console.log(`    \x1b[32m✔\x1b[0m Removido: ${path.basename(file)}`);
+					} catch (e) {}
+				}
+				Logger.success("JARs corrompidos removidos! Eles serão reconstruídos no próximo build.");
+				
+				// Limpar cache do Tomcat
+				Logger.process("Limpando cache do Tomcat (work/temp)...");
+				const tomcatWork = path.join(config.tomcat.path, "work");
+				const tomcatTemp = path.join(config.tomcat.path, "temp");
+				[tomcatWork, tomcatTemp].forEach(p => {
+					try {
+						if (fs.existsSync(p)) {
+							fs.rmSync(p, { recursive: true, force: true });
+							fs.mkdirSync(p);
+						}
+					} catch (e) {}
+				});
+				Logger.success("Cache do Tomcat limpo com sucesso.");
+			} else {
+				Logger.warn(
+					"Use 'xavva doctor --fix' para remover os JARs corrompidos e limpar o cache.",
+				);
+			}
+		} else {
+			this.check("Integridade JAR", true, "Todos os arquivos JAR parecem íntegros.");
+		}
 	}
 
 	private async checkBOM(fix: boolean) {
@@ -185,8 +272,14 @@ export class DoctorCommand implements Command {
             Logger.success("Download concluído. Extraindo binários...");
             
             // Usar PowerShell para extrair .tar.gz (nativo no Windows 10/11)
-            const extractCmd = `powershell -command "tar -xzf '${tarPath}' -C '${installDir}'"`;
-            Bun.spawnSync(["powershell", "-command", extractCmd]);
+            const extractCmd = `tar -xzf $env:TAR_PATH -C $env:INSTALL_DIR`;
+            Bun.spawnSync(["powershell", "-command", extractCmd], {
+                env: {
+                    ...process.env,
+                    TAR_PATH: tarPath,
+                    INSTALL_DIR: installDir
+                }
+            });
             
             fs.rmSync(tarPath);
 
@@ -204,12 +297,13 @@ export class DoctorCommand implements Command {
             };
 
             const jdkPath = findJdkRoot(installDir) || installDir;
+            const binPath = path.join(jdkPath, "bin");
 			            
 			                                    Logger.process("Configurando variáveis de ambiente do SISTEMA...");
 			                        
 			                                                const setEnvCmd = `
-			                                                    $jdk = '${jdkPath}';
-			                                                    $bin = '${path.join(jdkPath, "bin")}';
+			                                                    $jdk = $env:JDK_PATH;
+			                                                    $bin = $env:BIN_PATH;
 			                                                    try {
 			                                                        [Environment]::SetEnvironmentVariable('JAVA_HOME', $jdk, 'Machine');
 			                                                        $pathVar = [Environment]::GetEnvironmentVariable('Path', 'Machine');
@@ -230,7 +324,13 @@ export class DoctorCommand implements Command {
 			                                                        Write-Error $_.Exception.Message;
 			                                                    }
 			                                                `.replace(/\n/g, ' ');
-			                                    			                                    const result = Bun.spawnSync(["powershell", "-command", setEnvCmd]);
+			                                    			                                    const result = Bun.spawnSync(["powershell", "-command", setEnvCmd], {
+                                                                            env: {
+                                                                                ...process.env,
+                                                                                JDK_PATH: jdkPath,
+                                                                                BIN_PATH: binPath
+                                                                            }
+                                                                        });
 			                                    const output = result.stdout.toString() + result.stderr.toString();
 			                        
 			                                    if (output.includes("ACCESS_DENIED")) {

@@ -18,6 +18,23 @@ export class EndpointService {
                     const content = readFileSync(res, 'utf8');
                     const fileEndpoints = this.parseJavaFile(content, item.name, contextPath);
                     endpoints.push(...fileEndpoints);
+                } else if (item.name.endsWith('.jsp')) {
+                    const parts = res.split(/[/\\]/);
+                    const webappIndex = parts.indexOf("webapp");
+                    const webContentIndex = parts.indexOf("WebContent");
+                    const rootIndex = webappIndex !== -1 ? webappIndex : webContentIndex;
+                    
+                    if (rootIndex !== -1) {
+                        const relPath = "/" + parts.slice(rootIndex + 1).join("/");
+                        endpoints.push({
+                            method: "GET",
+                            path: relPath,
+                            fullPath: this.combinePaths(contextPath, relPath),
+                            className: "JSP",
+                            methodName: item.name,
+                            parameters: []
+                        });
+                    }
                 }
             }
         };

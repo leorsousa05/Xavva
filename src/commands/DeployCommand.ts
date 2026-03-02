@@ -1,68 +1,24 @@
 import path from "path";
 import fs from "fs";
 import type { Command } from "./Command";
-import type { AppConfig } from "../types/config";
+import type { AppConfig, CLIArguments } from "../types/config";
 import { BuildService } from "../services/BuildService";
 import { TomcatService } from "../services/TomcatService";
 import { Logger } from "../utils/ui";
 import { EndpointService } from "../services/EndpointService";
+import { BrowserService } from "../services/BrowserService";
 
 export class DeployCommand implements Command {
-    constructor(private tomcat?: TomcatService, private builder?: BuildService) {}
+    constructor(private tomcat: TomcatService, private builder: BuildService) {}
 
-    private async reloadBrowser(url: string) {
-        if (process.platform !== 'win32') return;
-        
-        await new Promise(r => setTimeout(r, 800));
-
-        const psCommand = `
-            $shell = New-Object -ComObject WScript.Shell
-            $process = Get-Process | Where-Object { $_.MainWindowTitle -match "Chrome" -or $_.MainWindowTitle -match "Edge" } | Select-Object -First 1
-            if ($process) {
-                $shell.AppActivate($process.Id)
-                Sleep -m 100
-                $shell.SendKeys("{F5}")
-            }
-        `;
-        Bun.spawn(["powershell", "-command", psCommand]);
-    }
-
-    async execute(config: AppConfig, incremental = false, isWatching = false): Promise<void> {
-        const tomcat = this.tomcat || new TomcatService(config.tomcat);
-        const builder = this.builder || new BuildService(config.project, config.tomcat);
+    async execute(config: AppConfig, args?: CLIArguments): Promise<void> {
+        const incremental = args?.watch && args?.incremental;
+        const isWatching = !!args?.watch;
+        const tomcat = this.tomcat;
+        const builder = this.builder;
 
         if (!incremental) {
-            Logger.config("Runtime", config.project.buildTool.toUpperCase());
-            Logger.config("Watch Mode", isWatching ? "ON" : "OFF");
-            Logger.config("Debug", config.project.debug ? "ON (Port 5005)" : "OFF");
-
-            let javaBin = "java";
-            if (process.env.JAVA_HOME) {
-                const homeBin = path.join(process.env.JAVA_HOME, "bin", "java.exe");
-                if (fs.existsSync(homeBin)) javaBin = homeBin;
-            }
-            
-            const javaVer = Bun.spawnSync([javaBin, "-version"]);
-            const output = (javaVer.stderr.toString() + javaVer.stdout.toString()).toLowerCase();
-            const hasDcevm = output.includes("dcevm") || 
-                             output.includes("jetbrains") || 
-                             output.includes("trava") || 
-                             output.includes("jbr");
-            
-            if (!hasDcevm && isWatching) {
-                Logger.config("Hot Reload", "Standard (No structural changes)");
-            } else if (hasDcevm) {
-                Logger.config("Hot Reload", "Advanced (DCEVM Active)");
-            }
-
-            const srcPath = path.join(process.cwd(), "src");
-            if (fs.existsSync(srcPath)) {
-                const contextPath = (config.project.appName || "").replace(".war", "");
-                const endpoints = EndpointService.scan(srcPath, contextPath);
-                if (endpoints.length > 0) {
-                    Logger.config("Endpoints", endpoints.length);
-                }
-            }
+            this.logConfiguration(config, isWatching);
         } else {
             Logger.watcher("Change detected", "change");
         }
@@ -71,20 +27,32 @@ export class DeployCommand implements Command {
             const contextPath = (config.project.appName || "").replace(".war", "");
 
             if (!incremental) {
-                await tomcat.killConflict();
-            }
+                tomcat.clearWebapps(contextPath);
 
-            if (!config.project.skipBuild) {
-                if (incremental) Logger.watcher("Incremental compilation", "start");
-                await builder.runBuild(incremental);
-                if (!incremental) Logger.build("Full project build");
+                const buildTask = config.project.skipBuild ? Promise.resolve() : builder.runBuild(incremental);
+                const killTask = tomcat.killConflict();
+                
+                if (!config.project.skipBuild) {
+                    Logger.watcher("Preparing environment and building in parallel", "start");
+                }
+
+                await Promise.all([buildTask, killTask]);
+                
+                if (!config.project.skipBuild) {
+                    Logger.build("Full project build and environment ready");
+                }
+            } else {
+                if (!config.project.skipBuild) {
+                    Logger.watcher("Incremental compilation", "start");
+                    await builder.runBuild(incremental);
+                }
             }
 
             if (incremental) {
-                const actualAppFolder = await builder.syncClasses(true); 
+                const actualAppFolder = await builder.syncClasses(); 
                 const actualContextPath = contextPath || actualAppFolder || "";
                 const actualAppUrl = `http://localhost:${config.tomcat.port}/${actualContextPath}`;
-                await this.reloadBrowser(actualAppUrl);
+                await BrowserService.reload(actualAppUrl);
                 Logger.watcher("Redeploy completed", "success");
                 return;
             }
@@ -96,62 +64,41 @@ export class DeployCommand implements Command {
             const finalContextPath = contextPath || artifactInfo.finalName.replace(".war", "");
             const appWebappPath = path.join(config.tomcat.path, "webapps", finalContextPath);
 
-            if (!fs.existsSync(appWebappPath)) fs.mkdirSync(appWebappPath, { recursive: true });
+            if (artifactInfo.isDirectory) {
+                await builder.syncClasses(artifactInfo.path);
+                Logger.build("Exploded directory synced");
+            } else {
+                if (!fs.existsSync(appWebappPath)) fs.mkdirSync(appWebappPath, { recursive: true });
 
-            try {
-                Bun.spawnSync(["jar", "xf", artifactInfo.path], { cwd: appWebappPath });
-                Logger.build("Artifacts deployed");
-            } catch (e: any) {
-                const extractCmd = `powershell -command "Expand-Archive -Path '${artifactInfo.path}' -DestinationPath '${appWebappPath}' -Force"`;
-                Bun.spawnSync(["powershell", "-command", extractCmd]);
-                Logger.build("Artifacts deployed (legacy mode)");
+                const artifactStat = fs.statSync(artifactInfo.path);
+                const webappStat = fs.existsSync(appWebappPath) ? fs.statSync(appWebappPath) : null;
+
+                if (!webappStat || artifactStat.mtimeMs > webappStat.mtimeMs) {
+                    try {
+                        Bun.spawnSync(["jar", "xf", artifactInfo.path], { cwd: appWebappPath });
+                        Logger.build("Artifacts deployed");
+                    } catch (e) {
+                        const extractCmd = `Expand-Archive -Path $env:ARTIFACT_PATH -DestinationPath $env:DEST_PATH -Force`;
+                        Bun.spawnSync(["powershell", "-command", extractCmd], {
+                            env: {
+                                ...process.env,
+                                ARTIFACT_PATH: artifactInfo.path,
+                                DEST_PATH: appWebappPath
+                            }
+                        });
+                        Logger.build("Artifacts deployed (legacy mode)");
+                    }
+                } else {
+                    Logger.build("Webapp already up to date, skipping extraction");
+                }
             }
 
-            const webInfClassesDir = path.join(appWebappPath, "WEB-INF", "classes");
-            if (!fs.existsSync(webInfClassesDir)) fs.mkdirSync(webInfClassesDir, { recursive: true });
-            
-            const xavvaProps = path.join(process.cwd(), ".xavva", "hotswap-agent.properties");
-            if (fs.existsSync(xavvaProps)) {
-                fs.copyFileSync(xavvaProps, path.join(webInfClassesDir, "hotswap-agent.properties"));
-            }
+            this.injectHotswapProperties(appWebappPath);
 
             const finalAppUrl = `http://localhost:${config.tomcat.port}/${finalContextPath}`;
             
             tomcat.onReady = async () => {
-                try {
-                    await new Promise(r => setTimeout(r, 1500));
-                    const response = await fetch(finalAppUrl);
-                    if (response.status < 500) {
-                        const memory = await tomcat.getMemoryUsage();
-                        Logger.health(finalAppUrl, "success");
-                        Logger.health(`Status ${response.status}`, "success");
-                        Logger.health(`Memory ${memory}`, "success");
-
-                        if (!config.project.quiet) {
-                            const endpoints = EndpointService.scan(path.join(process.cwd(), "src"), finalContextPath);
-                            if (endpoints.length > 0) {
-                                Logger.newline();
-                                Logger.log(`${Logger.C.cyan}◈ ENDPOINT MAP:${Logger.C.reset}`);
-                                endpoints.forEach(e => Logger.log(`${Logger.C.dim}➜ ${Logger.C.reset}http://localhost:${config.tomcat.port}${e.fullPath}`));
-                            }
-                        }
-                        
-                        if (incremental) {
-                            await this.reloadBrowser(finalAppUrl);
-                        } else {
-                            if (process.platform === 'win32') {
-                                Bun.spawn(["cmd", "/c", "start", finalAppUrl]);
-                            } else {
-                                const start = process.platform === 'darwin' ? 'open' : 'xdg-open';
-                                Bun.spawn([start, finalAppUrl]);
-                            }
-                        }
-                    } else {
-                        Logger.health(`App returned status ${response.status}`, "warn");
-                    }
-                } catch (e) {
-                    Logger.health(`Could not connect to ${finalAppUrl}`, "error");
-                }
+                await this.handleServerReady(config, finalAppUrl, finalContextPath, tomcat, incremental);
             };
 
             tomcat.start(config, isWatching);
@@ -161,9 +108,98 @@ export class DeployCommand implements Command {
         }
     }
 
+    private logConfiguration(config: AppConfig, isWatching: boolean) {
+        Logger.config("Runtime", config.project.buildTool.toUpperCase());
+        Logger.config("Watch Mode", isWatching ? "ON" : "OFF");
+        Logger.config("Debug", config.project.debug ? `ON (Port ${config.project.debugPort})` : "OFF");
+
+        let javaBin = "java";
+        if (process.env.JAVA_HOME) {
+            const homeBin = path.join(process.env.JAVA_HOME, "bin", "java.exe");
+            if (fs.existsSync(homeBin)) javaBin = homeBin;
+        }
+        
+        const javaVer = Bun.spawnSync([javaBin, "-version"]);
+        const output = (javaVer.stderr.toString() + javaVer.stdout.toString()).toLowerCase();
+        const hasDcevm = ["dcevm", "jetbrains", "trava", "jbr"].some(v => output.includes(v));
+        
+        if (!hasDcevm && isWatching) {
+            Logger.config("Hot Reload", "Standard (No structural changes)");
+        } else if (hasDcevm) {
+            Logger.config("Hot Reload", "Advanced (DCEVM Active)");
+        }
+
+        const srcPath = path.join(process.cwd(), "src");
+        if (fs.existsSync(srcPath)) {
+            const contextPath = (config.project.appName || "").replace(".war", "");
+            const endpoints = EndpointService.scan(srcPath, contextPath);
+            if (endpoints.length > 0) {
+                Logger.config("Endpoints", endpoints.length);
+            }
+        }
+    }
+
+    private injectHotswapProperties(appWebappPath: string) {
+        const webInfClassesDir = path.join(appWebappPath, "WEB-INF", "classes");
+        if (!fs.existsSync(webInfClassesDir)) fs.mkdirSync(webInfClassesDir, { recursive: true });
+        
+        const xavvaProps = path.join(process.cwd(), ".xavva", "hotswap-agent.properties");
+        if (fs.existsSync(xavvaProps)) {
+            fs.copyFileSync(xavvaProps, path.join(webInfClassesDir, "hotswap-agent.properties"));
+        }
+    }
+
+    private async handleServerReady(config: AppConfig, url: string, context: string, tomcat: TomcatService, incremental: boolean) {
+        try {
+            await new Promise(r => setTimeout(r, 1500));
+            const response = await fetch(url);
+            if (response.status < 500) {
+                const memory = await tomcat.getMemoryUsage();
+                Logger.health(url, "success");
+                Logger.health(`Status ${response.status}`, "success");
+                Logger.health(`Memory ${memory}`, "success");
+
+                if (!config.project.quiet) {
+                    this.showEndpointMap(config.tomcat.port, context);
+                }
+                
+                if (incremental) {
+                    await BrowserService.reload(url);
+                } else {
+                    BrowserService.open(url);
+                }
+            } else {
+                Logger.health(`App returned status ${response.status}`, "warn");
+            }
+        } catch (e) {
+            Logger.health(`Could not connect to ${url}`, "error");
+        }
+    }
+
+    private showEndpointMap(port: number, context: string) {
+        const endpoints = EndpointService.scan(path.join(process.cwd(), "src"), context);
+        if (endpoints.length > 0) {
+            Logger.newline();
+            Logger.log(`${Logger.C.cyan}◈ ENDPOINT MAP:${Logger.C.reset}`);
+            
+            const apis = endpoints.filter(e => e.className !== "JSP");
+            const jsps = endpoints.filter(e => e.className === "JSP");
+
+            if (apis.length > 0) {
+                const uniqueApiUrls = [...new Set(apis.map(e => `http://localhost:${port}${e.fullPath}`))];
+                uniqueApiUrls.forEach(url => Logger.log(`${Logger.C.dim}➜ ${Logger.C.reset}${url}`));
+            }
+
+            if (jsps.length > 0) {
+                Logger.log(`${Logger.C.dim}--- JSPs ---${Logger.C.reset}`);
+                const uniqueJspUrls = [...new Set(jsps.map(e => `http://localhost:${port}${e.fullPath}`))];
+                uniqueJspUrls.forEach(url => Logger.log(`${Logger.C.dim}📄 ${Logger.C.reset}${url}`));
+            }
+        }
+    }
+
     async syncResource(config: AppConfig, filename: string): Promise<void> {
         const contextPath = (config.project.appName || "").replace(".war", "");
-        
         const webappsPath = path.join(config.tomcat.path, "webapps");
         let appFolder = contextPath;
         
@@ -174,10 +210,7 @@ export class DeployCommand implements Command {
         }
 
         const explodedPath = path.join(webappsPath, appFolder);
-        
-        if (!appFolder || !fs.existsSync(explodedPath)) {
-            return;
-        }
+        if (!appFolder || !fs.existsSync(explodedPath)) return;
 
         const parts = filename.split(/[/\\]/);
         const webappIndex = parts.indexOf("webapp");
@@ -196,7 +229,7 @@ export class DeployCommand implements Command {
                 if (!config.project.quiet) Logger.success(`Synced ${path.basename(filename)} directly to Tomcat!`);
                 
                 const appUrl = `http://localhost:${config.tomcat.port}/${appFolder}`;
-                await this.reloadBrowser(appUrl);
+                await BrowserService.reload(appUrl);
             } catch (e) {
                 Logger.error(`Failed to sync resource: ${filename}`);
             }

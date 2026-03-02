@@ -1,15 +1,22 @@
-import type { TomcatConfig } from "../types/config";
+import type { TomcatConfig, AppConfig } from "../types/config";
 import { Logger } from "../utils/ui";
+import type { Subprocess } from "bun";
+import { ProjectService } from "./ProjectService";
 
 export class TomcatService {
 	private activeConfig: TomcatConfig;
-	private currentProcess: any = null;
+	private currentProcess: Subprocess | null = null;
 	private stopStartupSpinner?: (success?: boolean) => void;
 	public onReady?: () => void;
 	private pid: number | null = null;
+	private projectService: ProjectService | null = null;
 
 	constructor(customConfig: TomcatConfig) {
 		this.activeConfig = customConfig;
+	}
+
+	setProjectService(projectService: ProjectService) {
+		this.projectService = projectService;
 	}
 
 	async getMemoryUsage(): Promise<string> {
@@ -35,7 +42,7 @@ export class TomcatService {
 		}
 	}
 
-	clearWebapps(appName?: string) {
+	clearWebapps() {
 		const fs = require("fs");
 		const path = require("path");
 		const webappsPath = path.join(this.activeConfig.path, "webapps");
@@ -97,48 +104,7 @@ export class TomcatService {
 		}
 	}
 
-	private findAllClassPaths(buildTool: 'maven' | 'gradle'): string[] {
-		const fs = require("fs");
-		const path = require("path");
-		const results: string[] = [];
-		const root = process.cwd();
-
-		const scan = (dir: string) => {
-			try {
-				const files = fs.readdirSync(dir, { withFileTypes: true });
-				for (const file of files) {
-					if (!file.isDirectory()) continue;
-					
-					const name = file.name;
-					if (name.startsWith('.') || ['node_modules', 'out', 'bin', 'src', 'webapps', '.xavva'].includes(name)) continue;
-
-					const fullPath = path.join(dir, name);
-					
-					const isMavenClasses = buildTool === 'maven' && name === 'classes' && dir.endsWith('target');
-					const isGradleClasses = buildTool === 'gradle' && name === 'main' && dir.endsWith(path.join('classes', 'java'));
-					
-					if (isMavenClasses || isGradleClasses) {
-						results.push(fullPath.replace(/\\/g, "/"));
-					} else {
-						scan(fullPath);
-					}
-				}
-			} catch (e) {}
-		};
-
-		scan(root);
-		
-		if (results.length === 0) {
-			const defaultPath = buildTool === 'maven' 
-				? path.join(root, "target", "classes")
-				: path.join(root, "build", "classes", "java", "main");
-			results.push(defaultPath.replace(/\\/g, "/"));
-		}
-
-		return results;
-	}
-
-	async start(config: any, isWatching: boolean = false) {
+	async start(config: AppConfig, isWatching: boolean = false) {
 		const binPath = `${this.activeConfig.path}\\bin\\catalina.bat`;
 		const args = (config.project.debug || isWatching) ? ["jpda", "run"] : ["run"];
 		
@@ -181,16 +147,27 @@ export class TomcatService {
 				const xavvaDir = path.join(process.cwd(), ".xavva");
 				if (!fs.existsSync(xavvaDir)) fs.mkdirSync(xavvaDir, { recursive: true });
 				
-				const classPaths = this.findAllClassPaths(config.project.buildTool);
-				const extraClasspath = classPaths.join(",");
-
 				const propsPath = path.join(xavvaDir, "hotswap-agent.properties");
-				const propsContent = `autoHotswap=true\nautoHotswap.delay=3000\nwatchResources=false\nextraClasspath=${extraClasspath}\nLOGGER=info`;
+				const propsContent = `autoHotswap=true\nautoHotswap.delay=500\nwatchResources=false\nLOGGER=info`;
 				fs.writeFileSync(propsPath, propsContent);
 				
 				catalinaOpts.push(`-Dhotswap-agent.properties.path=${propsPath}`);
+
+				if (this.projectService) {
+					const classPaths = this.projectService.findAllClassPaths();
+					if (classPaths.length > 0) {
+						catalinaOpts.push(`-Dhotswap.extraClasspath=${classPaths.join(",")}`);
+					}
+				}
 			}
 		}
+
+		// Otimizações para JSP e Debug de JSP
+		catalinaOpts.push(
+			"-Dorg.apache.jasper.compiler.development=true",
+			"-Dorg.apache.jasper.compiler.disableSmap=false",
+			"-Dorg.apache.jasper.compiler.classdebuginfo=true"
+		);
 
 		if (config.project.skipScan) {
 			catalinaOpts.push(
@@ -203,7 +180,7 @@ export class TomcatService {
 			);
 		}
 
-		const env: any = { 
+		const env: Record<string, string | undefined> = { 
 			...process.env, 
 			CATALINA_HOME: this.activeConfig.path,
 			CATALINA_OPTS: catalinaOpts.join(" ").trim()
@@ -215,8 +192,8 @@ export class TomcatService {
 		}
 
 		if (config.project.debug) {
-			Logger.debug("Java Debugger habilitado na porta 5005");
-			env.JPDA_ADDRESS = "5005";
+			Logger.debug(`Java Debugger habilitado na porta ${config.project.debugPort}`);
+			env.JPDA_ADDRESS = String(config.project.debugPort);
 			env.JPDA_TRANSPORT = "dt_socket";
 		}
 
@@ -227,13 +204,17 @@ export class TomcatService {
 		this.currentProcess = Bun.spawn([binPath, ...args], {
 			stdout: "pipe",
 			stderr: "pipe",
-			env: env
+			env: env as any
 		});
 
 		this.pid = this.currentProcess.pid;
 
-		this.processLogStream(this.currentProcess.stdout, config.project.cleanLogs, config.project.quiet, config.project.verbose, config.tomcat.grep);
-		this.processLogStream(this.currentProcess.stderr, config.project.cleanLogs, config.project.quiet, config.project.verbose, config.tomcat.grep);
+		if (this.currentProcess.stdout) {
+			this.processLogStream(this.currentProcess.stdout as any, config.project.cleanLogs, config.project.quiet, config.project.verbose, config.tomcat.grep || "");
+		}
+		if (this.currentProcess.stderr) {
+			this.processLogStream(this.currentProcess.stderr as any, config.project.cleanLogs, config.project.quiet, config.project.verbose, config.tomcat.grep || "");
+		}
 	}
 
 	private async processLogStream(stream: ReadableStream, clean: boolean, quiet: boolean, verbose: boolean, grep: string) {

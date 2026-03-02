@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { watch } from "fs";
 import { ConfigManager } from "./utils/config";
+import { CommandRegistry } from "./commands/CommandRegistry";
 import { BuildCommand } from "./commands/BuildCommand";
 import { DeployCommand } from "./commands/DeployCommand";
 import { StartCommand } from "./commands/StartCommand";
@@ -10,11 +10,17 @@ import { RunCommand } from "./commands/RunCommand";
 import { LogsCommand } from "./commands/LogsCommand";
 import { DocsCommand } from "./commands/DocsCommand";
 import { AuditCommand } from "./commands/AuditCommand";
+
+import { ProjectService } from "./services/ProjectService";
 import { TomcatService } from "./services/TomcatService";
-import { EndpointService } from "./services/EndpointService";
+import { BuildService } from "./services/BuildService";
+import { AuditService } from "./services/AuditService";
+import { WatcherService } from "./services/WatcherService";
+import { BuildCacheService } from "./services/BuildCacheService";
+
 import pkg from "../package.json";
 import { Logger } from "./utils/ui";
-import path from "path";
+import type { AppConfig, CLIArguments } from "./types/config";
 
 async function main() {
 	const { config, positionals, values } = await ConfigManager.load();
@@ -32,142 +38,45 @@ async function main() {
 	}
 
 	if (values.help) {
-		new HelpCommand().execute(config);
+		new HelpCommand().execute(config, values);
 		process.exit(0);
 	}
 
-	switch (commandName) {
-		case "build":
-			await new BuildCommand().execute(config);
-			break;
-		case "start":
-			await new StartCommand().execute(config);
-			break;
-		case "doctor":
-			await new DoctorCommand().execute(config, values);
-			break;
-		case "run":
-			await new RunCommand(false).execute(config);
-			break;
-		case "debug":
-			await new RunCommand(true).execute(config);
-			break;
-		case "logs":
-			await new LogsCommand().execute(config);
-			break;
-		case "docs":
-			await new DocsCommand().execute(config);
-			break;
-		case "audit":
-			await new AuditCommand().execute(config);
-			break;
-		case "dev":
-		case "deploy":
-			await handleDeploy(config, values);
-			break;
-		default:
-			Logger.error(`Comando desconhecido: ${commandName}`);
-			new HelpCommand().execute(config);
-			process.exit(1);
-	}
-}
+	// 1. Instanciar Serviços (Injeção de Dependência)
+	const projectService = new ProjectService(config.project);
+	const buildCacheService = new BuildCacheService();
+	const buildService = new BuildService(config.project, config.tomcat, projectService, buildCacheService);
+	const tomcatService = new TomcatService(config.tomcat);
+	tomcatService.setProjectService(projectService);
+	const auditService = new AuditService(config.tomcat);
 
-async function handleDeploy(config: any, values: any) {
-	const tomcat = new TomcatService(config.tomcat);
-	const deployCmd = new DeployCommand(tomcat);
+	// 2. Registrar Comandos
+	const registry = new CommandRegistry();
 	
-	if (values.watch) {
-		let isDeploying = false;
+	const deployCmd = new DeployCommand(tomcatService, buildService);
+	
+	registry.register("build", new BuildCommand(buildService));
+	registry.register("start", new StartCommand(tomcatService));
+	registry.register("doctor", new DoctorCommand());
+	registry.register("run", new RunCommand());
+	registry.register("debug", new RunCommand());
+	registry.register("logs", new LogsCommand());
+	registry.register("docs", new DocsCommand());
+	registry.register("audit", new AuditCommand(auditService));
+	registry.register("deploy", deployCmd);
+	registry.register("dev", deployCmd);
 
-		const run = async (incremental = false) => {
-			if (isDeploying) return;
-			isDeploying = true;
-			try {
-				await deployCmd.execute(config, incremental, true);
-			} catch (e) {
-			} finally {
-				isDeploying = false;
-			}
-		};
-
-		await run(false);
-
-		let debounceTimer: Timer;
-		const coolingFiles = new Set<string>();
-
-		watch(process.cwd(), { recursive: true }, async (event, filename) => {
-			if (!filename) return;
-
-			if (coolingFiles.has(filename)) return;
-			coolingFiles.add(filename);
-			setTimeout(() => coolingFiles.delete(filename), 500);
-
-			const isJava = filename.endsWith(".java") || filename === "pom.xml" || filename === "build.gradle";
-			const isResource = filename.endsWith(".jsp") || filename.endsWith(".html") || 
-							   filename.endsWith(".css") || filename.endsWith(".js") || 
-							   filename.endsWith(".xml") || filename.endsWith(".properties");
-			
-			const isIgnored = filename.includes("target") || 
-							  filename.includes("build") || 
-							  filename.includes("node_modules") || 
-							  filename.split(/[/\\]/).some(part => part.startsWith("."));
-
-			if (isIgnored) return;
-
-			if (isResource && !isJava) {
-				const isJsp = filename.endsWith(".jsp");
-				let jspUrl = "";
-				let isPrivate = false;
-
-				if (isJsp) {
-					const parts = filename.split(/[/\\]/);
-					const webappIndex = parts.indexOf("webapp");
-					const webContentIndex = parts.indexOf("WebContent");
-					const rootIndex = webappIndex !== -1 ? webappIndex : webContentIndex;
-
-					if (rootIndex !== -1) {
-						const relPath = parts.slice(rootIndex + 1).join("/");
-						isPrivate = relPath.startsWith("WEB-INF") || relPath.startsWith("META-INF");
-						
-						let contextPath = (config.project.appName || "").replace(".war", "");
-						if (!contextPath) {
-							const webappsPath = require("path").join(config.tomcat.path, "webapps");
-							if (require("fs").existsSync(webappsPath)) {
-								const folders = require("fs").readdirSync(webappsPath, { withFileTypes: true })
-									.filter((dirent: any) => dirent.isDirectory() && !["ROOT", "manager", "host-manager", "docs"].includes(dirent.name));
-								if (folders.length === 1) contextPath = folders[0].name;
-							}
-						}
-
-						jspUrl = `http://localhost:${config.tomcat.port}${contextPath ? "/" + contextPath : ""}/${relPath}`;
-					}
-				}
-
-				if (isJsp && isPrivate) {
-					Logger.watcher(`JSP Private (WEB-INF): ${filename}`, 'change');
-					Logger.dim(`Nota: Este arquivo não é acessível via URL direta.`);
-				} else if (isJsp && jspUrl) {
-					Logger.watcher(`JSP Updated: ${jspUrl}`, 'success');
-				} else {
-					Logger.watcher(`Resource altered: ${filename}`, 'change');
-				}
-
-				await deployCmd.syncResource(config, filename);
-				return;
-			}
-
-			if (!isJava) return;
-
-			Logger.watcher(filename, 'watch');
-			clearTimeout(debounceTimer);
-			
-			debounceTimer = setTimeout(() => {
-				run(true);
-			}, 1000);
-		});
-
+	// Caso especial: Watch Mode para Deploy/Dev
+	if ((commandName === "deploy" || commandName === "dev") && values.watch) {
+		const watcher = new WatcherService(config, deployCmd);
+		await watcher.start();
 	} else {
-		await deployCmd.execute(config, false, false);
+		// 3. Executar do Registro
+		// Ajusta flags baseadas no nome do comando para comandos compartilhados
+		if (commandName === "debug") values.debug = true;
+		if (commandName === "run") values.debug = false;
+		
+		await registry.execute(commandName, config, values);
 	}
 }
 

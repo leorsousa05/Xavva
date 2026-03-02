@@ -1,15 +1,17 @@
 import path from "path";
 import fs from "fs";
 import type { Command } from "./Command";
-import type { AppConfig } from "../types/config";
+import type { AppConfig, CLIArguments } from "../types/config";
 import { AuditService, type JarAuditResult } from "../services/AuditService";
 import { Logger } from "../utils/ui";
 
 export class AuditCommand implements Command {
-    async execute(config: AppConfig): Promise<void> {
+    constructor(private auditService: AuditService) {}
+
+    async execute(config: AppConfig, args?: CLIArguments): Promise<void> {
         Logger.section("Vulnerability & JAR Audit");
 
-        let appName = config.project.appName;
+        let appName = args?.name || config.project.appName;
         
         if (!appName) {
             appName = this.inferFromArtifacts();
@@ -38,10 +40,8 @@ export class AuditCommand implements Command {
             return;
         }
 
-        const auditService = new AuditService(config.tomcat);
-        
         try {
-            const results = await auditService.runAudit(appName);
+            const results = await this.auditService.runAudit(appName);
             const vulnerable = results.filter(r => r.vulnerabilities.length > 0);
 
             if (vulnerable.length === 0) {
