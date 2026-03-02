@@ -22,6 +22,7 @@ Comandos principais:
 
 Opções de Interface:
   --tui         🖥️  Ativa o Dashboard Interativo (Interface TUI).
+                No modo TUI use: [R] Restart, [L] Clear, [Q] Quit.
   -w, --watch   👀 Hot Reload: Redeploy incremental de classes e recursos.
   -c, --clean   🧹 Logs coloridos e simplificados (Recomendado).
   -V, --verbose 📣 Exibe logs completos do Maven/Gradle.

@@ -22,8 +22,18 @@ export class Logger {
     private static lastDomain = "";
     private static lastHotswapMsg = "";
     private static activeSpinnerMsg = "";
+    private static dashboard: any = null;
+
+    static setDashboard(dashboard: any) {
+        this.dashboard = dashboard;
+    }
 
     private static write(message: string, isError: boolean = false) {
+        if (this.dashboard && this.dashboard.isTuiActive()) {
+            this.dashboard.log(message);
+            return;
+        }
+
         if (this.activeSpinnerMsg) {
             process.stdout.write("\r\x1B[K"); // Limpa a linha do spinner
         }
@@ -126,6 +136,17 @@ export class Logger {
     static dim(msg: string) { this.write(`  ${this.C.dim}${msg}${this.C.reset}`); }
 
     static spinner(msg: string) {
+        if (this.dashboard && this.dashboard.isTuiActive()) {
+            this.dashboard.log(`${this.C.cyan}⠋${this.C.reset} ${msg}...`);
+            return (success = true) => {
+                if (success) {
+                    this.dashboard.log(`${this.C.green}✔${this.C.reset} ${msg}`);
+                } else {
+                    this.dashboard.log(`${this.C.red}✖${this.C.reset} Falha em ${msg}`);
+                }
+            };
+        }
+
         this.activeSpinnerMsg = msg;
         const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
         let i = 0;

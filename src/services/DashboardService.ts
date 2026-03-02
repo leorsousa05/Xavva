@@ -8,17 +8,29 @@ export class DashboardService {
     private maxLogLines: number = 0;
     private status: string = "IDLE";
     private statusColor: string = Logger.C.dim;
+    private gitContext: any = null;
+    private actions: Map<string, () => void> = new Map();
 
     constructor(private config: AppConfig) {
         this.isTui = config.project.tui;
         if (this.isTui) {
-            this.maxLogLines = process.stdout.rows - 10;
+            this.gitContext = Logger.getGitContext();
+            this.maxLogLines = process.stdout.rows - 6;
             this.setupTui();
         }
     }
 
+    public isTuiActive(): boolean {
+        return this.isTui;
+    }
+
+    public onAction(key: string, callback: () => void) {
+        this.actions.set(key.toLowerCase(), callback);
+    }
+
     private setupTui() {
         process.stdout.write("\x1B[?1049h"); // Switch to alternate buffer
+        process.stdout.write("\x1B[2J"); // Clear screen
         process.stdout.write("\x1B[?25l"); // Hide cursor
         
         process.stdin.setRawMode(true);
@@ -26,14 +38,19 @@ export class DashboardService {
         process.stdin.setEncoding("utf8");
 
         process.stdin.on("data", (key: string) => {
+            const input = key.toLowerCase();
             // Ctrl+C ou Q para sair
-            if (key === "\u0003" || key.toLowerCase() === "q") {
+            if (key === "\u0003" || input === "q") {
                 this.exit();
             }
-            if (key.toLowerCase() === "l") {
+            if (input === "l") {
                 this.logLines = [];
                 this.render();
+                return;
             }
+            
+            const action = this.actions.get(input);
+            if (action) action();
         });
 
         process.on("SIGINT", () => this.exit());
@@ -41,14 +58,6 @@ export class DashboardService {
 
         // Atualiza o dashboard periodicamente para memória/status
         setInterval(() => this.render(), 1000);
-    }
-
-    public onKey(key: string, callback: () => void) {
-        process.stdin.on("data", (input: string) => {
-            if (input.toLowerCase() === key.toLowerCase()) {
-                callback();
-            }
-        });
     }
 
     public setStatus(status: string, color: string = Logger.C.cyan) {
@@ -75,32 +84,29 @@ export class DashboardService {
     private render() {
         if (!this.isTui) return;
 
-        this.maxLogLines = process.stdout.rows - 8;
+        this.maxLogLines = process.stdout.rows - 6;
         
         let output = "\x1B[H"; // Move to 0,0
         
         // Header
         const name = (process.cwd().split(/[/\\]/).pop() || "PROJECT").toUpperCase();
-        const git = Logger.getGitContext();
         const mem = Math.round((os.totalmem() - os.freemem()) / 1024 / 1024 / 1024 * 10) / 10;
         const totalMem = Math.round(os.totalmem() / 1024 / 1024 / 1024);
 
-        output += `${Logger.C.bold}${Logger.C.cyan} X A V V A  2.0 ${Logger.C.reset} ${Logger.C.dim}│${Logger.C.reset} ${Logger.C.white}${Logger.C.bold}${name}${Logger.C.reset}\n`;
-        output += `${Logger.C.dim} STATUS: ${this.statusColor}${this.status.padEnd(10)}${Logger.C.reset} ${Logger.C.dim}│ MEM: ${Logger.C.yellow}${mem}G/${totalMem}G${Logger.C.reset} ${Logger.C.dim}│ BRANCH: ${Logger.C.magenta}${git.branch || "unknown"}${Logger.C.reset}\n`;
-        output += `${Logger.C.dim}──────────────────────────────────────────────────────────────────────────${Logger.C.reset}\n`;
+        output += `${Logger.C.bold}${Logger.C.cyan} X A V V A  2.0 ${Logger.C.reset} ${Logger.C.dim}│${Logger.C.reset} ${Logger.C.white}${Logger.C.bold}${name}${Logger.C.reset}\x1B[K\n`;
+        output += `${Logger.C.dim} STATUS: ${this.statusColor}${this.status.padEnd(10)}${Logger.C.reset} ${Logger.C.dim}│ MEM: ${Logger.C.yellow}${mem}G/${totalMem}G${Logger.C.reset} ${Logger.C.dim}│ BRANCH: ${Logger.C.magenta}${this.gitContext?.branch || "unknown"}${Logger.C.reset}\x1B[K\n`;
+        output += `${Logger.C.dim}──────────────────────────────────────────────────────────────────────────${Logger.C.reset}\x1B[K\n`;
 
         // Logs
         const visibleLogs = this.logLines.slice(-this.maxLogLines);
         for (let i = 0; i < this.maxLogLines; i++) {
             const line = visibleLogs[i] || "";
-            // Limpa a linha antes de escrever (ANSI escape EL)
             output += line.substring(0, process.stdout.columns) + "\x1B[K\n";
         }
 
         // Footer
-        output += `\x1B[${process.stdout.rows - 1};1H`; // Move to last rows
-        output += `${Logger.C.dim}──────────────────────────────────────────────────────────────────────────${Logger.C.reset}\n`;
-        output += ` ${Logger.C.bold}${Logger.C.white}R${Logger.C.reset} Restart  ${Logger.C.bold}${Logger.C.white}L${Logger.C.reset} Clear  ${Logger.C.bold}${Logger.C.white}Q${Logger.C.reset} Quit    ${Logger.C.dim} (Xavva 2.0 TUI Mode)${Logger.C.reset}`;
+        output += `\x1B[${process.stdout.rows};1H`; // Move to last row
+        output += ` ${Logger.C.bold}${Logger.C.white}R${Logger.C.reset} Restart  ${Logger.C.bold}${Logger.C.white}L${Logger.C.reset} Clear  ${Logger.C.bold}${Logger.C.white}Q${Logger.C.reset} Quit    ${Logger.C.dim} (Xavva 2.0 TUI Mode)${Logger.C.reset}\x1B[K`;
 
         process.stdout.write(output);
     }

@@ -55,6 +55,7 @@ async function main() {
 	// Xavva 2.0: Dashboard & LogAnalyzer
 	const logAnalyzer = new LogAnalyzer(config.project);
 	const dashboard = new DashboardService(config);
+	Logger.setDashboard(dashboard);
 
 	// 2. Registrar Comandos
 	const registry = new CommandRegistry();
@@ -75,6 +76,14 @@ async function main() {
 
 	// Caso especial: Watch Mode para Deploy/Dev
 	if ((commandName === "deploy" || commandName === "dev") && values.watch) {
+		// Registrar ação de restart manual na TUI
+		if (dashboard.isTuiActive()) {
+			dashboard.onAction("r", () => {
+				dashboard.log(Logger.C.yellow + "Restart manual solicitado via TUI...");
+				deployCmd.execute(config, false, true); // Executa deploy completo mas mantém o watch
+			});
+		}
+
 		const watcher = new WatcherService(config, deployCmd);
 		await watcher.start();
 	} else {
