@@ -18,6 +18,7 @@ export interface ProjectConfig {
     debugPort: number;
     cleanLogs: boolean;
     grep?: string;
+    tui: boolean;
 }
 
 export interface AppConfig {
@@ -44,6 +45,7 @@ export interface CLIArguments {
     dp?: string;
     fix?: boolean;
     incremental?: boolean;
+    tui?: boolean;
 }
 
 export interface CommandContext {

@@ -17,6 +17,8 @@ import { BuildService } from "./services/BuildService";
 import { AuditService } from "./services/AuditService";
 import { WatcherService } from "./services/WatcherService";
 import { BuildCacheService } from "./services/BuildCacheService";
+import { DashboardService } from "./services/DashboardService";
+import { LogAnalyzer } from "./services/LogAnalyzer";
 
 import pkg from "../package.json";
 import { Logger } from "./utils/ui";
@@ -33,7 +35,7 @@ async function main() {
 	const commandNames = ["deploy", "build", "start", "dev", "doctor", "run", "debug", "logs", "docs", "audit"];
 	const commandName = positionals.find(p => commandNames.includes(p)) || "deploy";
 
-	if (!values.help) {
+	if (!values.help && !values.tui) {
 		Logger.banner(commandName);
 	}
 
@@ -49,18 +51,23 @@ async function main() {
 	const tomcatService = new TomcatService(config.tomcat);
 	tomcatService.setProjectService(projectService);
 	const auditService = new AuditService(config.tomcat);
+	
+	// Xavva 2.0: Dashboard & LogAnalyzer
+	const logAnalyzer = new LogAnalyzer(config.project);
+	const dashboard = new DashboardService(config);
 
 	// 2. Registrar Comandos
 	const registry = new CommandRegistry();
 	
 	const deployCmd = new DeployCommand(tomcatService, buildService);
+	const logsCmd = new LogsCommand(dashboard, logAnalyzer);
 	
 	registry.register("build", new BuildCommand(buildService));
 	registry.register("start", new StartCommand(tomcatService));
 	registry.register("doctor", new DoctorCommand());
 	registry.register("run", new RunCommand());
 	registry.register("debug", new RunCommand());
-	registry.register("logs", new LogsCommand());
+	registry.register("logs", logsCmd);
 	registry.register("docs", new DocsCommand());
 	registry.register("audit", new AuditCommand(auditService));
 	registry.register("deploy", deployCmd);
@@ -72,7 +79,6 @@ async function main() {
 		await watcher.start();
 	} else {
 		// 3. Executar do Registro
-		// Ajusta flags baseadas no nome do comando para comandos compartilhados
 		if (commandName === "debug") values.debug = true;
 		if (commandName === "run") values.debug = false;
 		

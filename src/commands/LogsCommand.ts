@@ -1,33 +1,35 @@
 import type { Command } from "./Command";
-import type { AppConfig } from "../types/config";
+import type { AppConfig, CLIArguments } from "../types/config";
+import { DashboardService } from "../services/DashboardService";
+import { LogAnalyzer } from "../services/LogAnalyzer";
 import { Logger } from "../utils/ui";
 import path from "path";
 import fs from "fs";
 
 export class LogsCommand implements Command {
-    async execute(config: AppConfig): Promise<void> {
+    constructor(private dashboard?: DashboardService, private logAnalyzer?: LogAnalyzer) {}
+
+    async execute(config: AppConfig, args?: CLIArguments): Promise<void> {
         const logPath = path.join(config.tomcat.path, "logs", "catalina.out");
 
         if (!fs.existsSync(logPath)) {
-            Logger.error(`Arquivo de log não encontrado: ${logPath}`);
+            const errorMsg = `Arquivo de log não encontrado: ${logPath}`;
+            if (this.dashboard) this.dashboard.log(Logger.C.red + errorMsg);
+            else Logger.error(errorMsg);
             return;
         }
 
-        Logger.section(`Monitoring Logs: ${logPath}`);
-        if (config.tomcat.grep) {
-            Logger.info("Filter", config.tomcat.grep);
+        const analyzer = this.logAnalyzer || new LogAnalyzer(config.project);
+        const dashboard = this.dashboard || new DashboardService(config);
+
+        dashboard.setStatus("LOGGING", Logger.C.green);
+        
+        if (args?.grep) {
+            dashboard.log(`${Logger.C.dim}Filter:${Logger.C.reset} ${Logger.C.bold}${args.grep}${Logger.C.reset}`);
         }
 
         const stats = fs.statSync(logPath);
         let currentSize = stats.size;
-
-        const colorize = (line: string): string => {
-            if (line.match(/SEVERE|ERROR|Exception|Error/i)) return `\x1b[31m${line}\x1b[0m`;
-            if (line.match(/WARNING|WARN/i)) return `\x1b[33m${line}\x1b[0m`;
-            if (line.match(/INFO/i)) return `\x1b[36m${line}\x1b[0m`;
-            if (line.match(/DEBUG/i)) return `\x1b[90m${line}\x1b[0m`;
-            return line;
-        };
 
         fs.watch(logPath, (event) => {
             if (event === "change") {
@@ -43,18 +45,22 @@ export class LogsCommand implements Command {
                         lines.forEach(line => {
                             if (!line.trim()) return;
                             
-                            if (config.tomcat.grep && !line.toLowerCase().includes(config.tomcat.grep.toLowerCase())) {
+                            const grep = args?.grep || config.project.grep;
+                            if (grep && !line.toLowerCase().includes(grep.toLowerCase())) {
                                 return;
                             }
 
-                            process.stdout.write(colorize(line) + "\n");
+                            const formatted = analyzer.summarize(line);
+                            if (formatted) {
+                                dashboard.log(formatted);
+                            }
                         });
                     });
 
                     currentSize = newStats.size;
                 } else if (newStats.size < currentSize) {
                     currentSize = newStats.size;
-                    Logger.warn("Arquivo de log foi resetado/rotacionado.");
+                    dashboard.log(Logger.C.yellow + "Arquivo de log foi resetado/rotacionado.");
                 }
             }
         });

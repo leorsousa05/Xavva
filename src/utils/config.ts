@@ -27,12 +27,25 @@ export class ConfigManager {
                 verbose: { type: "boolean", short: "V" },
                 dp: { type: "string" },
                 fix: { type: "boolean" },
+                tui: { type: "boolean" },
             },
             strict: false,
             allowPositionals: true,
         });
 
         const cliValues = values as CLIArguments;
+
+        // Load xavva.json
+        const xavvaJsonPath = path.join(process.cwd(), "xavva.json");
+        let xavvaJson: Partial<CLIArguments> = {};
+        if (fs.existsSync(xavvaJsonPath)) {
+            try {
+                xavvaJson = JSON.parse(fs.readFileSync(xavvaJsonPath, "utf8"));
+            } catch (e) {
+                console.error("Error reading xavva.json:", (e as Error).message);
+            }
+        }
+
         const isDev = positionals.includes("dev");
         const isRun = positionals.includes("run") || positionals.includes("debug");
         
@@ -49,24 +62,25 @@ export class ConfigManager {
 
         const config: AppConfig = {
             tomcat: {
-                path: String(cliValues.path || envTomcatPath),
-                port: parseInt(String(cliValues.port || "8080")),
+                path: String(cliValues.path || xavvaJson.path || envTomcatPath),
+                port: parseInt(String(cliValues.port || xavvaJson.port || "8080")),
                 webapps: "webapps",
-                grep: cliValues.grep ? String(cliValues.grep) : "",
+                grep: cliValues.grep || xavvaJson.grep ? String(cliValues.grep || xavvaJson.grep) : "",
             },
             project: {
-                appName: cliValues.name ? String(cliValues.name) : "",
-                buildTool: (cliValues.tool as "maven" | "gradle") || detectedTool,
-                profile: String(cliValues.profile || ""),
-                skipBuild: !!cliValues["no-build"],
-                skipScan: cliValues.scan !== undefined ? !cliValues.scan : true,
-                clean: !!cliValues.clean,
-                cleanLogs: cliValues.verbose ? false : true,
-                quiet: cliValues.verbose ? false : true,
-                verbose: !!cliValues.verbose,
-                debug: !!(cliValues.debug || isDev || isRun),
-                debugPort: parseInt(String(cliValues.dp || "5005")),
-                grep: runClass || (cliValues.grep ? String(cliValues.grep) : ""),
+                appName: cliValues.name || xavvaJson.name ? String(cliValues.name || xavvaJson.name) : "",
+                buildTool: (cliValues.tool as any) || (xavvaJson.tool as any) || detectedTool,
+                profile: String(cliValues.profile || xavvaJson.profile || ""),
+                skipBuild: !!(cliValues["no-build"] ?? xavvaJson["no-build"]),
+                skipScan: cliValues.scan !== undefined ? !cliValues.scan : (xavvaJson.scan !== undefined ? !xavvaJson.scan : true),
+                clean: !!(cliValues.clean ?? xavvaJson.clean),
+                cleanLogs: (cliValues.verbose ?? xavvaJson.verbose) ? false : true,
+                quiet: (cliValues.verbose ?? xavvaJson.verbose) ? false : true,
+                verbose: !!(cliValues.verbose ?? xavvaJson.verbose),
+                debug: !!(cliValues.debug ?? xavvaJson.debug ?? isDev ?? isRun),
+                debugPort: parseInt(String(cliValues.dp || xavvaJson.dp || "5005")),
+                grep: runClass || (cliValues.grep || xavvaJson.grep ? String(cliValues.grep || xavvaJson.grep) : ""),
+                tui: !!(cliValues.tui ?? xavvaJson.tui),
             }
         };
 
