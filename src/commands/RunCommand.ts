@@ -1,7 +1,6 @@
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
 import { Logger } from "../utils/ui";
-import { spawn } from "child_process";
 import path from "path";
 
 export class RunCommand implements Command {
@@ -54,19 +53,20 @@ export class RunCommand implements Command {
             Logger.warn(`🚀 Executando ${className}...`);
         }
 
-        const bin = process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, "bin", "java") : "java";
+        const bin = process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, "bin", "java.exe") : "java";
         
-        return new Promise((resolve) => {
-            const child = spawn(bin, javaArgs, {
-                stdio: "inherit",
-                shell: false
-            });
-
-            child.on("exit", () => {
-                Logger.log(`Sessão de ${isDebug ? "debug" : "execução"} encerrada.`);
-                resolve();
-            });
+        const proc = Bun.spawn([bin, ...javaArgs], {
+            stdout: "inherit",
+            stderr: "inherit",
+            stdin: "inherit",
+            env: {
+                ...process.env,
+                JAVA_OPTS: "-Xms256m -Xmx1024m"
+            } as any
         });
+
+        await proc.exited;
+        Logger.log(`Sessão de ${isDebug ? "debug" : "execução"} encerrada.`);
     }
 
     private async discoverClass(simpleName: string): Promise<string | null> {

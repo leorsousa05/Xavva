@@ -19,16 +19,22 @@ export class BuildService {
 		}
 
 		if (!incremental && !this.projectConfig.skipBuild) {
-			if (!this.projectConfig.clean && !this.cache.shouldRebuild(this.projectConfig.buildTool)) {
+			if (!this.projectConfig.clean && !this.cache.shouldRebuild(this.projectConfig.buildTool, this.projectService)) {
 				Logger.success("Build cache hit! Skipping full build.");
 				return;
 			}
 		}
 
 		const command = [];
+		const env = { ...process.env };
 		
 		if (this.projectConfig.buildTool === 'maven') {
 			command.push("mvn");
+
+			if (!this.cache.shouldRebuild('maven', this.projectService)) {
+				command.push("-o");
+			}
+
 			if (incremental) {
 				command.push("compile");
 			} else {
@@ -38,6 +44,8 @@ export class BuildService {
 			}
 			command.push("-Dmaven.test.skip=true", "-Dmaven.javadoc.skip=true");
 			if (this.projectConfig.profile) command.push(`-P${this.projectConfig.profile}`);
+
+			env.MAVEN_OPTS = "-Xms512m -Xmx1024m -XX:+UseParallelGC";
 		} else {
 			command.push("gradle");
 			if (incremental) {
@@ -49,13 +57,16 @@ export class BuildService {
 			}
 			command.push("-x", "test", "-x", "javadoc");
 			if (this.projectConfig.profile) command.push(`-Pprofile=${this.projectConfig.profile}`);
+
+			env.GRADLE_OPTS = "-Xmx1024m -Dorg.gradle.daemon=true";
 		}
 
 		const stopSpinner = (this.projectConfig.verbose) ? () => {} : Logger.spinner(incremental ? "Incremental compilation" : "Full project build");
 
 		const proc = Bun.spawn(command, { 
 			stdout: "pipe",
-			stderr: "pipe"
+			stderr: "pipe",
+			env: env as any
 		});
 
 		if (this.projectConfig.verbose) {

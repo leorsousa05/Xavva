@@ -27,16 +27,13 @@ export class DeployCommand implements Command {
             const contextPath = (config.project.appName || "").replace(".war", "");
 
             if (!incremental) {
-                tomcat.clearWebapps(contextPath);
+                await tomcat.killConflict();
+                await tomcat.clearWebapps();
 
-                const buildTask = config.project.skipBuild ? Promise.resolve() : builder.runBuild(incremental);
-                const killTask = tomcat.killConflict();
-                
                 if (!config.project.skipBuild) {
-                    Logger.watcher("Preparing environment and building in parallel", "start");
+                    Logger.watcher("Building project", "start");
+                    await builder.runBuild(incremental);
                 }
-
-                await Promise.all([buildTask, killTask]);
                 
                 if (!config.project.skipBuild) {
                     Logger.build("Full project build and environment ready");

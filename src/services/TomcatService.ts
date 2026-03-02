@@ -42,28 +42,45 @@ export class TomcatService {
 		}
 	}
 
-	clearWebapps() {
-		const fs = require("fs");
+	async clearWebapps() {
+		const fs = require("fs").promises;
+		const { existsSync } = require("fs");
 		const path = require("path");
 		const webappsPath = path.join(this.activeConfig.path, "webapps");
 		const workPath = path.join(this.activeConfig.path, "work");
 		const tempPath = path.join(this.activeConfig.path, "temp");
 
 		try {
-			[workPath, tempPath].forEach(p => {
-				if (fs.existsSync(p)) {
-					fs.rmSync(p, { recursive: true, force: true });
-					fs.mkdirSync(p);
+			const cleanDir = async (p: string) => {
+				if (existsSync(p)) {
+					await fs.rm(p, { recursive: true, force: true });
+					
+					// Resiliência para Windows: garante que o diretório foi liberado antes do mkdir
+					let retries = 10;
+					while (retries > 0 && existsSync(p)) {
+						await new Promise(r => setTimeout(r, 50));
+						retries--;
+					}
+					
+					await fs.mkdir(p, { recursive: true });
 				}
-			});
+			};
 
-			const files = fs.readdirSync(webappsPath);
-			for (const file of files) {
-				const fullPath = path.join(webappsPath, file);
-				if (file === "ROOT" || file === "manager" || file === "host-manager") continue;
-				
-				fs.rmSync(fullPath, { recursive: true, force: true });
+			const tasks: Promise<any>[] = [
+				cleanDir(workPath),
+				cleanDir(tempPath)
+			];
+
+			if (existsSync(webappsPath)) {
+				const files = await fs.readdir(webappsPath);
+				for (const file of files) {
+					if (file === "ROOT" || file === "manager" || file === "host-manager") continue;
+					const fullPath = path.join(webappsPath, file);
+					tasks.push(fs.rm(fullPath, { recursive: true, force: true }));
+				}
 			}
+
+			await Promise.all(tasks);
 		} catch (e) {
 			Logger.warn("Não foi possível limpar totalmente a pasta webapps ou cache.");
 		}

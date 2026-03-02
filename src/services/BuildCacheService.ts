@@ -41,7 +41,7 @@ export class BuildCacheService {
         return crypto.createHash("md5").update(hash).digest("hex");
     }
 
-    shouldRebuild(tool: "maven" | "gradle"): boolean {
+    shouldRebuild(tool: "maven" | "gradle", projectService?: any): boolean {
         if (!fs.existsSync(this.cacheFile)) return true;
 
         try {
@@ -51,8 +51,16 @@ export class BuildCacheService {
             // Se o pom/gradle mudou, precisa de rebuild completo
             if (currentHash !== cache.lastConfigHash) return true;
 
-            // Verificar se o artefato (.war) ainda existe
-            // (Esta parte será integrada ao BuildService)
+            // Verificar se o artefato (.war) ainda existe fisicamente
+            if (projectService) {
+                try {
+                    const artifact = projectService.getArtifact();
+                    if (!fs.existsSync(artifact.path)) return true;
+                } catch (e) {
+                    return true;
+                }
+            }
+
             return false;
         } catch (e) {
             return true;
