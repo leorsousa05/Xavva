@@ -1,50 +1,47 @@
 import type { Command } from "./Command";
-import type { AppConfig } from "../types/config";
+import type { AppConfig, CLIArguments } from "../types/config";
 import pkg from "../../package.json";
 
 export class HelpCommand implements Command {
-    async execute(_config: AppConfig): Promise<void> {
+    async execute(_config: AppConfig, _args?: CLIArguments): Promise<void> {
         console.log(`
-🛠️  Xavva CLI v${pkg.version}
--------------------------------
-A Xavva automatiza o ciclo de vida de aplicações Java (Tomcat).
-Se nenhum comando for fornecido, 'deploy' será executado por padrão.
+🛠️  XAVVA CLI v${pkg.version} 🚀
+---------------------------------------
+Automatização de alta performance para Java Enterprise (Tomcat) no Windows.
+Detecta automaticamente Maven/Gradle e otimiza o ciclo de desenvolvimento.
 
 Comandos principais:
-  dev           🚀 MODO COMPLETO: Deploy + Watch + Debug + Clean.
-  deploy        (Padrão) Builda o projeto, move para webapps e inicia o Tomcat.
-  start         Apenas inicia o servidor (útil quando o .war já foi gerado).
-  build         Executa apenas a compilação (mvn package ou gradle build).
-  doctor        🩺 Verifica o ambiente (Java, Tomcat, Maven, etc).
-  docs          📖 Swagger-like: Exibe endpoints e URLs de JSPs.
-  audit         🛡️ JAR Audit: Busca vulnerabilidades (CVEs) nas dependências.
-  run           🚀 Executa uma classe main (Uso: xavva run NomeDaClasse).
-  debug         🐞 Debuga uma classe main (Uso: xavva debug NomeDaClasse).
-  logs          📋 Monitora o catalina.out do Tomcat em tempo real.
+  dev           🚀 MODO COMPLETO: Build + Deploy + Watch + Debug.
+  deploy        (Padrão) Compila, sincroniza e inicia o servidor.
+  logs          📋 Tail inteligente (catalina.out) com Smart Folding.
+  run / debug   🚀 Executa classes standalone com Pathing JAR (Windows).
+  doctor        🩺 Diagnóstico e reparo de ambiente (DCEVM, JAVA_HOME).
+  audit         🛡️ Auditoria de segurança em JARs via OSV.dev.
+  docs          📖 Mapeamento estático de Endpoints e JSPs.
+  build / start Comandos granulares de compilação ou startup.
 
-Opções:
-  -w, --watch   👀 Hot Reload: monitora arquivos e redeploya automaticamente.
-  -d, --debug   🐞 Habilita debug Java (JPDA).
-  --dp [porta]  🔌 Porta do Debugger (padrão: 5005).
-  -c, --clean   🧹 Logs coloridos e simplificados (recomendado).
-  -q, --quiet   🤫 Mostra apenas mensagens essenciais nos logs.
-  -V, --verbose 📣 Mostra logs completos do Maven/Gradle.
-  -s, --no-build Pula o build (usa o que já estiver na pasta target/build).
-  -P, --profile Define o profile (ex: -P prod).
-  --fix         🔧 Corrige problemas automaticamente no 'doctor'.
+Opções de Interface:
+  --tui         🖥️  Ativa o Dashboard Interativo (Interface TUI).
+  -w, --watch   👀 Hot Reload: Redeploy incremental de classes e recursos.
+  -c, --clean   🧹 Logs coloridos e simplificados (Recomendado).
+  -V, --verbose 📣 Exibe logs completos do Maven/Gradle.
 
-Exemplos de uso:
-  xavva dev           A melhor experiência de dev local.
-  xavva -w -c         Inicia com auto-reload e logs limpos.
-  xavva deploy -d     Builda e inicia com debugger habilitado.
-  xavva start -c      Apenas sobe o servidor com logs limpos.
-  xavva build -P dev  Apenas compila usando o profile 'dev'.
+Opções de Runtime:
+  -d, --debug   🐞 Habilita JPDA Debugging (Porta 5005).
+  -P, --profile Define o profile de build (ex: -P prod).
+  -s, --no-build Pula o build inicial.
+  --fix         🔧 Corrige problemas automaticamente (Doctor).
 
-Opções de Configuração:
-  -p, --path    Caminho do Tomcat (padrão via config.ts)
-  -t, --tool    Ferramenta (maven/gradle)
-  -n, --name    Nome do .war (ex: -n ROOT)
-  --port        Porta HTTP (padrão: 8080)
+Configuração:
+  O Xavva prioriza o arquivo 'xavva.json' na raiz do projeto.
+  Flags de linha de comando: -p (Tomcat Path), -t (Build Tool), -n (WAR Name).
+
+Exemplos:
+  xavva dev --tui      Experiência completa com Dashboard.
+  xavva run MyClass    Execução standalone com classpath automático.
+  xavva audit          Verifica vulnerabilidades conhecidas.
+
+*Transformando o legado em produtivo.*
         `);
     }
 }
