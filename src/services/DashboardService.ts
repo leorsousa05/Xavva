@@ -34,9 +34,6 @@ export class DashboardService {
                 this.logLines = [];
                 this.render();
             }
-            // 'R' será tratado pelo comando que instanciar o Dashboard via callbacks se necessário
-            // ou podemos emitir um evento. Para simplificar, vou deixar os atalhos aqui
-            // e o usuário pode passar ações.
         });
 
         process.on("SIGINT", () => this.exit());
@@ -64,8 +61,7 @@ export class DashboardService {
         if (!message) return;
         
         if (this.isTui) {
-            const lines = message.split("
-");
+            const lines = message.split("\n");
             this.logLines.push(...lines);
             if (this.logLines.length > 1000) { // Limite de scrollbuffer
                 this.logLines = this.logLines.slice(-1000);
@@ -84,31 +80,26 @@ export class DashboardService {
         let output = "\x1B[H"; // Move to 0,0
         
         // Header
-        const name = (process.cwd().split(/[/\]/).pop() || "PROJECT").toUpperCase();
+        const name = (process.cwd().split(/[/\\]/).pop() || "PROJECT").toUpperCase();
         const git = Logger.getGitContext();
         const mem = Math.round((os.totalmem() - os.freemem()) / 1024 / 1024 / 1024 * 10) / 10;
         const totalMem = Math.round(os.totalmem() / 1024 / 1024 / 1024);
 
-        output += `${Logger.C.bold}${Logger.C.cyan} X A V V A  2.0 ${Logger.C.reset} ${Logger.C.dim}│${Logger.C.reset} ${Logger.C.white}${Logger.C.bold}${name}${Logger.C.reset}
-`;
-        output += `${Logger.C.dim} STATUS: ${this.statusColor}${this.status.padEnd(10)}${Logger.C.reset} ${Logger.C.dim}│ MEM: ${Logger.C.yellow}${mem}G/${totalMem}G${Logger.C.reset} ${Logger.C.dim}│ BRANCH: ${Logger.C.magenta}${git.branch || "unknown"}${Logger.C.reset}
-`;
-        output += `${Logger.C.dim}──────────────────────────────────────────────────────────────────────────${Logger.C.reset}
-`;
+        output += `${Logger.C.bold}${Logger.C.cyan} X A V V A  2.0 ${Logger.C.reset} ${Logger.C.dim}│${Logger.C.reset} ${Logger.C.white}${Logger.C.bold}${name}${Logger.C.reset}\n`;
+        output += `${Logger.C.dim} STATUS: ${this.statusColor}${this.status.padEnd(10)}${Logger.C.reset} ${Logger.C.dim}│ MEM: ${Logger.C.yellow}${mem}G/${totalMem}G${Logger.C.reset} ${Logger.C.dim}│ BRANCH: ${Logger.C.magenta}${git.branch || "unknown"}${Logger.C.reset}\n`;
+        output += `${Logger.C.dim}──────────────────────────────────────────────────────────────────────────${Logger.C.reset}\n`;
 
         // Logs
         const visibleLogs = this.logLines.slice(-this.maxLogLines);
         for (let i = 0; i < this.maxLogLines; i++) {
             const line = visibleLogs[i] || "";
             // Limpa a linha antes de escrever (ANSI escape EL)
-            output += line.substring(0, process.stdout.columns) + "\x1B[K
-";
+            output += line.substring(0, process.stdout.columns) + "\x1B[K\n";
         }
 
         // Footer
         output += `\x1B[${process.stdout.rows - 1};1H`; // Move to last rows
-        output += `${Logger.C.dim}──────────────────────────────────────────────────────────────────────────${Logger.C.reset}
-`;
+        output += `${Logger.C.dim}──────────────────────────────────────────────────────────────────────────${Logger.C.reset}\n`;
         output += ` ${Logger.C.bold}${Logger.C.white}R${Logger.C.reset} Restart  ${Logger.C.bold}${Logger.C.white}L${Logger.C.reset} Clear  ${Logger.C.bold}${Logger.C.white}Q${Logger.C.reset} Quit    ${Logger.C.dim} (Xavva 2.0 TUI Mode)${Logger.C.reset}`;
 
         process.stdout.write(output);
