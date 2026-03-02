@@ -10,6 +10,7 @@ import { RunCommand } from "./commands/RunCommand";
 import { LogsCommand } from "./commands/LogsCommand";
 import { DocsCommand } from "./commands/DocsCommand";
 import { AuditCommand } from "./commands/AuditCommand";
+import { ProfilesCommand } from "./commands/ProfilesCommand";
 
 import { ProjectService } from "./services/ProjectService";
 import { TomcatService } from "./services/TomcatService";
@@ -32,11 +33,11 @@ async function main() {
 		process.exit(0);
 	}
 
-	const commandNames = ["deploy", "build", "start", "dev", "doctor", "run", "debug", "logs", "docs", "audit"];
+	const commandNames = ["deploy", "build", "start", "dev", "doctor", "run", "debug", "logs", "docs", "audit", "profiles"];
 	const commandName = positionals.find(p => commandNames.includes(p)) || "deploy";
 
 	if (!values.help && !values.tui) {
-		Logger.banner(commandName);
+		Logger.banner(commandName, config.project.profile);
 	}
 
 	if (values.help) {
@@ -71,6 +72,7 @@ async function main() {
 	registry.register("logs", logsCmd);
 	registry.register("docs", new DocsCommand());
 	registry.register("audit", new AuditCommand(auditService));
+	registry.register("profiles", new ProfilesCommand(projectService));
 	registry.register("deploy", deployCmd);
 	registry.register("dev", deployCmd);
 

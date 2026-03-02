@@ -88,6 +88,44 @@ export class ProjectService {
         }
     }
 
+    getAvailableProfiles(): string[] {
+        const results: string[] = [];
+        const root = process.cwd();
+
+        if (this.config.buildTool === 'maven') {
+            const pomPath = path.join(root, "pom.xml");
+            if (existsSync(pomPath)) {
+                try {
+                    const content = require("fs").readFileSync(pomPath, "utf8");
+                    // Regex simples para capturar IDs de profiles no pom.xml
+                    const profileRegex = /<profile>[\s\S]*?<id>(.*?)<\/id>/g;
+                    let match;
+                    while ((match = profileRegex.exec(content)) !== null) {
+                        results.push(match[1]);
+                    }
+                } catch (e) {}
+            }
+        } else if (this.config.buildTool === 'gradle') {
+            const gradlePath = path.join(root, "build.gradle");
+            const gradleKtsPath = path.join(root, "build.gradle.kts");
+            const targetPath = existsSync(gradlePath) ? gradlePath : existsSync(gradleKtsPath) ? gradleKtsPath : null;
+
+            if (targetPath) {
+                try {
+                    const content = require("fs").readFileSync(targetPath, "utf8");
+                    // Em Gradle, perfis costumam ser tratados via propriedades ou tasks de ambiente
+                    // Vamos procurar por padrões comuns como "if (project.hasProperty('profile'))" 
+                    // ou simplesmente sugerir o uso de -P
+                    if (content.includes("project.hasProperty('profile')") || content.includes("-Pprofile")) {
+                        results.push("(Detectado uso dinâmico de -Pprofile)");
+                    }
+                } catch (e) {}
+            }
+        }
+
+        return results;
+    }
+
     findAllClassPaths(): string[] {
         const results: string[] = [];
         const root = process.cwd();

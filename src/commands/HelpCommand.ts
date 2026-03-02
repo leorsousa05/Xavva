@@ -17,6 +17,7 @@ Comandos principais:
   run / debug   🚀 Executa classes standalone com Pathing JAR (Windows).
   doctor        🩺 Diagnóstico e reparo de ambiente (DCEVM, JAVA_HOME).
   audit         🛡️ Auditoria de segurança em JARs via OSV.dev.
+  profiles      🏷️ Lista perfis de build disponíveis (Maven Profiles).
   docs          📖 Mapeamento estático de Endpoints e JSPs.
   build / start Comandos granulares de compilação ou startup.
 

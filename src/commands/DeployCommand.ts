@@ -110,6 +110,7 @@ export class DeployCommand implements Command {
 
     private logConfiguration(config: AppConfig, isWatching: boolean) {
         Logger.config("Runtime", config.project.buildTool.toUpperCase());
+        if (config.project.profile) Logger.config("Profile", config.project.profile.toUpperCase());
         Logger.config("Watch Mode", isWatching ? "ON" : "OFF");
         Logger.config("Debug", config.project.debug ? `ON (Port ${config.project.debugPort})` : "OFF");
 

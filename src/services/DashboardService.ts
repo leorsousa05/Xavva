@@ -92,8 +92,9 @@ export class DashboardService {
         const name = (process.cwd().split(/[/\\]/).pop() || "PROJECT").toUpperCase();
         const mem = Math.round((os.totalmem() - os.freemem()) / 1024 / 1024 / 1024 * 10) / 10;
         const totalMem = Math.round(os.totalmem() / 1024 / 1024 / 1024);
+        const profile = this.config.project.profile ? ` ${Logger.C.dim}•${Logger.C.reset} ${Logger.C.yellow}♦ ${this.config.project.profile.toUpperCase()}${Logger.C.reset}` : "";
 
-        output += `${Logger.C.bold}${Logger.C.cyan} X A V V A  2.0 ${Logger.C.reset} ${Logger.C.dim}│${Logger.C.reset} ${Logger.C.white}${Logger.C.bold}${name}${Logger.C.reset}\x1B[K\n`;
+        output += `${Logger.C.bold}${Logger.C.cyan} X A V V A  2.0 ${Logger.C.reset} ${Logger.C.dim}│${Logger.C.reset} ${Logger.C.white}${Logger.C.bold}${name}${Logger.C.reset}${profile}\x1B[K\n`;
         output += `${Logger.C.dim} STATUS: ${this.statusColor}${this.status.padEnd(10)}${Logger.C.reset} ${Logger.C.dim}│ MEM: ${Logger.C.yellow}${mem}G/${totalMem}G${Logger.C.reset} ${Logger.C.dim}│ BRANCH: ${Logger.C.magenta}${this.gitContext?.branch || "unknown"}${Logger.C.reset}\x1B[K\n`;
         output += `${Logger.C.dim}──────────────────────────────────────────────────────────────────────────${Logger.C.reset}\x1B[K\n`;
 

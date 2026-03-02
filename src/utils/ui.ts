@@ -61,7 +61,7 @@ export class Logger {
         }
     }
 
-    static banner(command?: string) {
+    static banner(command?: string, profile?: string) {
         console.clear();
         const git = this.getGitContext();
         const name = (process.cwd().split(/[/\\]/).pop() || "PROJECT").toUpperCase();
@@ -74,8 +74,9 @@ export class Logger {
         console.log("");
         console.log(`  ${this.C.bold}${this.C.cyan}X A V V A${this.C.reset} ${this.C.dim}─${this.C.reset} ${this.C.bold}${this.C.white}${name}${this.C.reset}`);
         
+        const profileInfo = profile ? ` ${this.C.dim}•${this.C.reset} ${this.C.yellow}♦ ${profile.toUpperCase()}${this.C.reset}` : "";
         const gitInfo = git.branch ? `${this.C.magenta}🌿 ${git.branch}${this.C.reset} ${this.C.dim}•${this.C.reset} ${this.C.yellow}${git.hash}${this.C.reset}` : "";
-        console.log(`  ${this.C.dim}📦 ${version}${gitInfo ? `  ${this.C.dim}•${this.C.reset}  ${gitInfo}` : ""}${this.C.reset}`);
+        console.log(`  ${this.C.dim}📦 ${version}${profileInfo}${gitInfo ? `  ${this.C.dim}•${this.C.reset}  ${gitInfo}` : ""}${this.C.reset}`);
         
         console.log(`  ${modeColor}${this.C.bold}⬢ ${modeIcon} ${mode} MODE${this.C.reset}`);
         console.log(`  ${this.C.dim}─────────────────────────────────────────────────${this.C.reset}`);
