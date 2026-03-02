@@ -1,4 +1,4 @@
-# XAVVA 🚀 (Windows Only) `v1.7.0`
+# XAVVA 🚀 (Windows Only) `v1.8.0`
 
 Xavva é uma CLI de alto desempenho construída com **Bun** para automatizar o ciclo de desenvolvimento de aplicações Java (Maven/Gradle) rodando no Apache Tomcat. Ela foi desenhada especificamente para desenvolvedores que buscam a velocidade de ambientes modernos (como Node.js/Vite) dentro do ecossistema Java Enterprise.
 
