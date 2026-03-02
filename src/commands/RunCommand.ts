@@ -295,8 +295,10 @@ export class RunCommand implements Command {
             const stopSpinner = Logger.spinner("Generating project classpath");
             try {
                 if (config.project.buildTool === "maven") {
-                    Bun.spawnSync(["mvn", "dependency:build-classpath", `-Dmdep.outputFile=${cpFile}`]);
+                    const mvnCmd = process.platform === "win32" ? "mvn.cmd" : "mvn";
+                    Bun.spawnSync([mvnCmd, "dependency:build-classpath", `-Dmdep.outputFile=${cpFile}`]);
                 } else if (config.project.buildTool === "gradle") {
+                    const gradleCmd = process.platform === "win32" ? "gradle.bat" : "gradle";
                     const initScriptPath = path.join(xavvaDir, "init-cp.gradle");
                     const normalizedCpFile = cpFile.replace(/\\/g, "/");
                     const initScriptContent = `
@@ -319,7 +321,7 @@ export class RunCommand implements Command {
                         }
                     `.trim().replace(/^ {24}/gm, ""); // Remove excess indentation
                     fs.writeFileSync(initScriptPath, initScriptContent);
-                    Bun.spawnSync(["gradle", "-q", "printClasspath", "-I", initScriptPath]);
+                    Bun.spawnSync([gradleCmd, "-q", "printClasspath", "-I", initScriptPath]);
                     if (fs.existsSync(initScriptPath)) fs.unlinkSync(initScriptPath);
                 } else {
                     fs.writeFileSync(cpFile, "."); 

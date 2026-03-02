@@ -62,8 +62,10 @@ export class DeployCommand implements Command {
             const appWebappPath = path.join(config.tomcat.path, "webapps", finalContextPath);
 
             if (artifactInfo.isDirectory) {
-                await builder.syncClasses(artifactInfo.path);
-                Logger.build("Exploded directory synced");
+                // Se é um diretório (exploded), sincronizamos o conteúdo total para a pasta do webapps
+                if (!fs.existsSync(appWebappPath)) fs.mkdirSync(appWebappPath, { recursive: true });
+                await builder.syncExploded(artifactInfo.path, appWebappPath);
+                Logger.build("Exploded directory synced to webapps");
             } else {
                 if (!fs.existsSync(appWebappPath)) fs.mkdirSync(appWebappPath, { recursive: true });
 
@@ -90,6 +92,7 @@ export class DeployCommand implements Command {
                 }
             }
 
+            this.injectContextConfiguration(appWebappPath);
             this.injectHotswapProperties(appWebappPath);
 
             const finalAppUrl = `http://localhost:${config.tomcat.port}/${finalContextPath}`;
@@ -134,6 +137,20 @@ export class DeployCommand implements Command {
                 Logger.config("Endpoints", endpoints.length);
             }
         }
+    }
+
+    private injectContextConfiguration(appPath: string) {
+        const metaInfPath = path.join(appPath, "META-INF");
+        if (!fs.existsSync(metaInfPath)) fs.mkdirSync(metaInfPath, { recursive: true });
+
+        const contextPath = path.join(metaInfPath, "context.xml");
+        
+        // Aumentamos o cache para 100MB (102400 KB) para evitar avisos de cache insuficiente
+        const contextContent = `<?xml version="1.0" encoding="UTF-8"?>\n<Context>\n    <Resources cachingAllowed="true" cacheMaxSize="102400" />\n</Context>`;
+
+        try {
+            fs.writeFileSync(contextPath, contextContent);
+        } catch (e) {}
     }
 
     private injectHotswapProperties(appWebappPath: string) {

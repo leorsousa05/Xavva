@@ -185,7 +185,8 @@ export class Logger {
             "Deployment of web application", "Deploying web application archive", "at org.apache",
             "Registering directory", "initialized in ClassLoader", "Discovered plugins:",
             "enhanced with plugin initialization", "registerJerseyContainer", "JasperLoader@",
-            "Hotswap ready (Plugins:", "autoHotswap.delay", "watchResources=false"
+            "Hotswap ready (Plugins:", "autoHotswap.delay", "watchResources=false",
+            "org.apache.catalina.webresources.Cache.getResource", "insufficient free space available"
         ];
         return noise.some(n => line.includes(n));
     }
