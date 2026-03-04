@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-
 # XAVVA CLI 🚀
 
 > Ultra-fast development toolkit for Java Enterprise (Tomcat) on Windows
