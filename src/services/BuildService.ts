@@ -162,6 +162,7 @@ export class BuildService {
 		const decoder = new TextDecoder();
 		let errorCount = 0;
 		const maxErrors = 15;
+		const buildTool = this.projectConfig.buildTool as 'maven' | 'gradle';
 
 		while (true) {
 			const { done, value } = await reader.read();
@@ -174,20 +175,27 @@ export class BuildService {
 				const cleanLine = line.trim();
 				if (!cleanLine) continue;
 
-				if (cleanLine.includes("[ERROR]")) {
+				if (cleanLine.includes("[ERROR]") || cleanLine.includes("error:")) {
 					errorCount++;
 					if (errorCount > maxErrors && !this.projectConfig.verbose) {
 						if (errorCount === maxErrors + 1) {
-							Logger.warn("... e mais erros ocultos. Use -V para ver todos.");
+							Logger.warn("... and more errors hidden. Use -V to see all.");
 						}
 						continue;
 					}
 				}
 
 				if (!this.projectConfig.verbose) {
-					// Lógica de sumarização omitida para brevidade
+					// Modo não-verbose: usa sumarização existente
+					const formatted = Logger.formatBuildLog(cleanLine, buildTool);
+					if (formatted) console.log(formatted);
 				} else {
-					process.stdout.write(line + "\n");
+					// Modo verbose: formata mas mantém estrutura
+					const formatted = Logger.formatBuildLog(cleanLine, buildTool);
+					if (formatted) {
+						console.log(formatted);
+					}
+					// Silencia linhas que são noise puro
 				}
 			}
 		}

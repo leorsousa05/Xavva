@@ -50,6 +50,10 @@ export class DepsCommand implements Command {
 			console.log(report);
 
 			// Ações adicionais baseadas em flags
+			if (args?.["update-safe"] || args?.["updateSafe"]) {
+				await this.performUpdateSafe(analyzer, result, config.project.buildTool);
+			}
+
 			if (args?.["fix"]) {
 				await this.suggestFixes(result, config.project.buildTool);
 			}
@@ -100,6 +104,62 @@ export class DepsCommand implements Command {
 				Logger.log("  Adicione ao build.gradle:");
 				Logger.log(`  ${Logger.C.dim}implementation("${conflict.groupId}:${conflict.artifactId}:${conflict.versions[conflict.versions.length - 1]}")${Logger.C.reset}`);
 			}
+		}
+	}
+
+	private async performUpdateSafe(
+		analyzer: DependencyAnalyzerService,
+		result: DependencyAnalysisResult,
+		buildTool: string
+	): Promise<void> {
+		const safeUpdates = result.updates.filter(u => !u.isMajor);
+		
+		if (safeUpdates.length === 0) {
+			Logger.info("", "Nenhuma atualização segura disponível");
+			return;
+		}
+
+		Logger.newline();
+		Logger.section("Atualizando Dependências (Safe Mode)");
+		Logger.info("Atualizações a aplicar", String(safeUpdates.length));
+
+		const spinner = Logger.spinner("Atualizando arquivos de configuração...");
+		
+		try {
+			const updateResult = await analyzer.updateSafe(safeUpdates);
+			spinner();
+
+			if (updateResult.updated > 0) {
+				Logger.success(`${updateResult.updated} dependências atualizadas`);
+				Logger.info("", `Backup criado: ${buildTool === "maven" ? "pom.xml.backup" : "build.gradle.backup"}`);
+				
+				// Listar o que foi atualizado
+				for (const update of safeUpdates.slice(0, 5)) {
+					Logger.log(`  ${Logger.C.green}↑${Logger.C.reset} ${update.groupId}:${update.artifactId} ${update.currentVersion} → ${Logger.C.green}${update.latestVersion}${Logger.C.reset}`);
+				}
+				if (safeUpdates.length > 5) {
+					Logger.log(`  ${Logger.C.dim}... e mais ${safeUpdates.length - 5}${Logger.C.reset}`);
+				}
+
+				Logger.newline();
+				Logger.log(`${Logger.C.yellow}⚠️  Execute 'mvn compile' ou 'gradle build' para aplicar as mudanças${Logger.C.reset}`);
+			} else {
+				Logger.warn("Nenhuma dependência foi atualizada");
+			}
+
+			if (updateResult.skipped > 0) {
+				Logger.info("Dependências ignoradas", `${updateResult.skipped} (definidas via propriedades)`);
+			}
+
+			if (updateResult.errors.length > 0) {
+				for (const error of updateResult.errors) {
+					Logger.warn(error);
+				}
+			}
+		} catch (error) {
+			spinner(false);
+			const message = error instanceof Error ? error.message : String(error);
+			Logger.error(`Falha na atualização: ${message}`);
 		}
 	}
 

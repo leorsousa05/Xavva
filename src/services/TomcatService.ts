@@ -2,7 +2,7 @@ import type { TomcatConfig, AppConfig } from "../types/config";
 import { Logger } from "../utils/ui";
 import type { Subprocess } from "bun";
 import { ProjectService } from "./ProjectService";
-import { existsSync, mkdirSync, writeFileSync, promises as fs } from "fs";
+import { existsSync, mkdirSync, writeFileSync, statSync, promises as fs } from "fs";
 import path from "path";
 import os from "os";
 
@@ -98,10 +98,10 @@ export class TomcatService {
 		const agentDir = path.join(os.homedir(), ".xavva", "agents");
 		const agentPath = path.join(agentDir, "hotswap-agent-2.0.3.jar");
 
-		if (fs.existsSync(agentPath) && fs.statSync(agentPath).size > 1000) return agentPath;
+		if (existsSync(agentPath) && statSync(agentPath).size > 1000) return agentPath;
 
 		try {
-			if (!fs.existsSync(agentDir)) fs.mkdirSync(agentDir, { recursive: true });
+			if (!existsSync(agentDir)) mkdirSync(agentDir, { recursive: true });
 			
 			Logger.step("Downloading HotswapAgent v2.0.3 (Global)...");
 			const url = "https://github.com/HotswapProjects/HotswapAgent/releases/download/RELEASE-2.0.3/hotswap-agent-2.0.3.jar";
@@ -109,7 +109,7 @@ export class TomcatService {
 			if (!response.ok) throw new Error(`Status: ${response.status}`);
 			
 			const buffer = await response.arrayBuffer();
-			fs.writeFileSync(agentPath, Buffer.from(buffer));
+			writeFileSync(agentPath, Buffer.from(buffer));
 			Logger.success("HotswapAgent v2.0.3 installed globally!");
 			return agentPath;
 		} catch (e) {
@@ -237,18 +237,21 @@ export class TomcatService {
 	private async processLogStream(stream: ReadableStream, clean: boolean, quiet: boolean, verbose: boolean, grep: string) {
 		const reader = stream.getReader();
 		const decoder = new TextDecoder();
+		let buffer = "";
 
 		while (true) {
 			const { done, value } = await reader.read();
 			if (done) break;
 
-			const chunk = decoder.decode(value);
-			const lines = chunk.split(/[\r\n]+/);
+			buffer += decoder.decode(value, { stream: true });
+			const lines = buffer.split(/\r?\n/);
+			buffer = lines.pop() || ""; // Keep incomplete line in buffer
 
 			for (const line of lines) {
 				const cleanLine = line.trim();
 				if (!cleanLine || cleanLine.startsWith("Listening for transport")) continue;
 
+				// Detect startup completion
 				if (cleanLine.includes("Server startup in") || cleanLine.includes("SEVERE") || cleanLine.includes("Exception")) {
 					const isSuccess = cleanLine.includes("Server startup in");
 					if (this.stopStartupSpinner) {
@@ -260,26 +263,44 @@ export class TomcatService {
 					}
 				}
 
+				// Verbose: formata logs do Tomcat
 				if (verbose) {
-					Logger.log(cleanLine);
+					if (Logger.isTomcatNoise(cleanLine)) {
+						continue; // Silencia noise completamente
+					}
+					const formatted = Logger.formatTomcatLog(cleanLine);
+					if (formatted) {
+						console.log(formatted);
+					}
 					continue;
 				}
 
+				// Clean mode: filtra noise
 				if (clean) {
+					// Sempre filtra noise do sistema
+					if (Logger.isSystemNoise(cleanLine)) continue;
+
+					// Quiet mode: só mostra essencial
 					if (quiet && !Logger.isEssential(cleanLine)) {
-						if (Logger.isSystemNoise(cleanLine)) continue;
-						if (cleanLine.includes("INFO")) continue;
-					} else if (Logger.isSystemNoise(cleanLine)) {
-						continue;
+						if (cleanLine.includes("INFO") && !cleanLine.includes("ERROR")) continue;
 					}
 
+					// Grep filter
 					if (grep && !cleanLine.toLowerCase().includes(grep.toLowerCase())) {
 						if (!Logger.isEssential(cleanLine)) continue;
 					}
 					
 					const summarized = Logger.summarize(cleanLine);
-					if (summarized) Logger.log(summarized);
+					if (summarized) {
+						// Só mostra se não for vazio (rate limiting)
+						if (summarized.trim()) Logger.log(summarized);
+					}
 				} else {
+					// Non-clean: mostra tudo mas formata
+					if (Logger.isSystemNoise(cleanLine)) {
+						// Silencia completamente noise em non-clean também
+						continue;
+					}
 					Logger.log(cleanLine);
 				}
 			}

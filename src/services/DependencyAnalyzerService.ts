@@ -471,6 +471,114 @@ export class DependencyAnalyzerService {
 		return 0;
 	}
 
+	async updateSafe(updates: DependencyUpdate[]): Promise<{ updated: number; skipped: number; errors: string[] }> {
+		const safeUpdates = updates.filter(u => !u.isMajor);
+		const result = { updated: 0, skipped: 0, errors: [] as string[] };
+		
+		if (safeUpdates.length === 0) {
+			return result;
+		}
+
+		if (this.projectConfig.buildTool === "maven") {
+			return this.updateMavenSafe(safeUpdates);
+		} else {
+			return this.updateGradleSafe(safeUpdates);
+		}
+	}
+
+	private async updateMavenSafe(updates: DependencyUpdate[]): Promise<{ updated: number; skipped: number; errors: string[] }> {
+		const result = { updated: 0, skipped: 0, errors: [] as string[] };
+		const pomPath = path.join(process.cwd(), "pom.xml");
+		
+		if (!fs.existsSync(pomPath)) {
+			result.errors.push("pom.xml não encontrado");
+			return result;
+		}
+
+		let content = fs.readFileSync(pomPath, "utf-8");
+		let modified = false;
+
+		for (const update of updates) {
+			// Pattern para encontrar a versão específica desta dependência
+			const groupId = update.groupId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			const artifactId = update.artifactId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			const currentVersion = update.currentVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			
+			// Regex para encontrar <version> dentro do bloco da dependência
+			const depPattern = new RegExp(
+				`(<dependency>\\s*<groupId>${groupId}</groupId>\\s*<artifactId>${artifactId}</artifactId>(?:\\s*<version>)${currentVersion}(</version>))`,
+				'g'
+			);
+			
+			if (depPattern.test(content)) {
+				content = content.replace(depPattern, `$1${update.latestVersion}$2`);
+				result.updated++;
+				modified = true;
+			} else {
+				// Pode ser definida via property
+				result.skipped++;
+			}
+		}
+
+		if (modified) {
+			// Backup do pom.xml
+			fs.writeFileSync(`${pomPath}.backup`, fs.readFileSync(pomPath));
+			fs.writeFileSync(pomPath, content);
+		}
+
+		return result;
+	}
+
+	private async updateGradleSafe(updates: DependencyUpdate[]): Promise<{ updated: number; skipped: number; errors: string[] }> {
+		const result = { updated: 0, skipped: 0, errors: [] as string[] };
+		const gradlePath = path.join(process.cwd(), "build.gradle");
+		
+		if (!fs.existsSync(gradlePath)) {
+			result.errors.push("build.gradle não encontrado");
+			return result;
+		}
+
+		let content = fs.readFileSync(gradlePath, "utf-8");
+		let modified = false;
+
+		for (const update of updates) {
+			const groupId = update.groupId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			const artifactId = update.artifactId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			const currentVersion = update.currentVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			
+			// Pattern: implementation("group:artifact:version") ou implementation 'group:artifact:version'
+			const patterns = [
+				new RegExp(`(implementation\\s*\\(\\s*["']${groupId}:${artifactId}:)${currentVersion}(["']\\s*\\))`, 'g'),
+				new RegExp(`(implementation\\s+["']${groupId}:${artifactId}:)${currentVersion}(["'])`, 'g'),
+				new RegExp(`(compile\\s*\\(\\s*["']${groupId}:${artifactId}:)${currentVersion}(["']\\s*\\))`, 'g'),
+				new RegExp(`(compile\\s+["']${groupId}:${artifactId}:)${currentVersion}(["'])`, 'g'),
+			];
+			
+			let updated = false;
+			for (const pattern of patterns) {
+				if (pattern.test(content)) {
+					content = content.replace(pattern, `$1${update.latestVersion}$2`);
+					updated = true;
+					break;
+				}
+			}
+			
+			if (updated) {
+				result.updated++;
+				modified = true;
+			} else {
+				result.skipped++;
+			}
+		}
+
+		if (modified) {
+			fs.writeFileSync(`${gradlePath}.backup`, fs.readFileSync(gradlePath));
+			fs.writeFileSync(gradlePath, content);
+		}
+
+		return result;
+	}
+
 	generateReport(result: DependencyAnalysisResult): string {
 		const lines: string[] = [];
 		lines.push("");
