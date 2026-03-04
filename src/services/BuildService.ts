@@ -52,7 +52,12 @@ export class BuildService {
 				command.push("compile");
 			} else {
 				if (this.projectConfig.clean) command.push("clean");
-				command.push("compile", "war:exploded");
+				// Use 'package' para gerar .war ou 'war:exploded' para pasta
+				if (this.projectConfig.war) {
+					command.push("package");
+				} else {
+					command.push("compile", "war:exploded");
+				}
 				command.push("-T", "1C");
 			}
 			command.push("-Dmaven.test.skip=true", "-Dmaven.javadoc.skip=true");

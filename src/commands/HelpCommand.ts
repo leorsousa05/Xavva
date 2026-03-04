@@ -46,6 +46,7 @@ export class HelpCommand implements Command {
     
     ${this.c("cyan", "-c, --clean")}          Clean logs before start
     ${this.c("cyan", "-s, --no-build")}       Skip initial build
+    ${this.c("cyan", "-W, --war")}             Generate .war file instead of exploded
     ${this.c("cyan", "-q, --quiet")}          Minimal output
     ${this.c("cyan", "-V, --verbose")}        Detailed output
     ${this.c("cyan", "-y, --yes")}            Auto-install Tomcat without confirmation
@@ -73,6 +74,9 @@ export class HelpCommand implements Command {
 
     ${this.c("dim", "# Auto-install embedded Tomcat without confirmation")}
     xavva deploy --yes
+
+    ${this.c("dim", "# Build and deploy as .war file")}
+    xavva deploy --war
 
     ${this.c("dim", "# Manage embedded Tomcat installations")}
     xavva tomcat install

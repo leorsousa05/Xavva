@@ -22,6 +22,7 @@ export interface ProjectConfig {
     grep?: string;
     tui: boolean;
     encoding?: string;
+    war?: boolean;
 }
 
 export interface AppConfig {
@@ -57,6 +58,7 @@ export interface CLIArguments {
     "update-safe"?: boolean;
     "updateSafe"?: boolean;
     yes?: boolean;
+    war?: boolean;
 }
 
 export interface CommandContext {
