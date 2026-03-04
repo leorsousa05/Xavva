@@ -1,6 +1,7 @@
 import { parseArgs } from "util";
 import path from "path";
 import fs from "fs";
+import readline from "readline";
 import { DEFAULT_TOMCAT_PORT, DEFAULT_DEBUG_PORT } from "./constants";
 import type { AppConfig, CLIArguments, CommandContext } from "../types/config";
 import { EmbeddedTomcatService } from "../services/EmbeddedTomcatService";
@@ -89,11 +90,26 @@ export class ConfigManager {
             
             // Instala se necessário
             if (!embeddedService.checkInstallation()) {
-                Logger.info("Tomcat", "Não instalado localmente");
-                Logger.info("Ação", `Download automático do Tomcat ${embeddedVersion} será iniciado`);
-                Logger.info("Dica", "Use --tomcat-version para escolher outra versão");
+                Logger.warn("Tomcat não encontrado!");
+                Logger.info("Versão solicitada", embeddedVersion);
+                Logger.newline();
+                Logger.log(`${Logger.C.cyan}?${Logger.C.reset} Deseja instalar o Tomcat ${embeddedVersion} automaticamente?`);
+                Logger.log(`${Logger.C.dim}  O download é de ~16MB e será salvo em:~/.xavva/tomcat/${embeddedVersion}${Logger.C.reset}`);
                 Logger.newline();
                 
+                const shouldInstall = await this.askYesNo("Instalar");
+                
+                if (!shouldInstall) {
+                    Logger.newline();
+                    Logger.info("Opções disponíveis", "");
+                    Logger.log(`  ${Logger.C.cyan}1.${Logger.C.reset} Defina TOMCAT_HOME ou CATALINA_HOME`);
+                    Logger.log(`  ${Logger.C.cyan}2.${Logger.C.reset} Use --path para especificar o Tomcat`);
+                    Logger.log(`  ${Logger.C.cyan}3.${Logger.C.reset} Use --tomcat-version para outra versão`);
+                    Logger.newline();
+                    process.exit(0);
+                }
+                
+                Logger.newline();
                 const installed = await embeddedService.install();
                 if (!installed) {
                     Logger.error("Falha ao instalar Tomcat embutido.");
@@ -152,6 +168,21 @@ export class ConfigManager {
             return "gradle";
         }
         return "maven";
+    }
+
+    private static async askYesNo(question: string): Promise<boolean> {
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+
+        return new Promise((resolve) => {
+            rl.question(`${question} [Y/n]: `, (answer) => {
+                rl.close();
+                const normalized = answer.trim().toLowerCase();
+                resolve(normalized === '' || normalized === 'y' || normalized === 'yes');
+            });
+        });
     }
 
     private static ensureGitIgnore() {
