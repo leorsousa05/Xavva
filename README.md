@@ -2,7 +2,7 @@
 
 > Ultra-fast development toolkit for Java Enterprise (Tomcat) on Windows
 
-[![Version](https://img.shields.io/badge/version-2.2.2-blue.svg)](https://github.com/leorsousa05/Xavva)
+[![Version](https://img.shields.io/badge/version-2.3.0-blue.svg)](https://github.com/leorsousa05/Xavva)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Xavva is a high-performance CLI built with **Bun** that transforms the Java/Tomcat development experience. It brings modern development workflows (like Node.js/Vite) to the Java Enterprise ecosystem with hot-reload, smart logging, and automated deployment.
