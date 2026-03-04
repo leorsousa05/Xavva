@@ -582,9 +582,9 @@ export class DependencyAnalyzerService {
 	generateReport(result: DependencyAnalysisResult): string {
 		const lines: string[] = [];
 		lines.push("");
-		lines.push(`${Logger.C.cyan}══════════════════════════════════════════════════════════${Logger.C.reset}`);
+		lines.push(`${Logger.C.primary}══════════════════════════════════════════════════════════${Logger.C.reset}`);
 		lines.push(`${Logger.C.bold}📊 ANÁLISE DE DEPENDÊNCIAS${Logger.C.reset}`);
-		lines.push(`${Logger.C.cyan}══════════════════════════════════════════════════════════${Logger.C.reset}`);
+		lines.push(`${Logger.C.primary}══════════════════════════════════════════════════════════${Logger.C.reset}`);
 		lines.push("");
 		
 		// Estatísticas
@@ -595,10 +595,10 @@ export class DependencyAnalyzerService {
 
 		// Conflitos
 		if (result.conflicts.length > 0) {
-			lines.push(`${Logger.C.yellow}⚠️  CONFLITOS DE VERSÃO (${result.conflicts.length})${Logger.C.reset}`);
+			lines.push(`${Logger.C.warning}⚠️  CONFLITOS DE VERSÃO (${result.conflicts.length})${Logger.C.reset}`);
 			for (const conflict of result.conflicts) {
 				const icon = conflict.severity === "error" ? "✖" : "▲";
-				const color = conflict.severity === "error" ? Logger.C.red : Logger.C.yellow;
+				const color = conflict.severity === "error" ? Logger.C.error : Logger.C.warning;
 				lines.push(`  ${color}${icon}${Logger.C.reset} ${conflict.groupId}:${conflict.artifactId}`);
 				lines.push(`     Versões: ${conflict.versions.join(", ")}`);
 			}
@@ -611,10 +611,10 @@ export class DependencyAnalyzerService {
 			const minorUpdates = result.updates.filter(u => !u.isMajor);
 
 			if (minorUpdates.length > 0) {
-				lines.push(`${Logger.C.green}⬆️  ATUALIZAÇÕES DISPONÍVEIS (${minorUpdates.length})${Logger.C.reset}`);
+				lines.push(`${Logger.C.success}⬆️  ATUALIZAÇÕES DISPONÍVEIS (${minorUpdates.length})${Logger.C.reset}`);
 				for (const update of minorUpdates.slice(0, 5)) {
-					lines.push(`  ${Logger.C.green}↑${Logger.C.reset} ${update.groupId}:${update.artifactId}`);
-					lines.push(`     ${update.currentVersion} → ${Logger.C.green}${update.latestVersion}${Logger.C.reset}`);
+					lines.push(`  ${Logger.C.success}↑${Logger.C.reset} ${update.groupId}:${update.artifactId}`);
+					lines.push(`     ${update.currentVersion} → ${Logger.C.success}${update.latestVersion}${Logger.C.reset}`);
 				}
 				if (minorUpdates.length > 5) {
 					lines.push(`  ${Logger.C.dim}... e mais ${minorUpdates.length - 5}${Logger.C.reset}`);
@@ -623,11 +623,11 @@ export class DependencyAnalyzerService {
 			}
 
 			if (majorUpdates.length > 0) {
-				lines.push(`${Logger.C.yellow}⚠️  ATUALIZAÇÕES MAJOR (${majorUpdates.length})${Logger.C.reset}`);
+				lines.push(`${Logger.C.warning}⚠️  ATUALIZAÇÕES MAJOR (${majorUpdates.length})${Logger.C.reset}`);
 				lines.push(`  ${Logger.C.dim}Podem conter breaking changes${Logger.C.reset}`);
 				for (const update of majorUpdates.slice(0, 3)) {
-					lines.push(`  ${Logger.C.yellow}!${Logger.C.reset} ${update.groupId}:${update.artifactId}`);
-					lines.push(`     ${update.currentVersion} → ${Logger.C.yellow}${update.latestVersion}${Logger.C.reset}`);
+					lines.push(`  ${Logger.C.warning}!${Logger.C.reset} ${update.groupId}:${update.artifactId}`);
+					lines.push(`     ${update.currentVersion} → ${Logger.C.warning}${update.latestVersion}${Logger.C.reset}`);
 				}
 				lines.push("");
 			}
@@ -635,7 +635,7 @@ export class DependencyAnalyzerService {
 
 		// Resumo
 		if (result.conflicts.length === 0 && result.updates.length === 0) {
-			lines.push(`${Logger.C.green}✔ Todas as dependências estão atualizadas!${Logger.C.reset}`);
+			lines.push(`${Logger.C.success}✔ Todas as dependências estão atualizadas!${Logger.C.reset}`);
 		}
 
 		lines.push("");

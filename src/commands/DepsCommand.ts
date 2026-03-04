@@ -135,14 +135,14 @@ export class DepsCommand implements Command {
 				
 				// Listar o que foi atualizado
 				for (const update of safeUpdates.slice(0, 5)) {
-					Logger.log(`  ${Logger.C.green}↑${Logger.C.reset} ${update.groupId}:${update.artifactId} ${update.currentVersion} → ${Logger.C.green}${update.latestVersion}${Logger.C.reset}`);
+					Logger.log(`  ${Logger.C.success}↑${Logger.C.reset} ${update.groupId}:${update.artifactId} ${update.currentVersion} → ${Logger.C.success}${update.latestVersion}${Logger.C.reset}`);
 				}
 				if (safeUpdates.length > 5) {
 					Logger.log(`  ${Logger.C.dim}... e mais ${safeUpdates.length - 5}${Logger.C.reset}`);
 				}
 
 				Logger.newline();
-				Logger.log(`${Logger.C.yellow}⚠️  Execute 'mvn compile' ou 'gradle build' para aplicar as mudanças${Logger.C.reset}`);
+				Logger.log(`${Logger.C.warning}⚠️  Execute 'mvn compile' ou 'gradle build' para aplicar as mudanças${Logger.C.reset}`);
 			} else {
 				Logger.warn("Nenhuma dependência foi atualizada");
 			}
