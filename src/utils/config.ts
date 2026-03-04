@@ -90,12 +90,17 @@ export class ConfigManager {
             
             // Instala se necessário
             if (!embeddedService.checkInstallation()) {
+                Logger.newline();
                 Logger.warn("Tomcat não encontrado!");
                 Logger.info("Versão solicitada", embeddedVersion);
                 Logger.newline();
                 Logger.log(`${Logger.C.cyan}?${Logger.C.reset} Deseja instalar o Tomcat ${embeddedVersion} automaticamente?`);
                 Logger.log(`${Logger.C.dim}  O download é de ~16MB e será salvo em:~/.xavva/tomcat/${embeddedVersion}${Logger.C.reset}`);
                 Logger.newline();
+                
+                // Garante que não há output pendente antes da pergunta
+                await new Promise(resolve => setTimeout(resolve, 50));
+                process.stdout.write('\r\x1b[K'); // Limpa linha atual
                 
                 const shouldInstall = await this.askYesNo("Instalar");
                 
@@ -171,13 +176,17 @@ export class ConfigManager {
     }
 
     private static async askYesNo(question: string): Promise<boolean> {
+        // Limpa qualquer output pendente
+        process.stdout.write('\r\x1b[K');
+        
         const rl = readline.createInterface({
             input: process.stdin,
-            output: process.stdout
+            output: process.stderr // Usa stderr para não interferir com stdout
         });
 
         return new Promise((resolve) => {
-            rl.question(`${question} [Y/n]: `, (answer) => {
+            process.stderr.write(`${question} [Y/n]: `);
+            rl.question('', (answer) => {
                 rl.close();
                 const normalized = answer.trim().toLowerCase();
                 resolve(normalized === '' || normalized === 'y' || normalized === 'yes');
