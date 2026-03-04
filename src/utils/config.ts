@@ -89,12 +89,19 @@ export class ConfigManager {
             
             // Instala se necessário
             if (!embeddedService.checkInstallation()) {
+                Logger.info("Tomcat", "Não instalado localmente");
+                Logger.info("Ação", `Download automático do Tomcat ${embeddedVersion} será iniciado`);
+                Logger.info("Dica", "Use --tomcat-version para escolher outra versão");
+                Logger.newline();
+                
                 const installed = await embeddedService.install();
                 if (!installed) {
                     Logger.error("Falha ao instalar Tomcat embutido.");
                     Logger.info("Dica", "Instale o Tomcat manualmente ou defina TOMCAT_HOME");
                     process.exit(1);
                 }
+            } else {
+                Logger.info("Tomcat", `Usando versão embutida ${embeddedVersion}`);
             }
             
             // Configura contexto da aplicação
