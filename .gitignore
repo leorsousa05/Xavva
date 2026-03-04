@@ -35,3 +35,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Xavva CLI
 .xavva/
+.xavva-test-cache/
+test-audit-temp/
+
+# Gemini AI
+.gemini/
