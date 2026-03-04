@@ -1,142 +1,187 @@
 import { Logger } from "../utils/ui";
 import { ProcessManager } from "../utils/processManager";
 import { 
-    MAX_LOG_SCROLLBUFFER, 
-    DASHBOARD_REFRESH_INTERVAL_MS,
-    DASHBOARD_LOG_SLICE_LINES 
+	MAX_LOG_SCROLLBUFFER, 
+	DASHBOARD_REFRESH_INTERVAL_MS,
+	DASHBOARD_LOG_SLICE_LINES 
 } from "../utils/constants";
 import type { AppConfig } from "../types/config";
 import os from "os";
 
+const C = Logger.C;
+
 export class DashboardService {
-    private isTui: boolean;
-    private logLines: string[] = [];
-    private maxLogLines: number = 0;
-    private status: string = "IDLE";
-    private statusColor: string = Logger.C.dim;
-    private gitContext: { branch: string; commit: string } | null = null;
-    private actions: Map<string, () => void> = new Map();
+	private isTui: boolean;
+	private logLines: string[] = [];
+	private maxLogLines: number = 0;
+	private status: string = "idle";
+	private statusColor: string = C.gray;
+	private gitContext: { branch: string; hash: string } | null = null;
+	private actions: Map<string, () => void> = new Map();
+	private startTime = Date.now();
 
-    constructor(private config: AppConfig) {
-        this.isTui = config.project.tui;
-        if (this.isTui) {
-            this.gitContext = Logger.getGitContext();
-            this.maxLogLines = process.stdout.rows - 6;
-            this.setupTui();
-            this.registerShutdownHandlers();
-        }
-    }
+	constructor(private config: AppConfig) {
+		this.isTui = config.project.tui;
+		if (this.isTui) {
+			this.gitContext = Logger.getGitContext();
+			this.maxLogLines = process.stdout.rows - 8;
+			this.setupTui();
+			this.registerShutdownHandlers();
+		}
+	}
 
-    private registerShutdownHandlers() {
-        const processManager = ProcessManager.getInstance();
-        processManager.onShutdown(() => {
-            this.restoreTerminal();
-        });
-    }
+	private registerShutdownHandlers() {
+		const processManager = ProcessManager.getInstance();
+		processManager.onShutdown(() => {
+			this.restoreTerminal();
+		});
+	}
 
-    private restoreTerminal() {
-        if (this.isTui) {
-            process.stdout.write("\x1B[?1049l"); // Restore buffer
-            process.stdout.write("\x1B[?25h"); // Show cursor
-            process.stdin.setRawMode(false);
-            process.stdin.pause();
-        }
-    }
+	private restoreTerminal() {
+		if (this.isTui) {
+			process.stdout.write("\x1B[?1049l");
+			process.stdout.write("\x1B[?25h");
+			process.stdin.setRawMode(false);
+			process.stdin.pause();
+		}
+	}
 
-    public isTuiActive(): boolean {
-        return this.isTui;
-    }
+	public isTuiActive(): boolean {
+		return this.isTui;
+	}
 
-    public onAction(key: string, callback: () => void) {
-        this.actions.set(key.toLowerCase(), callback);
-    }
+	public onAction(key: string, callback: () => void) {
+		this.actions.set(key.toLowerCase(), callback);
+	}
 
-    private setupTui() {
-        process.stdout.write("\x1B[?1049h"); // Switch to alternate buffer
-        process.stdout.write("\x1B[2J"); // Clear screen
-        process.stdout.write("\x1B[?25l"); // Hide cursor
-        
-        process.stdin.setRawMode(true);
-        process.stdin.resume();
-        process.stdin.setEncoding("utf8");
+	private setupTui() {
+		process.stdout.write("\x1B[?1049h");
+		process.stdout.write("\x1B[2J");
+		process.stdout.write("\x1B[?25l");
+		
+		process.stdin.setRawMode(true);
+		process.stdin.resume();
+		process.stdin.setEncoding("utf8");
 
-        process.stdin.on("data", (key: string) => {
-            const input = key.toLowerCase();
-            // Ctrl+C ou Q para sair
-            if (key === "\u0003" || input === "q") {
-                this.exit();
-            }
-            if (input === "l") {
-                this.logLines = [];
-                this.render();
-                return;
-            }
-            
-            const action = this.actions.get(input);
-            if (action) action();
-        });
+		process.stdin.on("data", (key: string) => {
+			const input = key.toLowerCase();
+			if (key === "\u0003" || input === "q") {
+				this.exit();
+			}
+			if (input === "l") {
+				this.logLines = [];
+				this.render();
+			}
+			
+			const action = this.actions.get(input);
+			if (action) action();
+		});
 
-        process.on("SIGINT", () => this.exit());
-        process.on("exit", () => this.exit());
+		process.on("SIGINT", () => this.exit());
+		process.on("exit", () => this.exit());
 
-        // Atualiza o dashboard periodicamente para memória/status
-        setInterval(() => this.render(), 1000);
-    }
+		setInterval(() => this.render(), DASHBOARD_REFRESH_INTERVAL_MS);
+	}
 
-    public setStatus(status: string, color: string = Logger.C.cyan) {
-        this.status = status;
-        this.statusColor = color;
-        this.render();
-    }
+	public setStatus(status: string, type: 'idle' | 'building' | 'ready' | 'error' = 'idle') {
+		this.status = status;
+		switch (type) {
+			case 'building':
+				this.statusColor = C.primary;
+				break;
+			case 'ready':
+				this.statusColor = C.success;
+				break;
+			case 'error':
+				this.statusColor = C.error;
+				break;
+			default:
+				this.statusColor = C.gray;
+		}
+		this.render();
+	}
 
-    public log(message: string) {
-        if (!message) return;
-        
-        if (this.isTui) {
-            const lines = message.split("\n");
-            this.logLines.push(...lines);
-            if (this.logLines.length > MAX_LOG_SCROLLBUFFER) {
-                this.logLines = this.logLines.slice(-DASHBOARD_LOG_SLICE_LINES);
-            }
-            this.render();
-        } else {
-            console.log(message);
-        }
-    }
+	public spinner(msg: string) {
+		const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+		let i = 0;
+		
+		this.setStatus(msg, 'building');
+		
+		const timer = setInterval(() => {
+			this.status = `${frames[i]} ${msg}`;
+			i = (i + 1) % frames.length;
+			this.render();
+		}, 80);
 
-    private render() {
-        if (!this.isTui) return;
+		return (success = true) => {
+			clearInterval(timer);
+			if (success) {
+				this.setStatus('ready', 'ready');
+			} else {
+				this.setStatus('error', 'error');
+			}
+		};
+	}
 
-        this.maxLogLines = process.stdout.rows - 6;
-        
-        let output = "\x1B[H"; // Move to 0,0
-        
-        // Header
-        const name = (process.cwd().split(/[/\\]/).pop() || "PROJECT").toUpperCase();
-        const mem = Math.round((os.totalmem() - os.freemem()) / 1024 / 1024 / 1024 * 10) / 10;
-        const totalMem = Math.round(os.totalmem() / 1024 / 1024 / 1024);
-        const profile = this.config.project.profile ? ` ${Logger.C.dim}•${Logger.C.reset} ${Logger.C.yellow}♦ ${this.config.project.profile.toUpperCase()}${Logger.C.reset}` : "";
+	public log(message: string) {
+		if (!message) return;
+		
+		if (this.isTui) {
+			const lines = message.split("\n");
+			this.logLines.push(...lines);
+			if (this.logLines.length > MAX_LOG_SCROLLBUFFER) {
+				this.logLines = this.logLines.slice(-DASHBOARD_LOG_SLICE_LINES);
+			}
+			this.render();
+		} else {
+			console.log(message);
+		}
+	}
 
-        output += `${Logger.C.bold}${Logger.C.cyan} X A V V A  2.0 ${Logger.C.reset} ${Logger.C.dim}│${Logger.C.reset} ${Logger.C.white}${Logger.C.bold}${name}${Logger.C.reset}${profile}\x1B[K\n`;
-        output += `${Logger.C.dim} STATUS: ${this.statusColor}${this.status.padEnd(10)}${Logger.C.reset} ${Logger.C.dim}│ MEM: ${Logger.C.yellow}${mem}G/${totalMem}G${Logger.C.reset} ${Logger.C.dim}│ BRANCH: ${Logger.C.magenta}${this.gitContext?.branch || "unknown"}${Logger.C.reset}\x1B[K\n`;
-        output += `${Logger.C.dim}──────────────────────────────────────────────────────────────────────────${Logger.C.reset}\x1B[K\n`;
+	private render() {
+		if (!this.isTui) return;
 
-        // Logs
-        const visibleLogs = this.logLines.slice(-this.maxLogLines);
-        for (let i = 0; i < this.maxLogLines; i++) {
-            const line = visibleLogs[i] || "";
-            output += line.substring(0, process.stdout.columns) + "\x1B[K\n";
-        }
+		this.maxLogLines = process.stdout.rows - 8;
+		
+		const projectName = (process.cwd().split(/[/\\]/).pop() || "project").toLowerCase();
+		const uptime = Math.floor((Date.now() - this.startTime) / 1000);
+		const uptimeStr = uptime < 60 ? `${uptime}s` : `${Math.floor(uptime / 60)}m ${uptime % 60}s`;
+		
+		const mem = Math.round((os.totalmem() - os.freemem()) / 1024 / 1024 / 1024 * 10) / 10;
+		const totalMem = Math.round(os.totalmem() / 1024 / 1024 / 1024);
+		
+		// Header minimalista
+		let output = "\x1B[H";
+		output += `${C.gray}┌─ ${C.primary}${C.bold}XAVVA${C.reset}${C.gray}.${C.reset}${projectName}${C.reset}`;
+		output += ` ${C.gray}│${C.reset} ${this.statusColor}${this.status}${C.reset}\x1B[K\n`;
+		
+		// Info bar
+		const infos: string[] = [];
+		if (this.config.project.profile) infos.push(`${C.warning}${this.config.project.profile}${C.reset}`);
+		if (this.gitContext?.branch) infos.push(`${C.secondary}git:${this.gitContext.branch}${C.reset}`);
+		infos.push(`${C.gray}mem:${mem}/${totalMem}GB${C.reset}`);
+		infos.push(`${C.gray}up:${uptimeStr}${C.reset}`);
+		
+		output += `${C.gray}│${C.reset}  ${infos.join(` ${C.gray}•${C.reset} `)}\x1B[K\n`;
+		output += `${C.gray}├────────────────────────────────────────────────────────┤${C.reset}\x1B[K\n`;
 
-        // Footer
-        output += `\x1B[${process.stdout.rows};1H`; // Move to last row
-        output += ` ${Logger.C.bold}${Logger.C.white}R${Logger.C.reset} Restart  ${Logger.C.bold}${Logger.C.white}L${Logger.C.reset} Clear  ${Logger.C.bold}${Logger.C.white}Q${Logger.C.reset} Quit    ${Logger.C.dim} (Xavva 2.0 TUI Mode)${Logger.C.reset}\x1B[K`;
+		// Logs
+		const visibleLogs = this.logLines.slice(-this.maxLogLines);
+		for (let i = 0; i < this.maxLogLines; i++) {
+			const line = visibleLogs[i] || "";
+			output += `${C.gray}│${C.reset} ${line.substring(0, process.stdout.columns - 3)}\x1B[K\n`;
+		}
 
-        process.stdout.write(output);
-    }
+		// Footer minimalista
+		output += `${C.gray}├────────────────────────────────────────────────────────┤${C.reset}\x1B[K\n`;
+		output += `${C.gray}│${C.reset}  ${C.white}[r]${C.reset}${C.gray}estart  ${C.white}[l]${C.reset}${C.gray}og clear  ${C.white}[q]${C.reset}${C.gray}uit${C.reset}\x1B[K\n`;
+		output += `${C.gray}└────────────────────────────────────────────────────────┘${C.reset}\x1B[K`;
 
-    private async exit() {
-        this.restoreTerminal();
-        await ProcessManager.getInstance().shutdown(0);
-    }
+		process.stdout.write(output);
+	}
+
+	private async exit() {
+		this.restoreTerminal();
+		await ProcessManager.getInstance().shutdown(0);
+	}
 }

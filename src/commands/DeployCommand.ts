@@ -20,7 +20,7 @@ export class DeployCommand implements Command {
         if (!incremental) {
             this.logConfiguration(config, isWatching);
         } else {
-            Logger.watcher("Change detected", "change");
+            Logger.watch("Change detected");
         }
         
         try {
@@ -31,16 +31,16 @@ export class DeployCommand implements Command {
                 await tomcat.clearWebapps();
 
                 if (!config.project.skipBuild) {
-                    Logger.watcher("Building project", "start");
+                    Logger.build("compiling...");
                     await builder.runBuild(incremental);
                 }
                 
                 if (!config.project.skipBuild) {
-                    Logger.build("Full project build and environment ready");
+                    Logger.build("completed");
                 }
             } else {
                 if (!config.project.skipBuild) {
-                    Logger.watcher("Incremental compilation", "start");
+                    Logger.build("incremental compile...");
                     await builder.runBuild(incremental);
                 }
             }
@@ -50,13 +50,13 @@ export class DeployCommand implements Command {
                 const actualContextPath = contextPath || actualAppFolder || "";
                 const actualAppUrl = `http://localhost:${config.tomcat.port}/${actualContextPath}`;
                 await BrowserService.reload(actualAppUrl);
-                Logger.watcher("Redeploy completed", "success");
+                Logger.success("redeploy completed");
                 return;
             }
 
-            Logger.build("Webapps cleaned");
+            Logger.server("cleaning webapps...");
             const artifactInfo = await builder.deployToWebapps();
-            Logger.build("Artifacts generated");
+            Logger.server("artifacts ready");
             
             const finalContextPath = contextPath || artifactInfo.finalName.replace(".war", "");
             const appWebappPath = path.join(config.tomcat.path, "webapps", finalContextPath);
@@ -65,7 +65,7 @@ export class DeployCommand implements Command {
                 // Se é um diretório (exploded), sincronizamos o conteúdo total para a pasta do webapps
                 if (!fs.existsSync(appWebappPath)) fs.mkdirSync(appWebappPath, { recursive: true });
                 await builder.syncExploded(artifactInfo.path, appWebappPath);
-                Logger.build("Exploded directory synced to webapps");
+                Logger.server("synced exploded directory");
             } else {
                 if (!fs.existsSync(appWebappPath)) fs.mkdirSync(appWebappPath, { recursive: true });
 
@@ -75,7 +75,7 @@ export class DeployCommand implements Command {
                 if (!webappStat || artifactStat.mtimeMs > webappStat.mtimeMs) {
                     try {
                         Bun.spawnSync(["jar", "xf", artifactInfo.path], { cwd: appWebappPath });
-                        Logger.build("Artifacts deployed");
+                        Logger.server("extracted WAR");
                     } catch (e) {
                         const extractCmd = `Expand-Archive -Path $env:ARTIFACT_PATH -DestinationPath $env:DEST_PATH -Force`;
                         Bun.spawnSync(["powershell", "-command", extractCmd], {
@@ -85,10 +85,10 @@ export class DeployCommand implements Command {
                                 DEST_PATH: appWebappPath
                             }
                         });
-                        Logger.build("Artifacts deployed (legacy mode)");
+                        Logger.server("extracted WAR (legacy)");
                     }
                 } else {
-                    Logger.build("Webapp already up to date, skipping extraction");
+                    Logger.server("webapp up to date");
                 }
             }
 
@@ -110,10 +110,11 @@ export class DeployCommand implements Command {
     }
 
     private logConfiguration(config: AppConfig, isWatching: boolean) {
-        Logger.config("Runtime", config.project.buildTool.toUpperCase());
-        if (config.project.profile) Logger.config("Profile", config.project.profile.toUpperCase());
-        Logger.config("Watch Mode", isWatching ? "ON" : "OFF");
-        Logger.config("Debug", config.project.debug ? `ON (Port ${config.project.debugPort})` : "OFF");
+        Logger.section("Configuration");
+        Logger.config("runtime", config.project.buildTool.toLowerCase());
+        if (config.project.profile) Logger.config("profile", config.project.profile);
+        Logger.config("watch", isWatching);
+        Logger.config("debug", config.project.debug ? `port ${config.project.debugPort}` : false);
 
         let javaBin = "java";
         if (process.env.JAVA_HOME) {
@@ -126,9 +127,9 @@ export class DeployCommand implements Command {
         const hasDcevm = ["dcevm", "jetbrains", "trava", "jbr"].some(v => output.includes(v));
         
         if (!hasDcevm && isWatching) {
-            Logger.config("Hot Reload", "Standard (No structural changes)");
+            Logger.config("hotswap", "standard");
         } else if (hasDcevm) {
-            Logger.config("Hot Reload", "Advanced (DCEVM Active)");
+            Logger.config("hotswap", "dcevm");
         }
 
         const srcPath = path.join(process.cwd(), "src");
@@ -136,9 +137,10 @@ export class DeployCommand implements Command {
             const contextPath = (config.project.appName || "").replace(".war", "");
             const endpoints = EndpointService.scan(srcPath, contextPath);
             if (endpoints.length > 0) {
-                Logger.config("Endpoints", endpoints.length);
+                Logger.config("endpoints", endpoints.length);
             }
         }
+        Logger.endSection();
     }
 
     private injectContextConfiguration(appPath: string) {
@@ -171,9 +173,12 @@ export class DeployCommand implements Command {
             const response = await fetch(url);
             if (response.status < 500) {
                 const memory = await tomcat.getMemoryUsage();
-                Logger.health(url, "success");
-                Logger.health(`Status ${response.status}`, "success");
-                Logger.health(`Memory ${memory}`, "success");
+                Logger.divider();
+                Logger.ready("Server ready");
+                Logger.url("Local", url);
+                Logger.info("Status", `${response.status}`);
+                Logger.info("Memory", memory);
+                Logger.done();
 
                 if (!config.project.quiet) {
                     this.showEndpointMap(config.tomcat.port, context);
@@ -185,32 +190,32 @@ export class DeployCommand implements Command {
                     BrowserService.open(url);
                 }
             } else {
-                Logger.health(`App returned status ${response.status}`, "warn");
+                Logger.warn(`App returned status ${response.status}`);
             }
         } catch (e) {
-            Logger.health(`Could not connect to ${url}`, "error");
+            Logger.error(`Could not connect to ${url}`);
         }
     }
 
     private showEndpointMap(port: number, context: string) {
         const endpoints = EndpointService.scan(path.join(process.cwd(), "src"), context);
         if (endpoints.length > 0) {
-            Logger.newline();
-            Logger.log(`${Logger.C.cyan}◈ ENDPOINT MAP:${Logger.C.reset}`);
+            Logger.section("Endpoints");
             
             const apis = endpoints.filter(e => e.className !== "JSP");
             const jsps = endpoints.filter(e => e.className === "JSP");
 
             if (apis.length > 0) {
                 const uniqueApiUrls = [...new Set(apis.map(e => `http://localhost:${port}${e.fullPath}`))];
-                uniqueApiUrls.forEach(url => Logger.log(`${Logger.C.dim}➜ ${Logger.C.reset}${url}`));
+                uniqueApiUrls.forEach(url => Logger.info("", url));
             }
 
             if (jsps.length > 0) {
-                Logger.log(`${Logger.C.dim}--- JSPs ---${Logger.C.reset}`);
+                Logger.info("JSPs", "");
                 const uniqueJspUrls = [...new Set(jsps.map(e => `http://localhost:${port}${e.fullPath}`))];
-                uniqueJspUrls.forEach(url => Logger.log(`${Logger.C.dim}📄 ${Logger.C.reset}${url}`));
+                uniqueJspUrls.forEach(url => Logger.info("", `  ${url}`));
             }
+            Logger.endSection();
         }
     }
 

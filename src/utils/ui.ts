@@ -1,317 +1,241 @@
 import pkg from "../../package.json";
 import type { DashboardService } from "../services/DashboardService";
 
+// Paleta de cores moderna e minimalista
+const C = {
+	reset: "\x1b[0m",
+	bold: "\x1b[1m",
+	dim: "\x1b[2m",
+	italic: "\x1b[3m",
+	
+	// Cores principais
+	primary: "\x1b[36m",      // Cyan
+	primaryBright: "\x1b[96m", // Bright Cyan
+	secondary: "\x1b[35m",     // Magenta
+	
+	// Estados
+	success: "\x1b[32m",       // Green
+	successBright: "\x1b[92m", // Bright Green
+	warning: "\x1b[33m",       // Yellow
+	warningBright: "\x1b[93m", // Bright Yellow
+	error: "\x1b[31m",         // Red
+	errorBright: "\x1b[91m",   // Bright Red
+	info: "\x1b[34m",          // Blue
+	
+	// Neutros
+	white: "\x1b[37m",
+	gray: "\x1b[90m",
+	lightGray: "\x1b[37m",
+	darkGray: "\x1b[38;5;240m",
+};
+
 export class Logger {
-    public static readonly C = {
-        reset: "\x1b[0m",
-        cyan: "\x1b[36m",
-        green: "\x1b[32m",
-        yellow: "\x1b[33m",
-        red: "\x1b[31m",
-        dim: "\x1b[90m",
-        bold: "\x1b[1m",
-        blue: "\x1b[34m",
-        magenta: "\x1b[35m",
-        bgRed: "\x1b[41m",
-        white: "\x1b[37m",
-        gray: "\x1b[38;5;240m",
-        lightGray: "\x1b[38;5;248m",
-        darkGray: "\x1b[38;5;238m"
-    };
+	public static readonly C = C;
+	private static dashboard: DashboardService | null = null;
+	private static activeSpinner: { stop: (success?: boolean) => void } | null = null;
+	private static lastDomain = "";
 
-    private static hotswapPluginsCount = 0;
-    private static lastDomain = "";
-    private static lastHotswapMsg = "";
-    private static activeSpinnerMsg = "";
-    private static dashboard: DashboardService | null = null;
+	static setDashboard(dashboard: DashboardService) {
+		this.dashboard = dashboard;
+	}
 
-    static setDashboard(dashboard: DashboardService) {
-        this.dashboard = dashboard;
-    }
+	// Banner moderno e clean
+	static banner(command?: string, profile?: string, encoding?: string) {
+		console.clear();
+		const git = this.getGitContext();
+		const name = process.cwd().split(/[/\\]/).pop() || "project";
+		
+		// Linha superior decorativa
+		console.log(`${C.gray}┌────────────────────────────────────────────────────────┐${C.reset}`);
+		
+		// Logo e projeto
+		console.log(`${C.gray}│${C.reset}  ${C.primary}${C.bold}XAVVA${C.reset}${C.gray}.${C.reset}${C.dim}v${pkg.version}${C.reset}  ${C.gray}│${C.reset}  ${C.white}${C.bold}${name}${C.reset}`);
+		
+		// Info adicional em uma linha
+		const parts: string[] = [];
+		if (command) parts.push(`${C.primary}${command}${C.reset}`);
+		if (profile) parts.push(`${C.warning}profile:${profile}${C.reset}`);
+		if (encoding) parts.push(`${C.info}${encoding}${C.reset}`);
+		if (git.branch) parts.push(`${C.secondary}git:${git.branch}${C.reset}`);
+		
+		if (parts.length > 0) {
+			console.log(`${C.gray}│${C.reset}  ${C.dim}mode${C.reset}  ${C.gray}│${C.reset}  ${parts.join(` ${C.gray}•${C.reset} `)}`);
+		}
+		
+		// Linha inferior
+		console.log(`${C.gray}└────────────────────────────────────────────────────────┘${C.reset}`);
+		console.log();
+	}
 
-    private static write(message: string, isError: boolean = false) {
-        if (this.dashboard && this.dashboard.isTuiActive()) {
-            this.dashboard.log(message);
-            return;
-        }
+	// Seções com divisórias clean
+	static section(title: string) {
+		console.log(`${C.gray}┌─ ${C.white}${C.bold}${title}${C.reset}`);
+	}
 
-        if (this.activeSpinnerMsg) {
-            process.stdout.write("\r\x1B[K"); // Limpa a linha do spinner
-        }
-        
-        if (isError) {
-            console.error(message + this.C.reset);
-        } else {
-            console.log(message + this.C.reset);
-        }
+	static endSection() {
+		console.log(`${C.gray}└${C.reset}`);
+	}
 
-        if (this.activeSpinnerMsg) {
-            // Re-imprime o início da linha do spinner para o próximo frame
-            process.stdout.write(`  ${this.C.cyan}⠋${this.C.reset} ${this.activeSpinnerMsg}...`);
-        }
-    }
+	// Configurações em formato chave: valor alinhado
+	static config(label: string, value: string | number | boolean) {
+		const valueStr = String(value);
+		const isBool = typeof value === 'boolean';
+		const displayValue = isBool 
+			? (value ? `${C.successBright}✓${C.reset} ${C.success}enabled${C.reset}` : `${C.gray}○${C.reset} ${C.gray}disabled${C.reset}`)
+			: `${C.white}${valueStr}${C.reset}`;
+		
+		console.log(`${C.gray}│${C.reset}  ${C.dim}${label.padEnd(12)}${C.reset} ${C.gray}:${C.reset} ${displayValue}`);
+	}
 
-    static getGitContext(): { branch: string, author: string, hash: string } {
-        try {
-            const branch = Bun.spawnSync(["git", "rev-parse", "--abbrev-ref", "HEAD"]).stdout.toString().trim();
-            const author = Bun.spawnSync(["git", "log", "-1", "--format=%an"]).stdout.toString().trim();
-            const hash = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"]).stdout.toString().trim();
-            return { branch, author, hash };
-        } catch (e) {
-            return { branch: "", author: "", hash: "" };
-        }
-    }
+	// Status com ícones minimalistas
+	static ready(msg: string) {
+		console.log(`${C.gray}│${C.reset}  ${C.success}●${C.reset} ${msg}`);
+	}
 
-    static banner(command?: string, profile?: string, encoding?: string) {
-        console.clear();
-        const git = this.getGitContext();
-        const name = (process.cwd().split(/[/\\]/).pop() || "PROJECT").toUpperCase();
-        const version = `v${pkg.version}`;
-        
-        const mode = command?.toUpperCase() || "DEPLOY";
-        const modeColor = mode === "DEV" ? this.C.green : this.C.blue;
-        const modeIcon = mode === "DEV" ? "⚡" : "🚀";
+	static info(label: string, value?: string) {
+		if (value) {
+			console.log(`${C.gray}│${C.reset}  ${C.dim}${label}${C.reset} ${C.gray}:${C.reset} ${C.white}${value}${C.reset}`);
+		} else {
+			console.log(`${C.gray}│${C.reset}  ${C.info}ℹ${C.reset} ${label}`);
+		}
+	}
 
-        console.log("");
-        console.log(`  ${this.C.bold}${this.C.cyan}X A V V A${this.C.reset} ${this.C.dim}─${this.C.reset} ${this.C.bold}${this.C.white}${name}${this.C.reset}`);
-        
-        const profileInfo = profile ? ` ${this.C.dim}•${this.C.reset} ${this.C.yellow}♦ ${profile.toUpperCase()}${this.C.reset}` : "";
-        const encodingInfo = encoding ? ` ${this.C.dim}•${this.C.reset} ${this.C.cyan}⚓ ${encoding.toUpperCase()}${this.C.reset}` : "";
-        const gitInfo = git.branch ? `${this.C.magenta}🌿 ${git.branch}${this.C.reset} ${this.C.dim}•${this.C.reset} ${this.C.yellow}${git.hash}${this.C.reset}` : "";
-        console.log(`  ${this.C.dim}📦 ${version}${profileInfo}${encodingInfo}${gitInfo ? `  ${this.C.dim}•${this.C.reset}  ${gitInfo}` : ""}${this.C.reset}`);
-        
-        console.log(`  ${modeColor}${this.C.bold}⬢ ${modeIcon} ${mode} MODE${this.C.reset}`);
-        console.log(`  ${this.C.dim}─────────────────────────────────────────────────${this.C.reset}`);
-    }
+	static success(msg: string) {
+		console.log(`${C.gray}│${C.reset}  ${C.success}✓${C.reset} ${msg}`);
+	}
 
-    static section(title: string) {
-        this.write(`\n${this.C.bold}${this.C.blue}[${title.toUpperCase()}]${this.C.reset}`);
-    }
+	static error(msg: string) {
+		console.log(`${C.gray}│${C.reset}  ${C.error}✗${C.reset} ${C.error}${msg}${C.reset}`);
+	}
 
-    private static domain(name: string) {
-        if (this.lastDomain !== name) {
-            this.write(`\n${this.C.bold}${this.C.blue}[${name.toUpperCase()}]${this.C.reset}`);
-            this.lastDomain = name;
-        }
-    }
+	static warn(msg: string) {
+		console.log(`${C.gray}│${C.reset}  ${C.warning}⚠${C.reset} ${msg}`);
+	}
 
-    static config(label: string, value: string | number | boolean) {
-        this.domain("config");
-        this.info(label, value);
-    }
+	static build(msg: string) {
+		console.log(`${C.gray}│${C.reset}  ${C.primary}▸${C.reset} ${C.dim}build${C.reset} ${C.gray}:${C.reset} ${msg}`);
+	}
 
-    static info(label: string, value: string | number | boolean) {
-        this.write(`  ${this.C.lightGray}${label.padEnd(12)}${this.C.reset} : ${this.C.bold}${value}${this.C.reset}`);
-    }
+	static server(msg: string) {
+		console.log(`${C.gray}│${C.reset}  ${C.primary}▸${C.reset} ${C.dim}server${C.reset} ${C.gray}:${C.reset} ${msg}`);
+	}
 
-    static build(msg: string, status: 'start' | 'success' | 'error' | 'info' = 'success') {
-        this.domain("build");
-        const symbol = status === 'start' ? `${this.C.blue}▶` : status === 'success' ? `${this.C.green}✔` : status === 'error' ? `${this.C.red}✖` : `${this.C.dim}ℹ`;
-        this.write(`  ${symbol} ${this.C.reset}${msg}`);
-    }
+	static watch(msg: string) {
+		console.log(`${C.gray}│${C.reset}  ${C.secondary}◉${C.reset} ${C.dim}watch${C.reset} ${C.gray}:${C.reset} ${msg}`);
+	}
 
-    static server(msg: string, status: 'start' | 'success' | 'error' | 'info' = 'info') {
-        this.domain("server");
-        const symbol = status === 'start' ? `${this.C.blue}▶` : status === 'success' ? `${this.C.green}✔` : status === 'error' ? `${this.C.red}✖` : `${this.C.dim}ℹ`;
-        this.write(`  ${symbol} ${this.C.reset}${msg}`);
-    }
+	static hotswap(msg: string) {
+		console.log(`${C.gray}│${C.reset}  ${C.secondary}↻${C.reset} ${C.dim}hotswap${C.reset} ${C.gray}:${C.reset} ${msg}`);
+	}
 
-    static health(msg: string, status: 'success' | 'error' | 'warn' = 'success') {
-        this.domain("health");
-        const symbol = status === 'success' ? `${this.C.green}✔` : status === 'error' ? `${this.C.red}✖` : `${this.C.yellow}⚠`;
-        this.write(`  ${symbol} ${this.C.reset}${msg}`);
-    }
+	// URL formatada de forma destacada
+	static url(label: string, url: string) {
+		console.log(`${C.gray}│${C.reset}  ${C.dim}${label}${C.reset} ${C.gray}:${C.reset} ${C.primaryBright}${C.bold}${url}${C.reset}`);
+	}
 
-    static watcher(msg: string, status: 'watch' | 'change' | 'start' | 'success' = 'success') {
-        this.domain("watcher");
-        const symbol = status === 'watch' ? `${this.C.magenta}👀` : status === 'change' ? `${this.C.yellow}▲` : status === 'start' ? `${this.C.blue}▶` : `${this.C.green}✔`;
-        this.write(`  ${symbol} ${this.C.reset}${msg}`);
-    }
+	// Spinner moderno
+	static spinner(msg: string) {
+		if (this.dashboard?.isTuiActive()) {
+			return this.dashboard.spinner(msg);
+		}
 
-    static success(msg: string) { this.write(`  ${this.C.green}✔ ${msg}`); }
-    static error(msg: string) { this.write(`  ${this.C.red}✖ ${msg}`, true); }
-    static warn(msg: string) { this.write(`  ${this.C.yellow}⚠ ${msg}`); }
-    static log(msg: string) { this.write(`  ${msg}`); }
-    static step(msg: string) { this.write(`  ${this.C.dim}» ${msg}`); }
-    static debug(msg: string) { this.write(`  ${this.C.magenta}🐛 ${msg}`); }
-    static process(msg: string) { this.write(`  ${this.C.blue}▶ ${msg}`); }
-    static newline() { this.write(""); }
-    static dim(msg: string) { this.write(`  ${this.C.dim}${msg}${this.C.reset}`); }
+		const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+		let i = 0;
+		
+		process.stdout.write(`${C.gray}│${C.reset}  `);
+		process.stdout.write("\x1B[?25l");
+		
+		const timer = setInterval(() => {
+			process.stdout.write(`\r${C.gray}│${C.reset}  ${C.primary}${frames[i]}${C.reset} ${C.dim}${msg}${C.reset}`);
+			i = (i + 1) % frames.length;
+		}, 80);
 
-    static spinner(msg: string) {
-        if (this.dashboard && this.dashboard.isTuiActive()) {
-            this.dashboard.log(`${this.C.cyan}⠋${this.C.reset} ${msg}...`);
-            return (success = true) => {
-                if (success) {
-                    this.dashboard.log(`${this.C.green}✔${this.C.reset} ${msg}`);
-                } else {
-                    this.dashboard.log(`${this.C.red}✖${this.C.reset} Falha em ${msg}`);
-                }
-            };
-        }
+		return (success = true) => {
+			clearInterval(timer);
+			process.stdout.write("\x1B[?25h");
+			if (success) {
+				console.log(`\r${C.gray}│${C.reset}  ${C.success}✓${C.reset} ${msg}`);
+			} else {
+				console.log(`\r${C.gray}│${C.reset}  ${C.error}✗${C.reset} ${C.error}${msg}${C.reset}`);
+			}
+		};
+	}
 
-        this.activeSpinnerMsg = msg;
-        const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-        let i = 0;
-        process.stdout.write("\x1B[?25l");
-        
-        const timer = setInterval(() => {
-            process.stdout.write(`\r  ${this.C.cyan}${frames[i]}${this.C.reset} ${msg}...`);
-            i = (i + 1) % frames.length;
-        }, 80);
+	// Linha em branco
+	static newline() {
+		console.log();
+	}
 
-        return (success = true) => {
-            clearInterval(timer);
-            this.activeSpinnerMsg = "";
-            process.stdout.write("\r\x1B[K");
-            process.stdout.write("\x1B[?25h");
-            if (success) {
-                this.write(`  ${this.C.green}✔${this.C.reset} ${msg}`);
-            } else {
-                this.error(`Falha em ${msg}`);
-            }
-        };
-    }
+	// Divisória simples
+	static divider() {
+		console.log(`${C.gray}├────────────────────────────────────────────────────────┤${C.reset}`);
+	}
 
-    static isSystemNoise(line: string): boolean {
-        const noise = [
-            "Using CATALINA_", "Using JRE_HOME", "Using CLASSPATH", "NOTE: Picked up JDK_JAVA_OPTIONS",
-            "Command line argument", "VersionLoggerListener", "Scanning for projects...",
-            "Building ", "--- ", "+++ ", "DEBUG: ", "org.apache.catalina.startup.VersionLoggerListener",
-            "org.apache.catalina.core.AprLifecycleListener", "org.apache.coyote.AbstractProtocol.init",
-            "org.apache.catalina.startup.Catalina.load", "Arquivos processados em",
-            "org.apache.jasper.servlet.TldScanner.scanJars", "Listening for transport dt_socket",
-            "org.apache.catalina.startup.ExpandWar.expand", "org.apache.catalina.startup.ContextConfig.configureStart",
-            "SLF4J: ", "org.glassfish.jersey.internal.Errors.logErrors", "contains empty path annotation",
-            "org.apache.catalina.core.StandardContext.setPath", "milliseconds",
-            "org.apache.catalina.startup.HostConfig.deployWAR", "org.apache.catalina.startup.HostConfig.deployDirectory",
-            "Deployment of web application", "Deploying web application archive", "at org.apache",
-            "Registering directory", "initialized in ClassLoader", "Discovered plugins:",
-            "enhanced with plugin initialization", "registerJerseyContainer", "JasperLoader@",
-            "Hotswap ready (Plugins:", "autoHotswap.delay", "watchResources=false",
-            "org.apache.catalina.webresources.Cache.getResource", "insufficient free space available"
-        ];
-        return noise.some(n => line.includes(n));
-    }
+	// Finalização
+	static done() {
+		console.log(`${C.gray}└────────────────────────────────────────────────────────┘${C.reset}`);
+		console.log();
+	}
 
-    static isEssential(line: string): boolean {
-        return line.includes("SEVERE") || line.includes("ERROR") || line.includes("Exception") ||
-               line.includes("Caused by") || line.includes("at ") || line.includes("... ") ||
-               line.includes("Server startup in") || line.includes("HOTSWAP AGENT:");
-    }
+	// Helper para contexto git
+	static getGitContext(): { branch: string; author: string; hash: string } {
+		try {
+			const branch = Bun.spawnSync(["git", "rev-parse", "abbrev-ref", "HEAD"]).stdout.toString().trim();
+			const author = Bun.spawnSync(["git", "log", "-1", "format=%an"]).stdout.toString().trim();
+			const hash = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"]).stdout.toString().trim();
+			return { branch, author, hash };
+		} catch {
+			return { branch: "", author: "", hash: "" };
+		}
+	}
 
-    static summarize(line: string): string {
-        if (this.isSystemNoise(line)) return "";
+	// Filtros de noise (mantidos)
+	static isSystemNoise(line: string): boolean {
+		const noise = [
+			"Using CATALINA_", "Using JRE_HOME", "Using CLASSPATH", 
+			"Scanning for projects...", "Building ", "--- ", "+++ ",
+			"Arquivos processados em", "milliseconds",
+			"SLF4J: ", "Discovered plugins:",
+			"enhanced with plugin initialization", "Hotswap ready",
+			"autoHotswap.delay", "watchResources=false",
+		];
+		return noise.some(n => line.includes(n));
+	}
 
-        const startupMatch = line.match(/Server startup in (\[?)(.*?)(\]?)\s*ms/);
-        if (startupMatch) {
-            const time = (parseInt(startupMatch[2]) / 1000).toFixed(1);
-            this.domain("server");
-            return `${this.C.green}✔ ${this.C.bold}Server started in ${time}s`;
-        }
+	// Sumarização de logs do Tomcat (simplificada)
+	static summarize(line: string): string {
+		if (this.isSystemNoise(line)) return "";
 
-        const deployMatch = line.match(/Deployment of web application archive \[(.*?)\] has finished in \[(.*?)\] ms/);
-        if (deployMatch) {
-            this.domain("build");
-            return `${this.C.green}✔ Artifacts deployed`;
-        }
+		// Server startup
+		const startupMatch = line.match(/Server startup in.*?([\d,]+)\s*ms/);
+		if (startupMatch) {
+			const time = startupMatch[1].replace(",", "");
+			const seconds = (parseInt(time) / 1000).toFixed(1);
+			return `${C.success}ready ${C.gray}in ${C.white}${seconds}s${C.reset}`;
+		}
 
-        const hotswapPattern = /HOTSWAP AGENT:.*? (INFO|WARN|ERROR|RELOAD) (.*?) - (.*)/;
-        const hotswapMatch = line.match(hotswapPattern);
-        if (hotswapMatch) {
-            const level = hotswapMatch[1];
-            let msg = hotswapMatch[3];
+		// Hotswap
+		if (line.includes("HOTSWAP AGENT") && line.includes("RELOAD")) {
+			return `${C.secondary}↻ hotswap ${C.gray}detected${C.reset}`;
+		}
 
-            if (msg.includes("plugin initialized")) {
-                this.hotswapPluginsCount++;
-                return "";
-            }
+		// Erros de compilação
+		const compilationError = line.match(/\[ERROR\].*?(\w+\.java):\[(\d+).*?\]\s*(.+)/);
+		if (compilationError) {
+			const [, file, lineNum, msg] = compilationError;
+			return `${C.error}✗ ${C.white}${file}${C.gray}:${lineNum}${C.reset} ${C.gray}${msg.slice(0, 50)}${C.reset}`;
+		}
 
-            if (msg.includes("redefinition") || msg.includes("reloaded") || level === 'RELOAD') {
-                if (msg.includes("Reloading classes [")) {
-                    const classes = msg.match(/\[(.*?)\]/)?.[1] || "";
-                    const classCount = classes.split(",").length;
-                    if (classCount > 3) msg = `Reloading ${classCount} classes...`;
-                }
-                
-                if (msg === this.lastHotswapMsg) return "";
-                this.lastHotswapMsg = msg;
+		// Erros SEVERE
+		if (line.includes("SEVERE") || line.includes("Exception")) {
+			return `${C.error}✗ ${C.gray}${line.slice(0, 80)}${C.reset}`;
+		}
 
-                this.watcher(`Hotswap: ${msg.replace(/Class '.*?'/, (m) => this.C.bold + m + this.C.reset)}`, 'success');
-                return "";
-            }
+		// Warnings
+		if (line.includes("WARNING")) {
+			return `${C.warning}⚠ ${C.gray}${line.slice(0, 80)}${C.reset}`;
+		}
 
-            if (msg.includes("Loading Hotswap agent")) {
-                this.domain("server");
-                return `${this.C.blue}▶ ${this.C.reset}Initializing Hotswap Agent ${msg.match(/\d+\.\d+\.\d+/)?.[0] || ""}`;
-            }
-
-            if (this.hotswapPluginsCount > 0) {
-                const count = this.hotswapPluginsCount;
-                this.hotswapPluginsCount = 0;
-                this.domain("server");
-                this.write(`  ${this.C.green}✔ ${this.C.reset}Hotswap ready (Plugins: ${count} loaded)`);
-            }
-
-            let color = this.C.cyan;
-            let symbol = "●";
-            if (level === "WARN") { color = this.C.yellow; symbol = "▲"; }
-            else if (level === "ERROR") { color = this.C.red; symbol = "✖"; }
-            
-            this.domain("server");
-            return `${color}${symbol} ${this.C.bold}Hotswap:${this.C.reset} ${msg}`;
-        }
-
-        if (line.includes("java.lang.UnsupportedOperationException") && (line.includes("add a method") || line.includes("change the schema"))) {
-            this.domain("watcher");
-            this.write(`  ${this.C.red}✖ ${this.C.bold}Hotswap Falhou:${this.C.reset} Mudança estrutural detectada (novo método/campo).`);
-            this.write(`    ${this.C.yellow}💡 Dica: Sua JVM atual não suporta mudar a estrutura da classe. Reinicie o servidor para aplicar.`);
-            return "";
-        }
-
-        const tomcatPattern = /^(\d{2}-\w{3}-\d{4} \d{2}:\d{2}:\d{2}\.\d{3})\s+(INFO|WARNING|SEVERE|ERROR)\s+\[(.*?)\]\s+(.*)$/;
-        const tMatch = line.match(tomcatPattern);
-        if (tMatch) {
-            const label = tMatch[2];
-            let msg = tMatch[4].trim();
-            if (this.isSystemNoise(msg)) return "";
-            let color = this.C.dim;
-            let symbol = "ℹ";
-            if (label === "WARNING") { color = this.C.yellow; symbol = "▲"; }
-            else if (label === "SEVERE" || label === "ERROR") { color = this.C.red; symbol = "✖"; }
-            msg = msg.replace(/^(org\.apache|com\.sun|java\..*?|org\.glassfish)\.[a-zA-Z0-9.]+\s/, "").trim();
-            if (!msg) return "";
-            return `${color}${symbol} ${msg}`;
-        }
-
-        const compilationErrorMatch = line.match(/^\[ERROR\]\s+(.*\.java):\[(\d+),(\d+)\]\s+(.*)$/);
-        if (compilationErrorMatch) {
-            const [_, filePath, row, col, msg] = compilationErrorMatch;
-            const fileName = filePath.split(/[/\\]/).pop();
-            return `${this.C.red}✖ ERROR ${this.C.reset}${this.C.dim}em ${this.C.reset}${this.C.bold}${fileName}${this.C.reset}${this.C.dim}:${row}${this.C.reset} ${this.C.red}➜ ${this.C.reset}${msg}`;
-        }
-
-        const logPattern = /^\[(INFO|WARNING|WARN|SEVERE|ERROR)\]\s+(.*)$/;
-        const match = line.match(logPattern);
-        if (match) {
-            const label = match[1];
-            let msg = match[2].trim();
-            if (msg.includes("Total time:") || msg.includes("Finished at:") || msg.includes("Final Memory:") || msg.includes("-----------------------")) return "";
-            let color = this.C.dim;
-            let symbol = "ℹ";
-            if (label === "WARNING") { color = this.C.yellow; symbol = "▲"; }
-            else if (label === "SEVERE" || label === "ERROR") { color = this.C.red; symbol = "✖"; }
-            msg = msg.replace(/^(org\.apache|com\.sun|java\..*?)\.[a-zA-Z0-9.]+\s/, "").trim();
-            if (!msg || msg === "]" || msg.includes("Compilation failure")) return "";
-            return `${color}${symbol} ${msg}`;
-        }
-
-        if (line.includes("Exception") || line.includes("Caused by") || line.includes("at ")) {
-            const trimmed = line.trim();
-            const color = (trimmed.includes("org.apache") || trimmed.includes("java.base") || trimmed.includes("sun.reflect")) ? this.C.dim : this.C.yellow;
-            return `   ${color}${trimmed}`;
-        }
-
-        return "";
-    }
+		return "";
+	}
 }
