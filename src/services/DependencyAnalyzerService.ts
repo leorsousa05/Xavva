@@ -417,6 +417,14 @@ export class DependencyAnalyzerService {
 
 	private async checkSingleUpdate(dep: Dependency): Promise<DependencyUpdate | null> {
 		try {
+			// Primeiro verifica se a versão atual existe no Maven Central
+			// Se não existir, é uma dependência local - não sugerir atualização
+			const currentExists = await this.checkVersionExists(dep.groupId, dep.artifactId, dep.version);
+			if (!currentExists) {
+				Logger.debug(`Dependência local detectada (não no Maven Central): ${dep.groupId}:${dep.artifactId}:${dep.version}`);
+				return null;
+			}
+			
 			const latest = await this.fetchLatestVersion(dep.groupId, dep.artifactId);
 			if (latest && this.isNewer(latest, dep.version)) {
 				return {
@@ -431,6 +439,18 @@ export class DependencyAnalyzerService {
 			// Silenciar erros de rede
 		}
 		return null;
+	}
+
+	private async checkVersionExists(groupId: string, artifactId: string, version: string): Promise<boolean> {
+		try {
+			const url = `https://search.maven.org/solrsearch/select?q=g:"${groupId}"+AND+a:"${artifactId}"+AND+v:"${version}"&rows=1&wt=json`;
+			const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+			const data = await response.json();
+			return data.response?.numFound > 0;
+		} catch (e) {
+			// Se não conseguir verificar, assume que existe para não bloquear
+			return true;
+		}
 	}
 
 	private async fetchLatestVersion(groupId: string, artifactId: string): Promise<string | null> {
