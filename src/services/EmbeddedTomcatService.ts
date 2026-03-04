@@ -1,5 +1,5 @@
 import { Logger } from "../utils/ui";
-import { existsSync, mkdirSync, createWriteStream, writeFileSync, promises as fs } from "fs";
+import { existsSync, mkdirSync, createWriteStream, writeFileSync, readdirSync, promises as fsPromises } from "fs";
 import path from "path";
 import os from "os";
 import { spawn } from "child_process";
@@ -86,7 +86,7 @@ export class EmbeddedTomcatService {
         if (!existsSync(baseDir)) return [];
 
         const versions: string[] = [];
-        const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+        const entries = readdirSync(baseDir, { withFileTypes: true });
         
         for (const entry of entries) {
             if (entry.isDirectory()) {
@@ -130,11 +130,11 @@ export class EmbeddedTomcatService {
             // Renomeia diretório extraído para versão padronizada
             const extractedDir = path.join(this.baseDir, `apache-tomcat-${this.version}`);
             if (existsSync(extractedDir) && extractedDir !== this.tomcatHome) {
-                await fs.rename(extractedDir, this.tomcatHome);
+                await fsPromises.rename(extractedDir, this.tomcatHome);
             }
 
             // Limpa arquivo zip
-            await fs.unlink(zipPath).catch(() => {});
+            await fsPromises.unlink(zipPath).catch(() => {});
 
             // Configura server.xml
             await this.configureServerXml();
@@ -150,7 +150,7 @@ export class EmbeddedTomcatService {
             Logger.error(`Falha ao instalar Tomcat: ${error}`);
             // Limpa arquivos parciais
             if (existsSync(this.tomcatHome)) {
-                await fs.rm(this.tomcatHome, { recursive: true, force: true });
+                await fsPromises.rm(this.tomcatHome, { recursive: true, force: true });
             }
             return false;
         }
@@ -166,7 +166,7 @@ export class EmbeddedTomcatService {
             throw new Error("server.xml não encontrado após extração");
         }
 
-        let content = await fs.readFile(serverXmlPath, "utf-8");
+        let content = await fsPromises.readFile(serverXmlPath, "utf-8");
 
         // Atualiza porta HTTP
         content = content.replace(
@@ -194,7 +194,7 @@ export class EmbeddedTomcatService {
             "<!-- <Context docBase=\"manager\" ... /> -->"
         );
 
-        await fs.writeFile(serverXmlPath, content, "utf-8");
+        await fsPromises.writeFile(serverXmlPath, content, "utf-8");
         Logger.debug(`server.xml configurado na porta ${this.port}`);
     }
 
@@ -206,7 +206,7 @@ export class EmbeddedTomcatService {
         
         if (!existsSync(contextXmlPath)) return;
 
-        let content = await fs.readFile(contextXmlPath, "utf-8");
+        let content = await fsPromises.readFile(contextXmlPath, "utf-8");
 
         // Adiciona atributos para hot-reload se não existirem
         if (!content.includes("reloadable")) {
@@ -216,7 +216,7 @@ export class EmbeddedTomcatService {
             );
         }
 
-        await fs.writeFile(contextXmlPath, content, "utf-8");
+        await fsPromises.writeFile(contextXmlPath, content, "utf-8");
     }
 
     /**
@@ -230,7 +230,7 @@ export class EmbeddedTomcatService {
         for (const app of defaultApps) {
             const appPath = path.join(webappsDir, app);
             if (existsSync(appPath)) {
-                await fs.rm(appPath, { recursive: true, force: true });
+                await fsPromises.rm(appPath, { recursive: true, force: true });
             }
         }
 
@@ -239,7 +239,7 @@ export class EmbeddedTomcatService {
         const appDir = path.join(webappsDir, appName);
 
         if (existsSync(appDir)) {
-            await fs.rm(appDir, { recursive: true, force: true });
+            await fsPromises.rm(appDir, { recursive: true, force: true });
         }
 
         // Se webappPath é um diretório, cria link/simula deploy
@@ -392,7 +392,7 @@ export class EmbeddedTomcatService {
      */
     async uninstall(): Promise<void> {
         if (existsSync(this.tomcatHome)) {
-            await fs.rm(this.tomcatHome, { recursive: true, force: true });
+            await fsPromises.rm(this.tomcatHome, { recursive: true, force: true });
             Logger.info("Tomcat", `Versão ${this.version} removida`);
         }
     }
