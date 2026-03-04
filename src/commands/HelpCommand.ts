@@ -63,6 +63,9 @@ export class HelpCommand implements Command {
     ${this.c("dim", "# Analyze dependencies for conflicts")}
     xavva deps --verbose
 
+    ${this.c("dim", "# Update safe dependencies (non-breaking only)")}
+    xavva deps --update-safe
+
     ${this.c("dim", "# Security audit with auto-fix suggestions")}
     xavva audit --fix
 
