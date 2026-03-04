@@ -12,6 +12,7 @@ import { DocsCommand } from "./commands/DocsCommand";
 import { AuditCommand } from "./commands/AuditCommand";
 import { ProfilesCommand } from "./commands/ProfilesCommand";
 import { DepsCommand } from "./commands/DepsCommand";
+import { TomcatCommand } from "./commands/TomcatCommand";
 
 import { ProjectService } from "./services/ProjectService";
 import { TomcatService } from "./services/TomcatService";
@@ -36,13 +37,16 @@ async function main() {
 		await processManager.shutdown(0);
 	}
 
-	const commandNames = ["deploy", "build", "start", "dev", "doctor", "run", "debug", "logs", "docs", "audit", "profiles", "deps"];
+	const commandNames = ["deploy", "build", "start", "dev", "doctor", "run", "debug", "logs", "docs", "audit", "profiles", "deps", "tomcat"];
 	const commandName = positionals.find(p => commandNames.includes(p)) || "deploy";
 
 	if (!values.help && !values.tui) {
 		Logger.banner(commandName, config.project.profile, config.project.encoding);
 		if (config.project.encoding) {
 			Logger.config("Encoding", config.project.encoding);
+		}
+		if (config.tomcat.embedded) {
+			Logger.config("Tomcat", `Embutido ${config.tomcat.version}`);
 		}
 	}
 
@@ -80,6 +84,7 @@ async function main() {
 	registry.register("audit", new AuditCommand(auditService));
 	registry.register("profiles", new ProfilesCommand(projectService));
 	registry.register("deps", new DepsCommand());
+	registry.register("tomcat", new TomcatCommand());
 	registry.register("deploy", deployCmd);
 	registry.register("dev", deployCmd);
 

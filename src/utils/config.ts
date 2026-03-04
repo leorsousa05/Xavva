@@ -3,6 +3,8 @@ import path from "path";
 import fs from "fs";
 import { DEFAULT_TOMCAT_PORT, DEFAULT_DEBUG_PORT } from "./constants";
 import type { AppConfig, CLIArguments, CommandContext } from "../types/config";
+import { EmbeddedTomcatService } from "../services/EmbeddedTomcatService";
+import { Logger } from "./ui";
 
 export class ConfigManager {
     static async load(): Promise<CommandContext> {
@@ -32,6 +34,7 @@ export class ConfigManager {
                 tui: { type: "boolean" },
                 output: { type: "string", short: "o" },
                 strict: { type: "boolean" },
+                "tomcat-version": { type: "string" },
             },
             strict: false,
             allowPositionals: true,
@@ -52,8 +55,9 @@ export class ConfigManager {
 
         const isDev = positionals.includes("dev");
         const isRun = positionals.includes("run") || positionals.includes("debug");
+        const isStart = positionals.includes("start") || positionals.includes("deploy") || isDev;
         
-        const envTomcatPath = process.env.TOMCAT_HOME || process.env.CATALINA_HOME || "C:\\apache-tomcat";
+        const envTomcatPath = process.env.TOMCAT_HOME || process.env.CATALINA_HOME;
         const detectedTool = this.detectBuildTool();
 
         let runClass = "";
@@ -64,12 +68,49 @@ export class ConfigManager {
             runClass = positionals[idx + 1] || "";
         }
 
+        // Detectar webapp path baseado no build tool
+        const webappPath = detectedTool === "maven" 
+            ? path.join(process.cwd(), "src", "main", "webapp")
+            : path.join(process.cwd(), "src", "main", "webapp");
+
+        // Verificar se usar Tomcat embutido
+        let tomcatPath = String(cliValues.path || xavvaJson.path || envTomcatPath || "");
+        let useEmbedded = false;
+        let embeddedVersion = String(cliValues["tomcat-version"] || xavvaJson.version || "10.1.28");
+
+        // Se não há Tomcat configurado ou não existe no path, usar embutido
+        if (!tomcatPath || (!fs.existsSync(path.join(tomcatPath, "bin", "catalina.bat")) && isStart)) {
+            useEmbedded = true;
+            const embeddedService = new EmbeddedTomcatService({
+                version: embeddedVersion,
+                port: parseInt(String(cliValues.port || xavvaJson.port || String(DEFAULT_TOMCAT_PORT))),
+                webappPath: webappPath
+            });
+            
+            // Instala se necessário
+            if (!embeddedService.checkInstallation()) {
+                const installed = await embeddedService.install();
+                if (!installed) {
+                    Logger.error("Falha ao instalar Tomcat embutido.");
+                    Logger.info("Dica", "Instale o Tomcat manualmente ou defina TOMCAT_HOME");
+                    process.exit(1);
+                }
+            }
+            
+            // Configura contexto da aplicação
+            await embeddedService.createAppContext();
+            
+            tomcatPath = embeddedService.getTomcatHome();
+        }
+
         const config: AppConfig = {
             tomcat: {
-                path: String(cliValues.path || xavvaJson.path || envTomcatPath),
+                path: tomcatPath,
                 port: parseInt(String(cliValues.port || xavvaJson.port || String(DEFAULT_TOMCAT_PORT))),
                 webapps: "webapps",
                 grep: cliValues.grep || xavvaJson.grep ? String(cliValues.grep || xavvaJson.grep) : "",
+                embedded: useEmbedded,
+                version: embeddedVersion,
             },
             project: {
                 appName: cliValues.name || xavvaJson.name ? String(cliValues.name || xavvaJson.name) : "",

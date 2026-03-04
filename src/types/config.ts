@@ -3,6 +3,8 @@ export interface TomcatConfig {
     port: number;
     webapps: string;
     grep?: string;
+    embedded?: boolean;
+    version?: string;
 }
 
 export interface ProjectConfig {
@@ -50,6 +52,10 @@ export interface CLIArguments {
     tui?: boolean;
     output?: string;
     strict?: boolean;
+    "tomcat-version"?: string;
+    "tomcat-action"?: string;
+    "update-safe"?: boolean;
+    "updateSafe"?: boolean;
 }
 
 export interface CommandContext {

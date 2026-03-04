@@ -28,6 +28,7 @@ export class HelpCommand implements Command {
     ${this.c("green", "audit")}            Security audit of JAR files
     ${this.c("green", "doctor")}           Diagnose and fix environment issues
     ${this.c("green", "profiles")}         List available Maven/Gradle profiles
+    ${this.c("green", "tomcat")}            Manage embedded Tomcat (install, list, status)
     ${this.c("green", "docs")}             Generate endpoint documentation
 
   ${this.c("yellow", "OPTIONS")}
@@ -65,6 +66,14 @@ export class HelpCommand implements Command {
 
     ${this.c("dim", "# Update safe dependencies (non-breaking only)")}
     xavva deps --update-safe
+
+    ${this.c("dim", "# Use embedded Tomcat (no installation required)")}
+    xavva deploy --tomcat-version 10.1.28
+
+    ${this.c("dim", "# Manage embedded Tomcat installations")}
+    xavva tomcat install
+    xavva tomcat status
+    xavva tomcat list
 
     ${this.c("dim", "# Security audit with auto-fix suggestions")}
     xavva audit --fix
