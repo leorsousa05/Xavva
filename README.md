@@ -18,6 +18,8 @@ Xavva is a high-performance CLI built with **Bun** that transforms the Java/Tomc
 - 📦 **Dependency Analysis** — Detect conflicts and outdated dependencies
 - 🎯 **Maven & Gradle** — Native support for both build tools
 - 🔧 **Auto-Healing** — Automatic diagnosis and repair of common issues
+- 🐱 **Embedded Tomcat** — Auto-install Tomcat, no manual setup needed
+- 📦 **WAR Generation** — Build as .war file or exploded directory
 
 ---
 
@@ -42,6 +44,9 @@ xavva dev --tui
 # Deploy to Tomcat
 xavva deploy
 
+# Build and deploy as .war file
+xavva deploy --war
+
 # Analyze dependencies for issues
 xavva deps
 
@@ -50,6 +55,9 @@ xavva deps --update-safe
 
 # Check for security vulnerabilities
 xavva audit
+
+# Use embedded Tomcat (auto-install)
+xavva dev --yes
 ```
 
 ---
@@ -82,6 +90,30 @@ xavva audit
 | `xavva doctor`   | Diagnose environment issues (JAVA_HOME, DCEVM)            |
 | `xavva profiles` | List available Maven/Gradle profiles                      |
 | `xavva docs`     | Generate endpoint documentation                           |
+| `xavva tomcat`   | Manage embedded Tomcat installations                      |
+
+---
+
+## 🐱 Embedded Tomcat
+
+Xavva can automatically download and manage a Tomcat installation for you:
+
+```bash
+# First time usage - auto-install Tomcat
+xavva dev --yes
+
+# Or install manually
+xavva tomcat install
+
+# Check Tomcat status
+xavva tomcat status
+
+# List available versions
+xavva tomcat list
+
+# Use specific version
+xavva dev --tomcat-version 9.0.115
+```
 
 ---
 
@@ -176,6 +208,8 @@ Create `xavva.json` in your project root:
 | `-d, --debug`          | Enable JPDA debugger            |
 | `-c, --clean`          | Clean logs before start         |
 | `-s, --no-build`       | Skip initial build              |
+| `-W, --war`            | Generate .war file (vs exploded)|
+| `-y, --yes`            | Auto-install Tomcat (no prompt) |
 | `-V, --verbose`        | Detailed output                 |
 
 ---
