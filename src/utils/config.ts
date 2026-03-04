@@ -1,7 +1,6 @@
 import { parseArgs } from "util";
 import path from "path";
 import fs from "fs";
-import readline from "readline";
 import { DEFAULT_TOMCAT_PORT, DEFAULT_DEBUG_PORT } from "./constants";
 import type { AppConfig, CLIArguments, CommandContext } from "../types/config";
 import { EmbeddedTomcatService } from "../services/EmbeddedTomcatService";
@@ -176,21 +175,55 @@ export class ConfigManager {
     }
 
     private static async askYesNo(question: string): Promise<boolean> {
-        // Limpa qualquer output pendente
-        process.stdout.write('\r\x1b[K');
+        // Força flush de qualquer output pendente
+        process.stdout.write('');
         
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stderr // Usa stderr para não interferir com stdout
-        });
-
+        // Usar process.stderr para evitar conflitos com stdout
+        process.stderr.write(`\n${question} [Y/n]: `);
+        
         return new Promise((resolve) => {
-            process.stderr.write(`${question} [Y/n]: `);
-            rl.question('', (answer) => {
-                rl.close();
-                const normalized = answer.trim().toLowerCase();
-                resolve(normalized === '' || normalized === 'y' || normalized === 'yes');
-            });
+            let input = '';
+            
+            const onData = (data: Buffer) => {
+                const str = data.toString();
+                
+                for (const char of str) {
+                    const code = char.charCodeAt(0);
+                    
+                    // Enter (CR or LF)
+                    if (char === '\r' || char === '\n') {
+                        process.stdin.removeListener('data', onData);
+                        process.stdin.pause();
+                        process.stderr.write('\n');
+                        const normalized = input.trim().toLowerCase();
+                        resolve(normalized === '' || normalized === 'y' || normalized === 'yes');
+                        return;
+                    }
+                    
+                    // Backspace or DEL
+                    if (code === 8 || code === 127) {
+                        if (input.length > 0) {
+                            input = input.slice(0, -1);
+                            process.stderr.write('\b \b');
+                        }
+                        continue;
+                    }
+                    
+                    // Printable characters
+                    if (code >= 32 && code <= 126) {
+                        input += char;
+                        process.stderr.write(char);
+                    }
+                }
+            };
+            
+            process.stdin.resume();
+            // @ts-ignore - setRawMode exists but TypeScript doesn't know
+            if (process.stdin.setRawMode) {
+                // @ts-ignore
+                process.stdin.setRawMode(true);
+            }
+            process.stdin.on('data', onData);
         });
     }
 
