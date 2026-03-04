@@ -28,7 +28,12 @@ export class ProjectService {
         const artifacts = this.searchArtifacts(buildDir).sort((a, b) => b.time - a.time);
 
         if (artifacts.length === 0) {
-            throw new Error(`Nenhum artefato (.war ou pasta exploded) encontrado em ${buildDir}!`);
+            // Debug: listar o que existe no diretório target
+            let debugInfo = `\nDiretório ${buildDir} existe: ${existsSync(buildDir)}`;
+            if (existsSync(buildDir)) {
+                debugInfo += `\nConteúdo: ${readdirSync(buildDir).join(', ')}`;
+            }
+            throw new Error(`Nenhum artefato (.war ou pasta exploded) encontrado em ${buildDir}!${debugInfo}`);
         }
 
         const artifact = artifacts[0];
