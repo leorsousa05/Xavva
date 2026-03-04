@@ -12,15 +12,18 @@ export class TomcatCommand implements Command {
             ? positionals[tomcatIndex + 1] 
             : "status";
         
+        // Argumentos extras após a ação (ex: xavva tomcat install 9.0.115)
+        const extraArgs = positionals && tomcatIndex >= 0 ? positionals.slice(tomcatIndex + 2) : [];
+        
         switch (action) {
             case "install":
-                await this.handleInstall(config, args);
+                await this.handleInstall(config, args, extraArgs);
                 break;
             case "list":
                 this.handleList();
                 break;
             case "uninstall":
-                await this.handleUninstall(config, args);
+                await this.handleUninstall(config, args, extraArgs);
                 break;
             case "status":
                 await this.handleStatus(config);
@@ -31,8 +34,9 @@ export class TomcatCommand implements Command {
         }
     }
 
-    private async handleInstall(config: AppConfig, args?: CLIArguments): Promise<void> {
-        const version = args?.["tomcat-version"] || config.tomcat.version || "10.1.52";
+    private async handleInstall(config: AppConfig, args?: CLIArguments, extraArgs: string[] = []): Promise<void> {
+        // Versão pode vir de: flag --tomcat-version, argumento posicional, config, ou padrão
+        const version = args?.["tomcat-version"] || extraArgs[0] || config.tomcat.version || "10.1.52";
         
         // Detectar webapp path
         const webappPath = config.project.buildTool === "maven"
@@ -72,8 +76,9 @@ export class TomcatCommand implements Command {
         Logger.info("Versão padrão", "10.1.52");
     }
 
-    private async handleUninstall(config: AppConfig, args?: CLIArguments): Promise<void> {
-        const version = args?.["tomcat-version"] || config.tomcat.version || "10.1.52";
+    private async handleUninstall(config: AppConfig, args?: CLIArguments, extraArgs: string[] = []): Promise<void> {
+        // Versão pode vir de: flag --tomcat-version, argumento posicional, config, ou padrão
+        const version = args?.["tomcat-version"] || extraArgs[0] || config.tomcat.version || "10.1.52";
         
         const service = new EmbeddedTomcatService({
             version,
