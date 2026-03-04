@@ -177,55 +177,46 @@ export class ConfigManager {
     }
 
     private static async askYesNo(question: string): Promise<boolean> {
-        // Força flush de qualquer output pendente
-        process.stdout.write('');
+        // Pequeno delay para garantir que o output anterior foi processado
+        await new Promise(resolve => setTimeout(resolve, 100));
         
-        // Usar process.stderr para evitar conflitos com stdout
-        process.stderr.write(`\n${question} [Y/n]: `);
+        // Limpa qualquer coisa pendente no stdout
+        process.stdout.write('\x1b[0m');
         
         return new Promise((resolve) => {
-            let input = '';
+            const chunks: Buffer[] = [];
+            
+            const cleanup = () => {
+                process.stdin.removeListener('data', onData);
+                process.stdin.removeListener('end', onEnd);
+                process.stdin.pause();
+            };
             
             const onData = (data: Buffer) => {
-                const str = data.toString();
+                chunks.push(data);
+                const str = Buffer.concat(chunks).toString();
                 
-                for (const char of str) {
-                    const code = char.charCodeAt(0);
-                    
-                    // Enter (CR or LF)
-                    if (char === '\r' || char === '\n') {
-                        process.stdin.removeListener('data', onData);
-                        process.stdin.pause();
-                        process.stderr.write('\n');
-                        const normalized = input.trim().toLowerCase();
-                        resolve(normalized === '' || normalized === 'y' || normalized === 'yes');
-                        return;
-                    }
-                    
-                    // Backspace or DEL
-                    if (code === 8 || code === 127) {
-                        if (input.length > 0) {
-                            input = input.slice(0, -1);
-                            process.stderr.write('\b \b');
-                        }
-                        continue;
-                    }
-                    
-                    // Printable characters
-                    if (code >= 32 && code <= 126) {
-                        input += char;
-                        process.stderr.write(char);
-                    }
+                // Procura por enter no input
+                if (str.includes('\n') || str.includes('\r')) {
+                    cleanup();
+                    const answer = str.replace(/\r?\n/g, '').trim().toLowerCase();
+                    process.stdout.write('\n');
+                    resolve(answer === '' || answer === 'y' || answer === 'yes');
                 }
             };
             
+            const onEnd = () => {
+                cleanup();
+                const answer = Buffer.concat(chunks).toString().trim().toLowerCase();
+                resolve(answer === '' || answer === 'y' || answer === 'yes');
+            };
+            
+            // Mostra a pergunta
+            process.stdout.write(`${question} [Y/n]: `);
+            
             process.stdin.resume();
-            // @ts-ignore - setRawMode exists but TypeScript doesn't know
-            if (process.stdin.setRawMode) {
-                // @ts-ignore
-                process.stdin.setRawMode(true);
-            }
             process.stdin.on('data', onData);
+            process.stdin.on('end', onEnd);
         });
     }
 
