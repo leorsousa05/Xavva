@@ -105,7 +105,7 @@ async function main() {
 		if (commandName === "debug") values.debug = true;
 		if (commandName === "run") values.debug = false;
 		
-		await registry.execute(commandName, config, values);
+		await registry.execute(commandName, config, values, positionals);
 	}
 }
 

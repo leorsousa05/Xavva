@@ -5,8 +5,12 @@ import { Logger } from "../utils/ui";
 import path from "path";
 
 export class TomcatCommand implements Command {
-    async execute(config: AppConfig, args?: CLIArguments): Promise<void> {
-        const action = args?.["tomcat-action"] || "status";
+    async execute(config: AppConfig, args?: CLIArguments, positionals?: string[]): Promise<void> {
+        // A ação vem como positional após "tomcat" (ex: xavva tomcat list)
+        const tomcatIndex = positionals?.indexOf("tomcat") ?? -1;
+        const action = positionals && tomcatIndex >= 0 && positionals[tomcatIndex + 1] 
+            ? positionals[tomcatIndex + 1] 
+            : "status";
         
         switch (action) {
             case "install":

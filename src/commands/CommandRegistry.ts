@@ -19,18 +19,18 @@ export class CommandRegistry {
         return this.commands.get(name);
     }
 
-    async execute(name: string, config: AppConfig, args: CLIArguments): Promise<void> {
+    async execute(name: string, config: AppConfig, args: CLIArguments, positionals?: string[]): Promise<void> {
         const command = this.commands.get(name);
         const processManager = ProcessManager.getInstance();
         
         if (!command) {
             Logger.error(`Comando desconhecido: ${name}`);
-            await new HelpCommand().execute(config);
+            await new HelpCommand().execute(config, args, positionals);
             await processManager.shutdown(2);
         }
 
         try {
-            await command.execute(config, args);
+            await command.execute(config, args, positionals);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             Logger.error(`Erro ao executar comando '${name}': ${message}`);
