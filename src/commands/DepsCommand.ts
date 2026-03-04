@@ -142,7 +142,8 @@ export class DepsCommand implements Command {
 				}
 
 				Logger.newline();
-				Logger.log(`${Logger.C.warning}⚠️  Execute 'mvn compile' ou 'gradle build' para aplicar as mudanças${Logger.C.reset}`);
+				Logger.log(`${Logger.C.warning}⚠️  Execute 'xavva build' para compilar e aplicar as mudanças${Logger.C.reset}`);
+				Logger.log(`${Logger.C.cyan}💡 Dica:${Logger.C.reset} Execute 'xavva audit' para verificar vulnerabilidades nas novas versões`);
 			} else {
 				Logger.warn("Nenhuma dependência foi atualizada");
 			}

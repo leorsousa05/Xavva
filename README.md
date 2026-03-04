@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+
 # XAVVA CLI 🚀
 
 > Ultra-fast development toolkit for Java Enterprise (Tomcat) on Windows
@@ -58,30 +60,30 @@ xavva audit
 
 ### Core Development
 
-| Command | Description |
-|---------|-------------|
-| `xavva dev` | Full development mode (build + deploy + watch + debug) |
-| `xavva deploy` | Build and deploy application to Tomcat |
-| `xavva build` | Compile project only |
-| `xavva start` | Start Tomcat server only |
+| Command        | Description                                            |
+| -------------- | ------------------------------------------------------ |
+| `xavva dev`    | Full development mode (build + deploy + watch + debug) |
+| `xavva deploy` | Build and deploy application to Tomcat                 |
+| `xavva build`  | Compile project only                                   |
+| `xavva start`  | Start Tomcat server only                               |
 
 ### Code Execution
 
-| Command | Description |
-|---------|-------------|
-| `xavva run <class>` | Execute a Java class with automatic classpath |
-| `xavva debug <class>` | Debug a Java class (port 5005) |
+| Command               | Description                                   |
+| --------------------- | --------------------------------------------- |
+| `xavva run <class>`   | Execute a Java class with automatic classpath |
+| `xavva debug <class>` | Debug a Java class (port 5005)                |
 
 ### Analysis & Monitoring
 
-| Command | Description |
-|---------|-------------|
-| `xavva logs` | Stream and analyze Tomcat logs in real-time |
-| `xavva deps` | **Analyze dependencies** — detect conflicts, find updates |
-| `xavva audit` | Security audit of JAR files via OSV.dev |
-| `xavva doctor` | Diagnose environment issues (JAVA_HOME, DCEVM) |
-| `xavva profiles` | List available Maven/Gradle profiles |
-| `xavva docs` | Generate endpoint documentation |
+| Command          | Description                                               |
+| ---------------- | --------------------------------------------------------- |
+| `xavva logs`     | Stream and analyze Tomcat logs in real-time               |
+| `xavva deps`     | **Analyze dependencies** — detect conflicts, find updates |
+| `xavva audit`    | Security audit of JAR files via OSV.dev                   |
+| `xavva doctor`   | Diagnose environment issues (JAVA_HOME, DCEVM)            |
+| `xavva profiles` | List available Maven/Gradle profiles                      |
+| `xavva docs`     | Generate endpoint documentation                           |
 
 ---
 
@@ -163,20 +165,20 @@ Create `xavva.json` in your project root:
 
 ### CLI Options
 
-| Option | Description |
-|--------|-------------|
-| `-p, --path <path>` | Tomcat installation path |
-| `-t, --tool <tool>` | Build tool: `maven` or `gradle` |
-| `-n, --name <name>` | Application name (WAR context) |
-| `--port <port>` | Tomcat port (default: 8080) |
-| `-P, --profile <prof>` | Maven/Gradle profile |
-| `-e, --encoding <enc>` | Source encoding (utf8, cp1252) |
-| `-w, --watch` | Enable file watching |
-| `--tui` | Interactive dashboard mode |
-| `-d, --debug` | Enable JPDA debugger |
-| `-c, --clean` | Clean logs before start |
-| `-s, --no-build` | Skip initial build |
-| `-V, --verbose` | Detailed output |
+| Option                 | Description                     |
+| ---------------------- | ------------------------------- |
+| `-p, --path <path>`    | Tomcat installation path        |
+| `-t, --tool <tool>`    | Build tool: `maven` or `gradle` |
+| `-n, --name <name>`    | Application name (WAR context)  |
+| `--port <port>`        | Tomcat port (default: 8080)     |
+| `-P, --profile <prof>` | Maven/Gradle profile            |
+| `-e, --encoding <enc>` | Source encoding (utf8, cp1252)  |
+| `-w, --watch`          | Enable file watching            |
+| `--tui`                | Interactive dashboard mode      |
+| `-d, --debug`          | Enable JPDA debugger            |
+| `-c, --clean`          | Clean logs before start         |
+| `-s, --no-build`       | Skip initial build              |
+| `-V, --verbose`        | Detailed output                 |
 
 ---
 
