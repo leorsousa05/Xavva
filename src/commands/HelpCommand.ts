@@ -48,6 +48,7 @@ export class HelpCommand implements Command {
     ${this.c("cyan", "-s, --no-build")}       Skip initial build
     ${this.c("cyan", "-q, --quiet")}          Minimal output
     ${this.c("cyan", "-V, --verbose")}        Detailed output
+    ${this.c("cyan", "-y, --yes")}            Auto-install Tomcat without confirmation
     ${this.c("cyan", "-h, --help")}           Show this help
     ${this.c("cyan", "-v, --version")}        Show version
 
@@ -69,6 +70,9 @@ export class HelpCommand implements Command {
 
     ${this.c("dim", "# Use embedded Tomcat (no installation required)")}
     xavva deploy --tomcat-version 10.1.52
+
+    ${this.c("dim", "# Auto-install embedded Tomcat without confirmation")}
+    xavva deploy --yes
 
     ${this.c("dim", "# Manage embedded Tomcat installations")}
     xavva tomcat install
