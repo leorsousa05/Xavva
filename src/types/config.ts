@@ -56,6 +56,7 @@ export interface CLIArguments {
     "tomcat-action"?: string;
     "update-safe"?: boolean;
     "updateSafe"?: boolean;
+    yes?: boolean;
 }
 
 export interface CommandContext {

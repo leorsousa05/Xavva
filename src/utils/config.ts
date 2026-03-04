@@ -35,6 +35,7 @@ export class ConfigManager {
                 output: { type: "string", short: "o" },
                 strict: { type: "boolean" },
                 "tomcat-version": { type: "string" },
+                yes: { type: "boolean", short: "y" },
             },
             strict: false,
             allowPositionals: true,
@@ -101,7 +102,8 @@ export class ConfigManager {
                 await new Promise(resolve => setTimeout(resolve, 50));
                 process.stdout.write('\r\x1b[K'); // Limpa linha atual
                 
-                const shouldInstall = await this.askYesNo("Instalar");
+                const autoYes = !!cliValues.yes;
+                const shouldInstall = autoYes || await this.askYesNo("Instalar");
                 
                 if (!shouldInstall) {
                     Logger.newline();
