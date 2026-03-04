@@ -28,10 +28,10 @@ export class HelpCommand implements Command {
     ${this.c("green", "audit")}            Security audit of JAR files
     ${this.c("green", "doctor")}           Diagnose and fix environment issues
     ${this.c("green", "profiles")}         List available Maven/Gradle profiles
-    ${this.c("green", "tomcat")}            Manage embedded Tomcat (install, list, status)
+    ${this.c("green", "tomcat")}           Manage embedded Tomcat (install, list, status)
     ${this.c("green", "docs")}             Generate endpoint documentation
 
-  ${this.c("yellow", "OPTIONS")}
+  ${this.c("yellow", "GENERAL OPTIONS")}
     ${this.c("cyan", "-p, --path")} <path>     Tomcat installation path
     ${this.c("cyan", "-t, --tool")} <tool>     Build tool: maven | gradle
     ${this.c("cyan", "-n, --name")} <name>     Application name (WAR context)
@@ -44,47 +44,54 @@ export class HelpCommand implements Command {
     ${this.c("cyan", "-d, --debug")}          Enable JPDA debugger
     ${this.c("cyan", "--dp")} <port>          Debugger port (default: 5005)
     
-    ${this.c("cyan", "-c, --clean")}          Clean logs before start
+    ${this.c("cyan", "-c, --clean")}          Clean before build
     ${this.c("cyan", "-s, --no-build")}       Skip initial build
-    ${this.c("cyan", "-W, --war")}             Generate .war file instead of exploded
     ${this.c("cyan", "-q, --quiet")}          Minimal output
     ${this.c("cyan", "-V, --verbose")}        Detailed output
-    ${this.c("cyan", "-y, --yes")}            Auto-install Tomcat without confirmation
     ${this.c("cyan", "-h, --help")}           Show this help
     ${this.c("cyan", "-v, --version")}        Show version
+
+  ${this.c("yellow", "BUILD OPTIONS")}  ${this.c("dim", "(for deploy, dev, build)")}
+    ${this.c("cyan", "-W, --war")}             Generate .war file instead of exploded directory
+
+  ${this.c("yellow", "TOMCAT OPTIONS")}  ${this.c("dim", "(for embedded Tomcat)")}
+    ${this.c("cyan", "--tomcat-version")} <v>   Tomcat version to install (default: 10.1.52)
+    ${this.c("cyan", "-y, --yes")}             Auto-install without confirmation
+
+  ${this.c("yellow", "DEPS OPTIONS")}  ${this.c("dim", "(for xavva deps)")}
+    ${this.c("cyan", "--update-safe")}         Update only non-breaking dependencies
+    ${this.c("cyan", "--fix")}                 Show fix suggestions for conflicts
+    ${this.c("cyan", "--strict")}              Fail on critical conflicts (for CI/CD)
+    ${this.c("cyan", "-o, --output")} <file>   Export report as JSON
 
   ${this.c("yellow", "EXAMPLES")}
     ${this.c("dim", "# Development with hot reload and dashboard")}
     xavva dev --tui --watch
 
-    ${this.c("dim", "# Quick deploy to specific Tomcat")}
+    ${this.c("dim", "# Deploy to specific Tomcat installation")}
     xavva deploy -p /opt/tomcat --port 8081
-
-    ${this.c("dim", "# Run a class with debugging")}
-    xavva debug com.example.MyClass
-
-    ${this.c("dim", "# Analyze dependencies for conflicts")}
-    xavva deps --verbose
-
-    ${this.c("dim", "# Update safe dependencies (non-breaking only)")}
-    xavva deps --update-safe
-
-    ${this.c("dim", "# Use embedded Tomcat (no installation required)")}
-    xavva deploy --tomcat-version 10.1.52
-
-    ${this.c("dim", "# Auto-install embedded Tomcat without confirmation")}
-    xavva deploy --yes
 
     ${this.c("dim", "# Build and deploy as .war file")}
     xavva deploy --war
 
-    ${this.c("dim", "# Manage embedded Tomcat installations")}
+    ${this.c("dim", "# Run a class with debugging")}
+    xavva debug com.example.MyClass
+
+    ${this.c("dim", "# Use embedded Tomcat (auto-install)")}
+    xavva dev --yes
+    xavva dev --tomcat-version 9.0.115
+
+    ${this.c("dim", "# Analyze and update dependencies")}
+    xavva deps --verbose
+    xavva deps --update-safe
+
+    ${this.c("dim", "# Security audit with auto-fix")}
+    xavva audit --fix
+
+    ${this.c("dim", "# Manage embedded Tomcat")}
     xavva tomcat install
     xavva tomcat status
     xavva tomcat list
-
-    ${this.c("dim", "# Security audit with auto-fix suggestions")}
-    xavva audit --fix
 
   ${this.c("yellow", "CONFIGURATION")}
     Settings are loaded from ${this.c("cyan", "xavva.json")} in the project root:
