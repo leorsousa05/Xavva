@@ -23,6 +23,7 @@ export interface ProjectConfig {
     tui: boolean;
     encoding?: string;
     war?: boolean;
+    cache?: boolean;
 }
 
 export interface AppConfig {
@@ -59,6 +60,7 @@ export interface CLIArguments {
     "updateSafe"?: boolean;
     yes?: boolean;
     war?: boolean;
+    cache?: boolean;
 }
 
 export interface CommandContext {

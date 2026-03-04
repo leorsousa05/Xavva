@@ -30,7 +30,10 @@ export class BuildService {
 			this.cache.clearCache();
 		}
 
-		if (!incremental && !this.projectConfig.skipBuild) {
+		// Cache só é usado se --cache for passado ou em modo incremental
+		const useCache = this.projectConfig.cache || incremental;
+		
+		if (useCache && !incremental && !this.projectConfig.skipBuild) {
 			if (!this.projectConfig.clean && !this.cache.shouldRebuild(this.projectConfig.buildTool, this.projectService)) {
 				Logger.success("Build cache hit! Skipping full build.");
 				return;
@@ -43,8 +46,8 @@ export class BuildService {
 		if (this.projectConfig.buildTool === 'maven') {
 			command.push(process.platform === "win32" ? "mvn.cmd" : "mvn");
 
-			// Smart Offline: Se o pom.xml não mudou e é incremental ou rebuild forçado (mas cache existe), usa -o
-			if (!this.cache.shouldRebuild('maven', this.projectService)) {
+			// Smart Offline: só usa -o se cache estiver habilitado e pom não mudou
+			if (useCache && !this.cache.shouldRebuild('maven', this.projectService)) {
 				command.push("-o");
 			}
 

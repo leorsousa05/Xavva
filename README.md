@@ -209,6 +209,7 @@ Create `xavva.json` in your project root:
 | `-c, --clean`          | Clean logs before start         |
 | `-s, --no-build`       | Skip initial build              |
 | `-W, --war`            | Generate .war file (vs exploded)|
+| `--cache`              | Use build cache (faster)        |
 | `-y, --yes`            | Auto-install Tomcat (no prompt) |
 | `-V, --verbose`        | Detailed output                 |
 

@@ -37,6 +37,7 @@ export class ConfigManager {
                 "tomcat-version": { type: "string" },
                 yes: { type: "boolean", short: "y" },
                 war: { type: "boolean", short: "W" },
+                cache: { type: "boolean" },
             },
             strict: false,
             allowPositionals: true,
@@ -158,6 +159,7 @@ export class ConfigManager {
                 tui: !!(cliValues.tui ?? xavvaJson.tui),
                 encoding: cliValues.encoding || xavvaJson.encoding || "",
                 war: !!(cliValues.war ?? xavvaJson.war),
+                cache: !!(cliValues.cache ?? xavvaJson.cache),
             }
         };
 

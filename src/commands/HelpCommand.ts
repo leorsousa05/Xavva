@@ -53,6 +53,7 @@ export class HelpCommand implements Command {
 
   ${this.c("yellow", "BUILD OPTIONS")}  ${this.c("dim", "(for deploy, dev, build)")}
     ${this.c("cyan", "-W, --war")}             Generate .war file instead of exploded directory
+    ${this.c("cyan", "--cache")}              Use build cache (skip if no changes)
 
   ${this.c("yellow", "TOMCAT OPTIONS")}  ${this.c("dim", "(for embedded Tomcat)")}
     ${this.c("cyan", "--tomcat-version")} <v>   Tomcat version to install (default: 10.1.52)
