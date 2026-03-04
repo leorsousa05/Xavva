@@ -505,13 +505,17 @@ export class DependencyAnalyzerService {
 			const currentVersion = update.currentVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 			
 			// Regex para encontrar <version> dentro do bloco da dependência
+			// Captura: grupo 1 = tudo antes da versão incluindo <version>
+			//          grupo 2 = a versão atual
+			//          grupo 3 = </version> e resto
 			const depPattern = new RegExp(
-				`(<dependency>\\s*<groupId>${groupId}</groupId>\\s*<artifactId>${artifactId}</artifactId>(?:\\s*<version>)${currentVersion}(</version>))`,
+				`(<dependency>\\s*<groupId>${groupId}</groupId>\\s*<artifactId>${artifactId}</artifactId>\\s*<version>)(${currentVersion})(</version>)`,
 				'g'
 			);
 			
 			if (depPattern.test(content)) {
-				content = content.replace(depPattern, `$1${update.latestVersion}$2`);
+				// Substitui apenas o grupo 2 (a versão), mantendo as tags
+				content = content.replace(depPattern, `$1${update.latestVersion}$3`);
 				result.updated++;
 				modified = true;
 			} else {
