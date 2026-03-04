@@ -1,5 +1,6 @@
 import { expect, test, describe, spyOn, mock } from "bun:test";
 import { CommandRegistry } from "../src/commands/CommandRegistry";
+import { ProcessExitError } from "../src/utils/processManager";
 import type { Command } from "../src/commands/Command";
 import type { AppConfig, CLIArguments } from "../src/types/config";
 
@@ -9,6 +10,26 @@ mock.module("../src/utils/ui", () => ({
         error: () => {},
         log: () => {},
         banner: () => {}
+    }
+}));
+
+// Mock do ProcessManager para evitar registro de handlers de sinal
+mock.module("../src/utils/processManager", () => ({
+    ProcessManager: {
+        getInstance: () => ({
+            shutdown: async (code: number) => {
+                throw new ProcessExitError(code as any);
+            },
+            setExitCode: () => {},
+            getExitCode: () => 0,
+            onShutdown: () => () => {}
+        })
+    },
+    ProcessExitError: class ProcessExitError extends Error {
+        constructor(public readonly code: number) {
+            super(`Process exited with code ${code}`);
+            this.name = 'ProcessExitError';
+        }
     }
 }));
 
@@ -46,20 +67,12 @@ describe("CommandRegistry", () => {
 
     test("deve tratar comando inexistente chamando o Help e saindo", async () => {
         const registry = new CommandRegistry();
-        const exitSpy = spyOn(process, "exit").mockImplementation((code?: number | string | null | undefined): never => {
-            throw new Error(`Exit called with ${code}`);
-        });
 
         const config = {} as AppConfig;
         const args = {} as CLIArguments;
 
-        try {
-            await registry.execute("unknown", config, args);
-        } catch (e: any) {
-            expect(e.message).toBe("Exit called with 1");
-        }
-
-        expect(exitSpy).toHaveBeenCalled();
-        exitSpy.mockRestore();
+        await expect(registry.execute("unknown", config, args))
+            .rejects
+            .toThrow(ProcessExitError);
     });
 });

@@ -1,11 +1,12 @@
 import type { Command } from "./Command";
-import type { AppConfig } from "../types/config";
+import type { AppConfig, CLIArguments } from "../types/config";
 import { Logger } from "../utils/ui";
 import fs from "fs";
 import path from "path";
+import os from "os";
 
 export class DoctorCommand implements Command {
-	async execute(config: AppConfig, values: any = {}): Promise<void> {
+	async execute(config: AppConfig, values: CLIArguments = {}): Promise<void> {
 		Logger.section("Xavva Doctor - Ambiente");
 
 		this.check(
@@ -252,7 +253,7 @@ export class DoctorCommand implements Command {
         
         // URL para o JetBrains Runtime 21 SDK Windows x64
         const url = "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.6-windows-x64-b895.97.tar.gz";
-        const installDir = path.join(require("os").homedir(), ".xavva", "jdk-dcevm");
+        const installDir = path.join(os.homedir(), ".xavva", "jdk-dcevm");
         
         // Limpar instalação anterior se existir
         if (fs.existsSync(installDir)) {
@@ -344,7 +345,7 @@ export class DoctorCommand implements Command {
 			                        
 			                                    Logger.newline();
 			                                    Logger.warn("IMPORTANTE: Reinicie seu terminal (ou o VS Code) para as mudanças surtirem efeito.");
-			                                } catch (e: any) {
+			                                } catch (e) {
 			                        
 			            			Logger.error(`Falha na instalação: ${e.message}`);
 		}

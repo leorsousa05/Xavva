@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from "fs";
+import { existsSync, readdirSync, statSync, readFileSync } from "fs";
 import path from "path";
 import type { ProjectConfig } from "../types/config";
 
@@ -96,7 +96,7 @@ export class ProjectService {
             const pomPath = path.join(root, "pom.xml");
             if (existsSync(pomPath)) {
                 try {
-                    const content = require("fs").readFileSync(pomPath, "utf8");
+                    const content = readFileSync(pomPath, "utf8");
                     // Regex simples para capturar IDs de profiles no pom.xml
                     const profileRegex = /<profile>[\s\S]*?<id>(.*?)<\/id>/g;
                     let match;
@@ -112,7 +112,7 @@ export class ProjectService {
 
             if (targetPath) {
                 try {
-                    const content = require("fs").readFileSync(targetPath, "utf8");
+                    const content = readFileSync(targetPath, "utf8");
                     // Em Gradle, perfis costumam ser tratados via propriedades ou tasks de ambiente
                     // Vamos procurar por padrões comuns como "if (project.hasProperty('profile'))" 
                     // ou simplesmente sugerir o uso de -P

@@ -38,7 +38,7 @@ export class BuildService {
 		}
 
 		const command = [];
-		const env: any = { ...process.env };
+		const env: Record<string, string | undefined> = { ...process.env };
 		
 		if (this.projectConfig.buildTool === 'maven') {
 			command.push(process.platform === "win32" ? "mvn.cmd" : "mvn");
@@ -57,6 +57,10 @@ export class BuildService {
 			}
 			command.push("-Dmaven.test.skip=true", "-Dmaven.javadoc.skip=true");
 			if (this.projectConfig.profile) command.push(`-P${this.projectConfig.profile}`);
+			if (this.projectConfig.encoding) {
+				command.push(`-Dproject.build.sourceEncoding=${this.projectConfig.encoding}`);
+				command.push(`-Dproject.reporting.outputEncoding=${this.projectConfig.encoding}`);
+			}
 
 			env.MAVEN_OPTS = "-Xms512m -Xmx1024m -XX:+UseParallelGC";
 		} else {
@@ -70,6 +74,9 @@ export class BuildService {
 			}
 			command.push("-x", "test", "-x", "javadoc");
 			if (this.projectConfig.profile) command.push(`-Pprofile=${this.projectConfig.profile}`);
+			if (this.projectConfig.encoding) {
+				command.push(`-Dfile.encoding=${this.projectConfig.encoding}`);
+			}
 
 			env.GRADLE_OPTS = "-Xmx1024m -Dorg.gradle.daemon=true";
 		}

@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import type { ProjectService } from "./ProjectService";
 
 export interface CacheData {
     lastConfigHash: string;
@@ -41,7 +42,7 @@ export class BuildCacheService {
         return crypto.createHash("md5").update(hash).digest("hex");
     }
 
-    shouldRebuild(tool: "maven" | "gradle", projectService?: any): boolean {
+    shouldRebuild(tool: "maven" | "gradle", projectService?: ProjectService): boolean {
         if (!fs.existsSync(this.cacheFile)) return true;
 
         try {

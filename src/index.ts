@@ -11,6 +11,7 @@ import { LogsCommand } from "./commands/LogsCommand";
 import { DocsCommand } from "./commands/DocsCommand";
 import { AuditCommand } from "./commands/AuditCommand";
 import { ProfilesCommand } from "./commands/ProfilesCommand";
+import { DepsCommand } from "./commands/DepsCommand";
 
 import { ProjectService } from "./services/ProjectService";
 import { TomcatService } from "./services/TomcatService";
@@ -23,26 +24,31 @@ import { LogAnalyzer } from "./services/LogAnalyzer";
 
 import pkg from "../package.json";
 import { Logger } from "./utils/ui";
+import { ProcessManager } from "./utils/processManager";
 import type { AppConfig, CLIArguments } from "./types/config";
 
 async function main() {
+	const processManager = ProcessManager.getInstance();
 	const { config, positionals, values } = await ConfigManager.load();
 
 	if (values.version) {
 		Logger.log(`v${pkg.version}`);
-		process.exit(0);
+		await processManager.shutdown(0);
 	}
 
-	const commandNames = ["deploy", "build", "start", "dev", "doctor", "run", "debug", "logs", "docs", "audit", "profiles"];
+	const commandNames = ["deploy", "build", "start", "dev", "doctor", "run", "debug", "logs", "docs", "audit", "profiles", "deps"];
 	const commandName = positionals.find(p => commandNames.includes(p)) || "deploy";
 
 	if (!values.help && !values.tui) {
-		Logger.banner(commandName, config.project.profile);
+		Logger.banner(commandName, config.project.profile, config.project.encoding);
+		if (config.project.encoding) {
+			Logger.config("Encoding", config.project.encoding);
+		}
 	}
 
 	if (values.help) {
 		new HelpCommand().execute(config, values);
-		process.exit(0);
+		await processManager.shutdown(0);
 	}
 
 	// 1. Instanciar Serviços (Injeção de Dependência)
@@ -73,6 +79,7 @@ async function main() {
 	registry.register("docs", new DocsCommand());
 	registry.register("audit", new AuditCommand(auditService));
 	registry.register("profiles", new ProfilesCommand(projectService));
+	registry.register("deps", new DepsCommand());
 	registry.register("deploy", deployCmd);
 	registry.register("dev", deployCmd);
 
@@ -97,4 +104,7 @@ async function main() {
 	}
 }
 
-main().catch(console.error);
+main().catch(async (error) => {
+	console.error(error);
+	await ProcessManager.getInstance().shutdown(1);
+});

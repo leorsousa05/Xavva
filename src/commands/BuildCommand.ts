@@ -2,6 +2,7 @@ import type { Command } from "./Command";
 import type { AppConfig } from "../types/config";
 import { BuildService } from "../services/BuildService";
 import { Logger } from "../utils/ui";
+import { ProcessManager } from "../utils/processManager";
 
 export class BuildCommand implements Command {
     constructor(private buildService: BuildService) {}
@@ -14,9 +15,10 @@ export class BuildCommand implements Command {
         try {
             await this.buildService.runBuild();
             Logger.success("Build completed successfully!");
-        } catch (error: any) {
-            Logger.error(error.message);
-            process.exit(1);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            Logger.error(message);
+            await ProcessManager.getInstance().shutdown(1);
         }
     }
 }

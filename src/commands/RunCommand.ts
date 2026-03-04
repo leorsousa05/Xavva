@@ -2,6 +2,9 @@ import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
 import { Logger } from "../utils/ui";
 import path from "path";
+import fs from "fs";
+import { glob } from "glob";
+import readline from "readline";
 
 export class RunCommand implements Command {
     async execute(config: AppConfig, args?: CLIArguments): Promise<void> {
@@ -39,6 +42,10 @@ export class RunCommand implements Command {
             "-classpath", finalCp,
         ];
 
+        if (config.project.encoding) {
+            javaArgs.push(`-Dfile.encoding=${config.project.encoding}`);
+        }
+
         if (isDebug) {
             javaArgs.push("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005");
         }
@@ -70,8 +77,6 @@ export class RunCommand implements Command {
     }
 
     private async discoverClass(simpleName: string): Promise<string | null> {
-        const fs = require("fs");
-        const glob = require("glob");
         const basePaths = [
             path.join(process.cwd(), "src/main/java"),
             path.join(process.cwd(), "src/test/java"),
@@ -134,14 +139,14 @@ export class RunCommand implements Command {
             Logger.log(`  [${i + 1}] ${c}`);
         });
 
-        const readline = require("readline").createInterface({
+        const rl = readline.createInterface({
             input: process.stdin,
             output: process.stdout
         });
 
         return new Promise((resolve) => {
-            readline.question(`  Escolha a classe (1-${uniqueClasses.length}) ou [C]ancelar: `, (answer: string) => {
-                readline.close();
+            rl.question(`  Escolha a classe (1-${uniqueClasses.length}) ou [C]ancelar: `, (answer: string) => {
+                rl.close();
                 const idx = parseInt(answer) - 1;
                 if (!isNaN(idx) && uniqueClasses[idx]) {
                     resolve(uniqueClasses[idx]);
@@ -154,7 +159,6 @@ export class RunCommand implements Command {
     }
 
     private async loadFromHistory(): Promise<string | null> {
-        const fs = require("fs");
         const xavvaDir = path.join(process.cwd(), ".xavva");
         const historyFile = path.join(xavvaDir, "history.json");
 
@@ -169,14 +173,14 @@ export class RunCommand implements Command {
                 Logger.log(`  [${i + 1}] ${c}${i === 0 ? " (Enter)" : ""}`);
             });
 
-            const readline = require("readline").createInterface({
+            const rl = readline.createInterface({
                 input: process.stdin,
                 output: process.stdout
             });
 
             return new Promise((resolve) => {
-                readline.question(`  Escolha a classe (1-${Math.min(history.length, 5)}) ou [C]ancelar: `, (answer: string) => {
-                    readline.close();
+                rl.question(`  Escolha a classe (1-${Math.min(history.length, 5)}) ou [C]ancelar: `, (answer: string) => {
+                    rl.close();
                     if (!answer.trim()) {
                         resolve(history[0]);
                         return;
@@ -195,7 +199,6 @@ export class RunCommand implements Command {
     }
 
     private saveToHistory(className: string) {
-        const fs = require("fs");
         const xavvaDir = path.join(process.cwd(), ".xavva");
         const historyFile = path.join(xavvaDir, "history.json");
 
@@ -214,7 +217,6 @@ export class RunCommand implements Command {
     }
 
     private async createPathingJar(dependencyCp: string): Promise<string> {
-        const fs = require("fs");
         const xavvaDir = path.join(process.cwd(), ".xavva");
         const jarPath = path.join(xavvaDir, "classpath.jar");
 
@@ -285,7 +287,6 @@ export class RunCommand implements Command {
     }
 
     private async getClasspath(config: AppConfig): Promise<{ localCp: string, dependencyCp: string }> {
-        const fs = require("fs");
         const xavvaDir = path.join(process.cwd(), ".xavva");
         const cpFile = path.join(xavvaDir, "classpath.txt");
 

@@ -60,8 +60,9 @@ export class AuditCommand implements Command {
             Logger.info("Total de Falhas", totalVulns);
             Logger.info("Relatório gerado via", "OSV.dev (Open Source Vulnerability Database)");
 
-        } catch (e: any) {
-            Logger.error(e.message);
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            Logger.error(message);
         }
     }
 

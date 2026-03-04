@@ -19,6 +19,7 @@ export interface ProjectConfig {
     cleanLogs: boolean;
     grep?: string;
     tui: boolean;
+    encoding?: string;
 }
 
 export interface AppConfig {
@@ -31,6 +32,7 @@ export interface CLIArguments {
     tool?: string;
     name?: string;
     port?: string;
+    encoding?: string;
     "no-build"?: boolean;
     scan?: boolean;
     clean?: boolean;
@@ -46,6 +48,8 @@ export interface CLIArguments {
     fix?: boolean;
     incremental?: boolean;
     tui?: boolean;
+    output?: string;
+    strict?: boolean;
 }
 
 export interface CommandContext {

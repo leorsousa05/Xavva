@@ -19,6 +19,32 @@ export interface JarAuditResult {
     vulnerabilities: Vulnerability[];
 }
 
+// Interfaces para resposta da OSV API
+interface OSVEvent {
+    fixed?: string;
+}
+
+interface OSVRange {
+    events: OSVEvent[];
+}
+
+interface OSVAffected {
+    ranges: OSVRange[];
+}
+
+interface OSVVulnerability {
+    id: string;
+    summary?: string;
+    details?: string;
+    affected?: OSVAffected[];
+    database_specific?: { severity?: string };
+    advisories?: { url: string }[];
+}
+
+interface OSVResponse {
+    vulns?: OSVVulnerability[];
+}
+
 export class AuditService {
     constructor(private tomcatConfig: TomcatConfig) {}
 
@@ -120,22 +146,22 @@ export class AuditService {
                 })
             });
 
-            const data = await response.json();
+            const data = (await response.json()) as OSVResponse;
             if (!data.vulns) return [];
 
-            return data.vulns.map((v: any) => ({
+            return data.vulns.map((v) => ({
                 id: v.id,
                 summary: v.summary || v.details?.substring(0, 100) + "...",
                 details: v.details,
                 severity: this.extractSeverity(v),
-                fixedIn: v.affected?.[0]?.ranges?.[0]?.events?.find((e: any) => e.fixed)?.fixed
+                fixedIn: v.affected?.[0]?.ranges?.[0]?.events?.find((e) => e.fixed)?.fixed
             }));
         } catch (e) {
             return [];
         }
     }
 
-    private extractSeverity(vuln: any): string {
+    private extractSeverity(vuln: OSVVulnerability): string {
         if (vuln.database_specific?.severity) return vuln.database_specific.severity;
         if (vuln.advisories?.[0]?.url?.includes("github.com/advisories")) {
             const d = (vuln.details || "").toLowerCase();

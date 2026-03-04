@@ -1,4 +1,10 @@
 import { Logger } from "../utils/ui";
+import { ProcessManager } from "../utils/processManager";
+import { 
+    MAX_LOG_SCROLLBUFFER, 
+    DASHBOARD_REFRESH_INTERVAL_MS,
+    DASHBOARD_LOG_SLICE_LINES 
+} from "../utils/constants";
 import type { AppConfig } from "../types/config";
 import os from "os";
 
@@ -8,7 +14,7 @@ export class DashboardService {
     private maxLogLines: number = 0;
     private status: string = "IDLE";
     private statusColor: string = Logger.C.dim;
-    private gitContext: any = null;
+    private gitContext: { branch: string; commit: string } | null = null;
     private actions: Map<string, () => void> = new Map();
 
     constructor(private config: AppConfig) {
@@ -17,6 +23,23 @@ export class DashboardService {
             this.gitContext = Logger.getGitContext();
             this.maxLogLines = process.stdout.rows - 6;
             this.setupTui();
+            this.registerShutdownHandlers();
+        }
+    }
+
+    private registerShutdownHandlers() {
+        const processManager = ProcessManager.getInstance();
+        processManager.onShutdown(() => {
+            this.restoreTerminal();
+        });
+    }
+
+    private restoreTerminal() {
+        if (this.isTui) {
+            process.stdout.write("\x1B[?1049l"); // Restore buffer
+            process.stdout.write("\x1B[?25h"); // Show cursor
+            process.stdin.setRawMode(false);
+            process.stdin.pause();
         }
     }
 
@@ -72,8 +95,8 @@ export class DashboardService {
         if (this.isTui) {
             const lines = message.split("\n");
             this.logLines.push(...lines);
-            if (this.logLines.length > 1000) { // Limite de scrollbuffer
-                this.logLines = this.logLines.slice(-1000);
+            if (this.logLines.length > MAX_LOG_SCROLLBUFFER) {
+                this.logLines = this.logLines.slice(-DASHBOARD_LOG_SLICE_LINES);
             }
             this.render();
         } else {
@@ -112,13 +135,8 @@ export class DashboardService {
         process.stdout.write(output);
     }
 
-    private exit() {
-        if (this.isTui) {
-            process.stdout.write("\x1B[?1049l"); // Restore buffer
-            process.stdout.write("\x1B[?25h"); // Show cursor
-            process.stdin.setRawMode(false);
-            process.stdin.pause();
-        }
-        process.exit(0);
+    private async exit() {
+        this.restoreTerminal();
+        await ProcessManager.getInstance().shutdown(0);
     }
 }

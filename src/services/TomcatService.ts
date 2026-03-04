@@ -2,6 +2,9 @@ import type { TomcatConfig, AppConfig } from "../types/config";
 import { Logger } from "../utils/ui";
 import type { Subprocess } from "bun";
 import { ProjectService } from "./ProjectService";
+import { existsSync, mkdirSync, writeFileSync, promises as fs } from "fs";
+import path from "path";
+import os from "os";
 
 export class TomcatService {
 	private activeConfig: TomcatConfig;
@@ -43,9 +46,6 @@ export class TomcatService {
 	}
 
 	async clearWebapps() {
-		const fs = require("fs").promises;
-		const { existsSync } = require("fs");
-		const path = require("path");
 		const webappsPath = path.join(this.activeConfig.path, "webapps");
 		const workPath = path.join(this.activeConfig.path, "work");
 		const tempPath = path.join(this.activeConfig.path, "temp");
@@ -95,9 +95,6 @@ export class TomcatService {
 	}
 
 	private async ensureHotswapAgent(): Promise<string | null> {
-		const fs = require("fs");
-		const path = require("path");
-		const os = require("os");
 		const agentDir = path.join(os.homedir(), ".xavva", "agents");
 		const agentPath = path.join(agentDir, "hotswap-agent-2.0.3.jar");
 
@@ -134,7 +131,7 @@ export class TomcatService {
 				
 				let javaBin = "java";
 				if (process.env.JAVA_HOME) {
-					javaBin = require("path").join(process.env.JAVA_HOME, "bin", "java.exe");
+					javaBin = path.join(process.env.JAVA_HOME, "bin", "java.exe");
 				}
 
 				const javaVer = Bun.spawnSync([javaBin, "-version"]);
@@ -159,14 +156,13 @@ export class TomcatService {
 					"--add-opens=java.desktop/java.beans=ALL-UNNAMED"
 				);
 				
-				const fs = require("fs");
-				const path = require("path");
+
 				const xavvaDir = path.join(process.cwd(), ".xavva");
-				if (!fs.existsSync(xavvaDir)) fs.mkdirSync(xavvaDir, { recursive: true });
+				if (!existsSync(xavvaDir)) mkdirSync(xavvaDir, { recursive: true });
 				
 				const propsPath = path.join(xavvaDir, "hotswap-agent.properties");
 				const propsContent = `autoHotswap=true\nautoHotswap.delay=500\nwatchResources=false\nLOGGER=info`;
-				fs.writeFileSync(propsPath, propsContent);
+				writeFileSync(propsPath, propsContent);
 				
 				catalinaOpts.push(`-Dhotswap-agent.properties.path=${propsPath}`);
 
@@ -185,6 +181,10 @@ export class TomcatService {
 			"-Dorg.apache.jasper.compiler.disableSmap=false",
 			"-Dorg.apache.jasper.compiler.classdebuginfo=true"
 		);
+
+		if (config.project.encoding) {
+			catalinaOpts.push(`-Dfile.encoding=${config.project.encoding}`);
+		}
 
 		if (config.project.skipScan) {
 			catalinaOpts.push(

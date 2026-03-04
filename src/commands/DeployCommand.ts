@@ -102,8 +102,9 @@ export class DeployCommand implements Command {
             };
 
             tomcat.start(config, isWatching);
-        } catch (error: any) {
-            Logger.error(error.message);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            Logger.error(message);
             throw error;
         }
     }

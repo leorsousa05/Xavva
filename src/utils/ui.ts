@@ -1,4 +1,5 @@
 import pkg from "../../package.json";
+import type { DashboardService } from "../services/DashboardService";
 
 export class Logger {
     public static readonly C = {
@@ -22,9 +23,9 @@ export class Logger {
     private static lastDomain = "";
     private static lastHotswapMsg = "";
     private static activeSpinnerMsg = "";
-    private static dashboard: any = null;
+    private static dashboard: DashboardService | null = null;
 
-    static setDashboard(dashboard: any) {
+    static setDashboard(dashboard: DashboardService) {
         this.dashboard = dashboard;
     }
 
@@ -61,7 +62,7 @@ export class Logger {
         }
     }
 
-    static banner(command?: string, profile?: string) {
+    static banner(command?: string, profile?: string, encoding?: string) {
         console.clear();
         const git = this.getGitContext();
         const name = (process.cwd().split(/[/\\]/).pop() || "PROJECT").toUpperCase();
@@ -75,8 +76,9 @@ export class Logger {
         console.log(`  ${this.C.bold}${this.C.cyan}X A V V A${this.C.reset} ${this.C.dim}─${this.C.reset} ${this.C.bold}${this.C.white}${name}${this.C.reset}`);
         
         const profileInfo = profile ? ` ${this.C.dim}•${this.C.reset} ${this.C.yellow}♦ ${profile.toUpperCase()}${this.C.reset}` : "";
+        const encodingInfo = encoding ? ` ${this.C.dim}•${this.C.reset} ${this.C.cyan}⚓ ${encoding.toUpperCase()}${this.C.reset}` : "";
         const gitInfo = git.branch ? `${this.C.magenta}🌿 ${git.branch}${this.C.reset} ${this.C.dim}•${this.C.reset} ${this.C.yellow}${git.hash}${this.C.reset}` : "";
-        console.log(`  ${this.C.dim}📦 ${version}${profileInfo}${gitInfo ? `  ${this.C.dim}•${this.C.reset}  ${gitInfo}` : ""}${this.C.reset}`);
+        console.log(`  ${this.C.dim}📦 ${version}${profileInfo}${encodingInfo}${gitInfo ? `  ${this.C.dim}•${this.C.reset}  ${gitInfo}` : ""}${this.C.reset}`);
         
         console.log(`  ${modeColor}${this.C.bold}⬢ ${modeIcon} ${mode} MODE${this.C.reset}`);
         console.log(`  ${this.C.dim}─────────────────────────────────────────────────${this.C.reset}`);

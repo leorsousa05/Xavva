@@ -1,78 +1,204 @@
-# XAVVA 🚀 (Windows Only) `v2.0.3`
+# XAVVA CLI 🚀
 
-Xavva é uma CLI de alto desempenho construída com **Bun** para automatizar o ciclo de desenvolvimento de aplicações Java (Maven/Gradle) rodando no Apache Tomcat. Ela foi desenhada especificamente para desenvolvedores que buscam a velocidade de ambientes modernos (como Node.js/Vite) dentro do ecossistema Java Enterprise.
+> Ultra-fast development toolkit for Java Enterprise (Tomcat) on Windows
 
----
+[![Version](https://img.shields.io/badge/version-2.0.3-blue.svg)](https://github.com/leorsousa05/Xavva)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## 🛠️ Por que Xavva?
-
-Desenvolver para Java/Tomcat tradicionalmente envolve ciclos lentos de `clean install`, `war deploy` e restarts de servidor. O Xavva quebra esse paradigma ao introduzir um fluxo de **Hot-Reload incremental**, onde apenas o que mudou é enviado ao servidor.
-
-### ⚡ Funcionalidades de Elite
-
-- **Interactive Dashboard (TUI)**: Um painel em tempo real (`--tui`) com métricas de sistema, status do servidor e atalhos rápidos (Restart, Clear, Quit).
-- **Smart Log Analyzer**: Logs inteligentes que escondem ruídos do framework (Stack Folding) e destacam a causa raiz de erros Java.
-- **Ultra-Fast Hot Swap**: Compilação incremental e injeção direta de arquivos `.class` e recursos (JSP, HTML, CSS, JS) no Tomcat em execução sem restart.
-- **Gradle & Maven Native**: Suporte robusto para ambos os ecossistemas, incluindo extração automática de classpath para execução de classes standalone (`run`/`debug`).
-- **Segurança & Robustez**: Auditoria de dependências (`.jar`) e execução protegida contra *Command Injection* no PowerShell.
-- **Pathing JAR (Windows)**: Contorna limites de caracteres do Windows em classpaths gigantes.
-- **Auto-Healing**: Diagnóstico e reparo automático de problemas comuns de ambiente.
+Xavva is a high-performance CLI built with **Bun** that transforms the Java/Tomcat development experience. It brings modern development workflows (like Node.js/Vite) to the Java Enterprise ecosystem with hot-reload, smart logging, and automated deployment.
 
 ---
 
-## 🚀 Começo Rápido
+## ✨ Features
 
-### Instalação
+- ⚡ **Hot Reload** — Incremental compilation and class injection without server restart
+- 📊 **Interactive Dashboard** — Real-time TUI with system metrics and shortcuts
+- 🧠 **Smart Log Analyzer** — Stack trace folding and root cause highlighting
+- 🔒 **Security Audit** — Automated vulnerability scanning via OSV.dev
+- 📦 **Dependency Analysis** — Detect conflicts and outdated dependencies
+- 🎯 **Maven & Gradle** — Native support for both build tools
+- 🔧 **Auto-Healing** — Automatic diagnosis and repair of common issues
+
+---
+
+## 📦 Installation
+
 ```powershell
-# Instalação global via NPM
+# Via NPM
 npm install -g @archznn/xavva
 
-# Iniciar em modo Dashboard (TUI)
-xavva dev --tui
+# Or run directly with Bun
+bunx @archznn/xavva dev
 ```
 
 ---
 
-## 📖 Referência de Comandos
+## 🚀 Quick Start
 
-O Xavva 2.0 utiliza uma arquitetura modular de comandos e serviços.
+```bash
+# Start development mode with dashboard
+xavva dev --tui
 
-### 1. Modo Desenvolvimento (`xavva dev`)
-O comando principal para o dia a dia. Ativa o monitoramento de arquivos e o Hot-Reload.
-- **Flags úteis**: 
-  - `--tui`: Ativa o Dashboard interativo no terminal.
-  - `--no-build`: Pula o build inicial.
-  - `--watch`: Ativa o modo de observação de arquivos (padrão em `dev`).
-  - `--port 8081`: Define uma porta específica para o Tomcat.
+# Deploy to Tomcat
+xavva deploy
 
-### 2. Configuração de Projeto (`xavva.json`)
-Crie um arquivo `xavva.json` na raiz do seu projeto para salvar suas configurações:
+# Analyze dependencies for issues
+xavva deps
+
+# Check for security vulnerabilities
+xavva audit
+```
+
+---
+
+## 📖 Commands
+
+### Core Development
+
+| Command | Description |
+|---------|-------------|
+| `xavva dev` | Full development mode (build + deploy + watch + debug) |
+| `xavva deploy` | Build and deploy application to Tomcat |
+| `xavva build` | Compile project only |
+| `xavva start` | Start Tomcat server only |
+
+### Code Execution
+
+| Command | Description |
+|---------|-------------|
+| `xavva run <class>` | Execute a Java class with automatic classpath |
+| `xavva debug <class>` | Debug a Java class (port 5005) |
+
+### Analysis & Monitoring
+
+| Command | Description |
+|---------|-------------|
+| `xavva logs` | Stream and analyze Tomcat logs in real-time |
+| `xavva deps` | **Analyze dependencies** — detect conflicts, find updates |
+| `xavva audit` | Security audit of JAR files via OSV.dev |
+| `xavva doctor` | Diagnose environment issues (JAVA_HOME, DCEVM) |
+| `xavva profiles` | List available Maven/Gradle profiles |
+| `xavva docs` | Generate endpoint documentation |
+
+---
+
+## 🔍 Dependency Analysis
+
+The `xavva deps` command provides comprehensive dependency analysis:
+
+```bash
+# Basic analysis
+xavva deps
+
+# With verbose output for debugging
+xavva deps --verbose
+
+# Show fix suggestions for conflicts
+xavva deps --fix
+
+# Export report as JSON
+xavva deps --output report.json
+
+# Fail on critical conflicts (useful in CI/CD)
+xavva deps --strict
+```
+
+### What it detects:
+
+- ⚠️ **Version Conflicts** — Same dependency with different versions
+- ⬆️ **Available Updates** — Newer versions in Maven Central
+- 🔴 **Major Updates** — Breaking changes that need attention
+- 📊 **Statistics** — Direct vs transitive dependencies
+
+### Sample output:
+
+```
+══════════════════════════════════════════════════════════
+📊 DEPENDENCY ANALYSIS
+══════════════════════════════════════════════════════════
+
+Statistics:
+  Total: 183 dependencies
+  Direct: 45 | Transitive: 138
+
+⚠️  VERSION CONFLICTS (2)
+  ✖ com.fasterxml.jackson.core:jackson-databind
+     Versions: 2.13.0, 2.12.6
+
+⬆️  UPDATES AVAILABLE (5)
+  ↑ org.postgresql:postgresql
+     42.2.5 → 42.7.1
+
+⚠️  MAJOR UPDATES (1)
+  ! org.springframework.boot:spring-boot-starter
+     2.5.0 → 3.1.0
+```
+
+---
+
+## ⚙️ Configuration
+
+Create `xavva.json` in your project root:
+
 ```json
 {
   "project": {
-    "appName": "meu-app",
+    "appName": "my-application",
     "buildTool": "maven",
-    "tui": true
+    "profile": "dev",
+    "tui": false
   },
   "tomcat": {
+    "path": "C:/apache-tomcat",
     "port": 8080
   }
 }
 ```
 
-### 3. Execução de Classes (`xavva run` / `xavva debug`)
-Executa classes Java standalone (`public static void main`) com resolução automática de dependências.
+### CLI Options
+
+| Option | Description |
+|--------|-------------|
+| `-p, --path <path>` | Tomcat installation path |
+| `-t, --tool <tool>` | Build tool: `maven` or `gradle` |
+| `-n, --name <name>` | Application name (WAR context) |
+| `--port <port>` | Tomcat port (default: 8080) |
+| `-P, --profile <prof>` | Maven/Gradle profile |
+| `-e, --encoding <enc>` | Source encoding (utf8, cp1252) |
+| `-w, --watch` | Enable file watching |
+| `--tui` | Interactive dashboard mode |
+| `-d, --debug` | Enable JPDA debugger |
+| `-c, --clean` | Clean logs before start |
+| `-s, --no-build` | Skip initial build |
+| `-V, --verbose` | Detailed output |
 
 ---
 
-## 🏗️ Arquitetura Xavva 2.0
+## 🏗️ Architecture
 
-O Xavva foi refatorado para uma arquitetura de **Injeção de Dependências** e **Serviços Centralizados**:
+Xavva uses a modular service-oriented architecture:
 
-- **DashboardService**: Gerenciamento de interface TUI e interatividade.
-- **LogAnalyzer**: Processamento inteligente de logs e stack traces.
-- **ProjectService**: Inteligência centralizada para descoberta de diretórios e artefatos.
-- **CommandRegistry**: Despacho modular de comandos.
+- **DashboardService** — TUI management and interactivity
+- **LogAnalyzer** — Intelligent log processing
+- **DependencyAnalyzerService** — Dependency conflict detection
+- **ProjectService** — Project structure discovery
+- **BuildService** — Maven/Gradle integration
+- **TomcatService** — Server lifecycle management
 
 ---
-*Desenvolvido para transformar o legado em produtivo. 🚀*
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+---
+
+## 📄 License
+
+MIT License — see [LICENSE](LICENSE) for details.
+
+---
+
+<p align="center">
+  <sub>Built with ❤️ for Java developers who miss modern tooling</sub>
+</p>

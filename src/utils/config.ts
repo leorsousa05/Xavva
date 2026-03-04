@@ -1,6 +1,7 @@
 import { parseArgs } from "util";
 import path from "path";
 import fs from "fs";
+import { DEFAULT_TOMCAT_PORT, DEFAULT_DEBUG_PORT } from "./constants";
 import type { AppConfig, CLIArguments, CommandContext } from "../types/config";
 
 export class ConfigManager {
@@ -25,9 +26,12 @@ export class ConfigManager {
                 profile: { type: "string", short: "P" },
                 grep: { type: "string", short: "G" },
                 verbose: { type: "boolean", short: "V" },
+                encoding: { type: "string", short: "e" },
                 dp: { type: "string" },
                 fix: { type: "boolean" },
                 tui: { type: "boolean" },
+                output: { type: "string", short: "o" },
+                strict: { type: "boolean" },
             },
             strict: false,
             allowPositionals: true,
@@ -63,7 +67,7 @@ export class ConfigManager {
         const config: AppConfig = {
             tomcat: {
                 path: String(cliValues.path || xavvaJson.path || envTomcatPath),
-                port: parseInt(String(cliValues.port || xavvaJson.port || "8080")),
+                port: parseInt(String(cliValues.port || xavvaJson.port || String(DEFAULT_TOMCAT_PORT))),
                 webapps: "webapps",
                 grep: cliValues.grep || xavvaJson.grep ? String(cliValues.grep || xavvaJson.grep) : "",
             },
@@ -78,9 +82,10 @@ export class ConfigManager {
                 quiet: (cliValues.verbose ?? xavvaJson.verbose) ? false : true,
                 verbose: !!(cliValues.verbose ?? xavvaJson.verbose),
                 debug: !!(cliValues.debug ?? xavvaJson.debug ?? isDev ?? isRun),
-                debugPort: parseInt(String(cliValues.dp || xavvaJson.dp || "5005")),
+                debugPort: parseInt(String(cliValues.dp || xavvaJson.dp || String(DEFAULT_DEBUG_PORT))),
                 grep: runClass || (cliValues.grep || xavvaJson.grep ? String(cliValues.grep || xavvaJson.grep) : ""),
                 tui: !!(cliValues.tui ?? xavvaJson.tui),
+                encoding: cliValues.encoding || xavvaJson.encoding || "",
             }
         };
 

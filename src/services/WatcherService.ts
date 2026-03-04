@@ -1,6 +1,7 @@
 import { watch } from "fs";
 import { Logger } from "../utils/ui";
 import { DeployCommand } from "../commands/DeployCommand";
+import { WATCHER_DEBOUNCE_MS, WATCHER_COOLING_MS } from "../utils/constants";
 import type { AppConfig } from "../types/config";
 
 export class WatcherService {
@@ -19,7 +20,7 @@ export class WatcherService {
 
             if (this.coolingFiles.has(filename)) return;
             this.coolingFiles.add(filename);
-            setTimeout(() => this.coolingFiles.delete(filename), 500);
+            setTimeout(() => this.coolingFiles.delete(filename), WATCHER_COOLING_MS);
 
             if (this.isIgnored(filename)) return;
 
@@ -47,7 +48,7 @@ export class WatcherService {
             this.debounceTimer = setTimeout(() => {
                 this.run(this.pendingFullBuild ? false : true);
                 this.pendingFullBuild = false;
-            }, 1000);
+            }, WATCHER_DEBOUNCE_MS);
         });
     }
 

@@ -2,6 +2,7 @@ import type { Command } from "./Command";
 import type { AppConfig } from "../types/config";
 import { TomcatService } from "../services/TomcatService";
 import { Logger } from "../utils/ui";
+import { ProcessManager } from "../utils/processManager";
 
 export class StartCommand implements Command {
     constructor(private tomcat: TomcatService) {}
@@ -20,9 +21,10 @@ export class StartCommand implements Command {
             tomcat.start(config, false);
             
             await new Promise(() => {}); 
-        } catch (error: any) {
-            Logger.error(error.message);
-            process.exit(1);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            Logger.error(message);
+            await ProcessManager.getInstance().shutdown(1);
         }
     }
 }

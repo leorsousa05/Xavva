@@ -4,46 +4,100 @@ import pkg from "../../package.json";
 
 export class HelpCommand implements Command {
     async execute(_config: AppConfig, _args?: CLIArguments): Promise<void> {
+        const version = pkg.version;
+        
         console.log(`
-🛠️  XAVVA CLI v${pkg.version} 🚀
----------------------------------------
-Automatização de alta performance para Java Enterprise (Tomcat) no Windows.
-Detecta automaticamente Maven/Gradle e otimiza o ciclo de desenvolvimento.
+  ${this.c("cyan", "▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓")}
+  ${this.c("cyan", "▓")}                                              ${this.c("cyan", "▓")}
+  ${this.c("cyan", "▓")}   ${this.c("bold", "XAVVA")} ${this.c("dim", `v${version}`)} ${this.c("gray", "— Java/Tomcat Dev CLI")}           ${this.c("cyan", "▓")}
+  ${this.c("cyan", "▓")}                                              ${this.c("cyan", "▓")}
+  ${this.c("cyan", "▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓")}
 
-Comandos principais:
-  dev           🚀 MODO COMPLETO: Build + Deploy + Watch + Debug.
-  deploy        (Padrão) Compila, sincroniza e inicia o servidor.
-  logs          📋 Tail inteligente (catalina.out) com Smart Folding.
-  run / debug   🚀 Executa classes standalone com Pathing JAR (Windows).
-  doctor        🩺 Diagnóstico e reparo de ambiente (DCEVM, JAVA_HOME).
-  audit         🛡️ Auditoria de segurança em JARs via OSV.dev.
-  profiles      🏷️ Lista perfis de build disponíveis (Maven Profiles).
-  docs          📖 Mapeamento estático de Endpoints e JSPs.
-  build / start Comandos granulares de compilação ou startup.
+  ${this.c("yellow", "USAGE")}
+    xavva <command> [options]
 
-Opções de Interface:
-  --tui         🖥️  Ativa o Dashboard Interativo (Interface TUI).
-                No modo TUI use: [R] Restart, [L] Clear, [Q] Quit.
-  -w, --watch   👀 Hot Reload: Redeploy incremental de classes e recursos.
-  -c, --clean   🧹 Logs coloridos e simplificados (Recomendado).
-  -V, --verbose 📣 Exibe logs completos do Maven/Gradle.
+  ${this.c("yellow", "COMMANDS")}
+    ${this.c("green", "dev")}              Start development mode (build + deploy + watch)
+    ${this.c("green", "deploy")}           Build and deploy to Tomcat (default)
+    ${this.c("green", "build")}            Compile project only
+    ${this.c("green", "start")}            Start Tomcat server only
+    ${this.c("green", "run")} <class>      Run a Java class with automatic classpath
+    ${this.c("green", "debug")} <class>    Debug a Java class (port 5005)
+    ${this.c("green", "logs")}             Stream and analyze Tomcat logs
+    ${this.c("green", "deps")}             Analyze dependencies (conflicts, updates)
+    ${this.c("green", "audit")}            Security audit of JAR files
+    ${this.c("green", "doctor")}           Diagnose and fix environment issues
+    ${this.c("green", "profiles")}         List available Maven/Gradle profiles
+    ${this.c("green", "docs")}             Generate endpoint documentation
 
-Opções de Runtime:
-  -d, --debug   🐞 Habilita JPDA Debugging (Porta 5005).
-  -P, --profile Define o profile de build (ex: -P prod).
-  -s, --no-build Pula o build inicial.
-  --fix         🔧 Corrige problemas automaticamente (Doctor).
+  ${this.c("yellow", "OPTIONS")}
+    ${this.c("cyan", "-p, --path")} <path>     Tomcat installation path
+    ${this.c("cyan", "-t, --tool")} <tool>     Build tool: maven | gradle
+    ${this.c("cyan", "-n, --name")} <name>     Application name (WAR context)
+    ${this.c("cyan", "--port")} <port>        Tomcat port (default: 8080)
+    ${this.c("cyan", "-P, --profile")} <prof>  Maven/Gradle profile
+    ${this.c("cyan", "-e, --encoding")} <enc>  Source encoding (utf8, cp1252)
+    
+    ${this.c("cyan", "-w, --watch")}          Enable file watching (hot reload)
+    ${this.c("cyan", "--tui")}                Interactive dashboard mode
+    ${this.c("cyan", "-d, --debug")}          Enable JPDA debugger
+    ${this.c("cyan", "--dp")} <port>          Debugger port (default: 5005)
+    
+    ${this.c("cyan", "-c, --clean")}          Clean logs before start
+    ${this.c("cyan", "-s, --no-build")}       Skip initial build
+    ${this.c("cyan", "-q, --quiet")}          Minimal output
+    ${this.c("cyan", "-V, --verbose")}        Detailed output
+    ${this.c("cyan", "-h, --help")}           Show this help
+    ${this.c("cyan", "-v, --version")}        Show version
 
-Configuração:
-  O Xavva prioriza o arquivo 'xavva.json' na raiz do projeto.
-  Flags de linha de comando: -p (Tomcat Path), -t (Build Tool), -n (WAR Name).
+  ${this.c("yellow", "EXAMPLES")}
+    ${this.c("dim", "# Development with hot reload and dashboard")}
+    xavva dev --tui --watch
 
-Exemplos:
-  xavva dev --tui      Experiência completa com Dashboard.
-  xavva run MyClass    Execução standalone com classpath automático.
-  xavva audit          Verifica vulnerabilidades conhecidas.
+    ${this.c("dim", "# Quick deploy to specific Tomcat")}
+    xavva deploy -p /opt/tomcat --port 8081
 
-*Transformando o legado em produtivo.*
-        `);
+    ${this.c("dim", "# Run a class with debugging")}
+    xavva debug com.example.MyClass
+
+    ${this.c("dim", "# Analyze dependencies for conflicts")}
+    xavva deps --verbose
+
+    ${this.c("dim", "# Security audit with auto-fix suggestions")}
+    xavva audit --fix
+
+  ${this.c("yellow", "CONFIGURATION")}
+    Settings are loaded from ${this.c("cyan", "xavva.json")} in the project root:
+    
+    ${this.c("dim", `{
+      "project": {
+        "appName": "my-app",
+        "buildTool": "maven",
+        "tui": true
+      },
+      "tomcat": {
+        "path": "C:/apache-tomcat",
+        "port": 8080
+      }
+    }`)}
+
+  ${this.c("gray", "────────────────────────────────────────────────────────────")}
+  ${this.c("gray", "Docs: github.com/leorsousa05/Xavva  |  License: MIT")}
+`);
+    }
+
+    private c(color: string, text: string): string {
+        const colors: Record<string, string> = {
+            reset: "\x1b[0m",
+            bold: "\x1b[1m",
+            dim: "\x1b[2m",
+            gray: "\x1b[90m",
+            red: "\x1b[31m",
+            green: "\x1b[32m",
+            yellow: "\x1b[33m",
+            blue: "\x1b[34m",
+            cyan: "\x1b[36m",
+        };
+        return `${colors[color] || ""}${text}\x1b[0m`;
     }
 }
