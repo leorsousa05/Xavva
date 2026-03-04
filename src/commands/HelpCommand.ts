@@ -28,7 +28,7 @@ export class HelpCommand implements Command {
     ${this.c("green", "audit")}            Security audit of JAR files
     ${this.c("green", "doctor")}           Diagnose and fix environment issues
     ${this.c("green", "profiles")}         List available Maven/Gradle profiles
-    ${this.c("green", "tomcat")}           Manage embedded Tomcat (install, list, status)
+    ${this.c("green", "tomcat")}           Manage embedded Tomcat (install, list, installed, use, status)
     ${this.c("green", "docs")}             Generate endpoint documentation
 
   ${this.c("yellow", "GENERAL OPTIONS")}
@@ -90,9 +90,12 @@ export class HelpCommand implements Command {
     xavva audit --fix
 
     ${this.c("dim", "# Manage embedded Tomcat")}
-    xavva tomcat install
+    xavva tomcat list              # List available versions
+    xavva tomcat installed         # List installed versions
+    xavva tomcat install 9.0.115   # Install specific version
+    xavva tomcat use 9.0.115       # Switch to version for this project
     xavva tomcat status
-    xavva tomcat list
+    xavva tomcat uninstall 9.0.115
 
   ${this.c("yellow", "CONFIGURATION")}
     Settings are loaded from ${this.c("cyan", "xavva.json")} in the project root:

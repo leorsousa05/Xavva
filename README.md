@@ -102,16 +102,25 @@ Xavva can automatically download and manage a Tomcat installation for you:
 # First time usage - auto-install Tomcat
 xavva dev --yes
 
-# Or install manually
-xavva tomcat install
+# List available versions to download
+xavva tomcat list
+
+# List already installed versions
+xavva tomcat installed
+
+# Install a specific version
+xavva tomcat install 9.0.115
+
+# Switch to a version for this project
+xavva tomcat use 9.0.115
 
 # Check Tomcat status
 xavva tomcat status
 
-# List available versions
-xavva tomcat list
+# Remove a version
+xavva tomcat uninstall 9.0.115
 
-# Use specific version
+# Or use with flags
 xavva dev --tomcat-version 9.0.115
 ```
 

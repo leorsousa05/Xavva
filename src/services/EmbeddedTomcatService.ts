@@ -79,6 +79,28 @@ export class EmbeddedTomcatService {
     }
 
     /**
+     * Lista todas as versões instaladas
+     */
+    static listInstalledVersions(): string[] {
+        const baseDir = path.join(os.homedir(), ".xavva", "tomcat");
+        if (!existsSync(baseDir)) return [];
+
+        const versions: string[] = [];
+        const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+        
+        for (const entry of entries) {
+            if (entry.isDirectory()) {
+                const catalinaBat = path.join(baseDir, entry.name, "bin", "catalina.bat");
+                if (existsSync(catalinaBat)) {
+                    versions.push(entry.name);
+                }
+            }
+        }
+        
+        return versions.sort();
+    }
+
+    /**
      * Baixa e instala o Tomcat
      */
     async install(): Promise<boolean> {
