@@ -27,24 +27,24 @@ export class EmbeddedTomcatService {
     private downloadUrl: string;
     private isInstalled: boolean = false;
 
-    // Versões estáveis do Tomcat
+    // Versões estáveis do Tomcat (atualizadas: 2026-03-04)
     private static readonly VERSIONS: Record<string, { url: string; sha512: string }> = {
-        "10.1.28": {
-            url: "https://dlcdn.apache.org/tomcat/tomcat-10/v10.1.28/bin/apache-tomcat-10.1.28-windows-x64.zip",
+        "10.1.52": {
+            url: "https://dlcdn.apache.org/tomcat/tomcat-10/v10.1.52/bin/apache-tomcat-10.1.52-windows-x64.zip",
             sha512: ""
         },
-        "9.0.93": {
-            url: "https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.93/bin/apache-tomcat-9.0.93-windows-x64.zip",
+        "9.0.115": {
+            url: "https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.115/bin/apache-tomcat-9.0.115-windows-x64.zip",
             sha512: ""
         },
-        "11.0.0-M24": {
-            url: "https://dlcdn.apache.org/tomcat/tomcat-11/v11.0.0-M24/bin/apache-tomcat-11.0.0-M24-windows-x64.zip",
+        "11.0.18": {
+            url: "https://dlcdn.apache.org/tomcat/tomcat-11/v11.0.18/bin/apache-tomcat-11.0.18-windows-x64.zip",
             sha512: ""
         }
     };
 
     constructor(options: EmbeddedTomcatOptions) {
-        this.version = options.version || "10.1.28";
+        this.version = options.version || "10.1.52";
         this.port = options.port || 8080;
         this.webappPath = path.resolve(options.webappPath);
         this.contextPath = options.contextPath || "/";

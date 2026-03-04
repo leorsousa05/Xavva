@@ -76,7 +76,7 @@ export class ConfigManager {
         // Verificar se usar Tomcat embutido
         let tomcatPath = String(cliValues.path || xavvaJson.path || envTomcatPath || "");
         let useEmbedded = false;
-        let embeddedVersion = String(cliValues["tomcat-version"] || xavvaJson.version || "10.1.28");
+        let embeddedVersion = String(cliValues["tomcat-version"] || xavvaJson.version || "10.1.52");
 
         // Se não há Tomcat configurado ou não existe no path, usar embutido
         if (!tomcatPath || (!fs.existsSync(path.join(tomcatPath, "bin", "catalina.bat")) && isStart)) {

@@ -28,7 +28,7 @@ export class TomcatCommand implements Command {
     }
 
     private async handleInstall(config: AppConfig, args?: CLIArguments): Promise<void> {
-        const version = args?.["tomcat-version"] || config.tomcat.version || "10.1.28";
+        const version = args?.["tomcat-version"] || config.tomcat.version || "10.1.52";
         
         // Detectar webapp path
         const webappPath = config.project.buildTool === "maven"
@@ -65,11 +65,11 @@ export class TomcatCommand implements Command {
         }
         
         Logger.newline();
-        Logger.info("Versão padrão", "10.1.28");
+        Logger.info("Versão padrão", "10.1.52");
     }
 
     private async handleUninstall(config: AppConfig, args?: CLIArguments): Promise<void> {
-        const version = args?.["tomcat-version"] || config.tomcat.version || "10.1.28";
+        const version = args?.["tomcat-version"] || config.tomcat.version || "10.1.52";
         
         const service = new EmbeddedTomcatService({
             version,
@@ -92,7 +92,7 @@ export class TomcatCommand implements Command {
         
         if (config.tomcat.embedded) {
             Logger.config("Modo", "Embutido");
-            Logger.config("Versão", config.tomcat.version || "10.1.28");
+            Logger.config("Versão", config.tomcat.version || "10.1.52");
             Logger.config("Porta", String(config.tomcat.port));
             Logger.config("Home", config.tomcat.path);
         } else {

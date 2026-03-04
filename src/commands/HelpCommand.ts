@@ -68,7 +68,7 @@ export class HelpCommand implements Command {
     xavva deps --update-safe
 
     ${this.c("dim", "# Use embedded Tomcat (no installation required)")}
-    xavva deploy --tomcat-version 10.1.28
+    xavva deploy --tomcat-version 10.1.52
 
     ${this.c("dim", "# Manage embedded Tomcat installations")}
     xavva tomcat install
