@@ -98,7 +98,7 @@ export class LogAnalyzer {
             return `${Logger.C.magenta}👀 ${Logger.C.bold}Hotswap:${Logger.C.reset} ${msg.replace(/Class '.*?'/, (m) => Logger.C.bold + m + Logger.C.reset)}`;
         }
 
-        let color = Logger.C.cyan;
+        let color = Logger.C.primary;
         let symbol = "●";
         if (level === "WARN") { color = Logger.C.yellow; symbol = "▲"; }
         else if (level === "ERROR") { color = Logger.C.red; symbol = "✖"; }

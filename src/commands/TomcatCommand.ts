@@ -61,7 +61,7 @@ export class TomcatCommand implements Command {
         const versions = EmbeddedTomcatService.getAvailableVersions();
         
         for (const version of versions) {
-            Logger.log(`  ${Logger.C.cyan}•${Logger.C.reset} ${version}`);
+            Logger.log(`  ${Logger.C.primary}•${Logger.C.reset} ${version}`);
         }
         
         Logger.newline();

@@ -94,7 +94,7 @@ export class ConfigManager {
                 Logger.warn("Tomcat não encontrado!");
                 Logger.info("Versão solicitada", embeddedVersion);
                 Logger.newline();
-                Logger.log(`${Logger.C.cyan}?${Logger.C.reset} Deseja instalar o Tomcat ${embeddedVersion} automaticamente?`);
+                Logger.log(`${Logger.C.primary}?${Logger.C.reset} Deseja instalar o Tomcat ${embeddedVersion} automaticamente?`);
                 Logger.log(`${Logger.C.dim}  O download é de ~16MB e será salvo em:~/.xavva/tomcat/${embeddedVersion}${Logger.C.reset}`);
                 Logger.newline();
                 
@@ -108,9 +108,9 @@ export class ConfigManager {
                 if (!shouldInstall) {
                     Logger.newline();
                     Logger.info("Opções disponíveis", "");
-                    Logger.log(`  ${Logger.C.cyan}1.${Logger.C.reset} Defina TOMCAT_HOME ou CATALINA_HOME`);
-                    Logger.log(`  ${Logger.C.cyan}2.${Logger.C.reset} Use --path para especificar o Tomcat`);
-                    Logger.log(`  ${Logger.C.cyan}3.${Logger.C.reset} Use --tomcat-version para outra versão`);
+                    Logger.log(`  ${Logger.C.primary}1.${Logger.C.reset} Defina TOMCAT_HOME ou CATALINA_HOME`);
+                    Logger.log(`  ${Logger.C.primary}2.${Logger.C.reset} Use --path para especificar o Tomcat`);
+                    Logger.log(`  ${Logger.C.primary}3.${Logger.C.reset} Use --tomcat-version para outra versão`);
                     Logger.newline();
                     process.exit(0);
                 }

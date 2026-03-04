@@ -31,7 +31,7 @@ export class DoctorCommand implements Command {
 				await this.installDCEVM();
 			} else {
 				Logger.log(
-					`    ${Logger.C.cyan}Use 'xavva doctor --fix' para baixar uma JDK com DCEVM integrado.${Logger.C.reset}`,
+					`    ${Logger.C.primary}Use 'xavva doctor --fix' para baixar uma JDK com DCEVM integrado.${Logger.C.reset}`,
 				);
 			}
 		}

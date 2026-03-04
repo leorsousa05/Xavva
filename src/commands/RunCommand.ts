@@ -54,7 +54,7 @@ export class RunCommand implements Command {
 
         if (isDebug) {
             Logger.warn(`🚀 Aguardando debugger na porta 5005 para ${className}...`);
-            Logger.log(`${Logger.C.cyan}Dica:${Logger.C.reset} No VS Code ou IntelliJ, use 'Attach to Remote JVM' na porta 5005.`);
+            Logger.log(`${Logger.C.primary}Dica:${Logger.C.reset} No VS Code ou IntelliJ, use 'Attach to Remote JVM' na porta 5005.`);
             Logger.newline();
         } else {
             Logger.warn(`🚀 Executando ${className}...`);

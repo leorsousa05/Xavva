@@ -34,7 +34,7 @@ export class DepsCommand implements Command {
 				Logger.log("  • Arquivo pom.xml/build.gradle não encontrado");
 				Logger.log("  • Erro de parsing no arquivo de configuração");
 				Logger.newline();
-				Logger.log(`${Logger.C.cyan}Dica:${Logger.C.reset} Execute com --verbose para mais detalhes`);
+				Logger.log(`${Logger.C.primary}Dica:${Logger.C.reset} Execute com --verbose para mais detalhes`);
 				return;
 			}
 
@@ -87,7 +87,7 @@ export class DepsCommand implements Command {
 		Logger.section("Sugestões de Correção");
 
 		for (const conflict of result.conflicts) {
-			Logger.log(`\n${Logger.C.cyan}${conflict.groupId}:${conflict.artifactId}${Logger.C.reset}`);
+			Logger.log(`\n${Logger.C.primary}${conflict.groupId}:${conflict.artifactId}${Logger.C.reset}`);
 			
 			if (buildTool === "maven") {
 				Logger.log("  Adicione ao pom.xml:");
@@ -143,7 +143,7 @@ export class DepsCommand implements Command {
 
 				Logger.newline();
 				Logger.log(`${Logger.C.warning}⚠️  Execute 'xavva build' para compilar e aplicar as mudanças${Logger.C.reset}`);
-				Logger.log(`${Logger.C.cyan}💡 Dica:${Logger.C.reset} Execute 'xavva audit' para verificar vulnerabilidades nas novas versões`);
+				Logger.log(`${Logger.C.primary}💡 Dica:${Logger.C.reset} Execute 'xavva audit' para verificar vulnerabilidades nas novas versões`);
 			} else {
 				Logger.warn("Nenhuma dependência foi atualizada");
 			}

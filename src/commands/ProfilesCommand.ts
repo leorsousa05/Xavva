@@ -20,7 +20,7 @@ export class ProfilesCommand implements Command {
         }
 
         Logger.log(`
-  ${Logger.C.cyan}Perfis detectados:${Logger.C.reset}`);
+  ${Logger.C.primary}Perfis detectados:${Logger.C.reset}`);
         profiles.forEach(p => {
             const active = config.project.profile === p ? ` ${Logger.C.green}(Ativo)${Logger.C.reset}` : "";
             Logger.log(`  ${Logger.C.bold}➜${Logger.C.reset} ${p}${active}`);
