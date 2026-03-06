@@ -42,3 +42,5 @@ xavva.exe
 # Gemini AI
 .gemini/
 GEMINI.md
+AGENTS.md
+xavva.json

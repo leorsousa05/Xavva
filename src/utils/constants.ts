@@ -10,8 +10,8 @@ export const DEFAULT_DEBUG_PORT = 5005;
 
 // Timeouts (em milissegundos)
 export const TIMEOUT_SHUTDOWN_MS = 5000;
-export const WATCHER_DEBOUNCE_MS = 1000;
-export const WATCHER_COOLING_MS = 500;
+export const WATCHER_DEBOUNCE_MS = 1500;
+export const WATCHER_COOLING_MS = 1000;
 export const BROWSER_OPEN_DELAY_MS = 800;
 export const DEPLOY_HEALTH_CHECK_DELAY_MS = 1500;
 export const HOTSWAP_DELAY_MS = 500;

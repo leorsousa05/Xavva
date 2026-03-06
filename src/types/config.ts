@@ -61,6 +61,7 @@ export interface CLIArguments {
     yes?: boolean;
     war?: boolean;
     cache?: boolean;
+    changedFiles?: string[];
 }
 
 export interface CommandContext {

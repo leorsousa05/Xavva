@@ -9,6 +9,11 @@ export class WatcherService {
     private pendingFullBuild = false;
     private coolingFiles = new Set<string>();
     private debounceTimer?: Timer;
+    
+    // Rastreamento de arquivos modificados para build incremental inteligente
+    private modifiedFiles = new Set<string>();
+    private pendingFiles = new Set<string>(); // Arquivos modificados durante compilação
+    private hasPendingChanges = false;
 
     constructor(private config: AppConfig, private deployCmd: DeployCommand) {}
 
@@ -43,24 +48,57 @@ export class WatcherService {
             if (!isJava) return;
 
             Logger.watcher(filename, 'watch');
+            
+            // Se estiver compilando, acumula na fila de pendentes
+            if (this.isDeploying) {
+                this.pendingFiles.add(filename);
+                this.hasPendingChanges = true;
+                return;
+            }
+            
+            // Acumula arquivos modificados para o próximo build
+            this.modifiedFiles.add(filename);
+            
             clearTimeout(this.debounceTimer);
             
             this.debounceTimer = setTimeout(() => {
-                this.run(this.pendingFullBuild ? false : true);
+                const filesToCompile = [...this.modifiedFiles];
+                this.modifiedFiles.clear();
+                this.run(this.pendingFullBuild ? false : true, filesToCompile);
                 this.pendingFullBuild = false;
             }, WATCHER_DEBOUNCE_MS);
         });
     }
 
-    private async run(incremental = false) {
+    private async run(incremental = false, changedFiles?: string[]) {
         if (this.isDeploying) return;
         this.isDeploying = true;
+        
         try {
-            await this.deployCmd.execute(this.config, { watch: true, incremental });
+            // Passa os arquivos específicos que foram modificados
+            await this.deployCmd.execute(this.config, { 
+                watch: true, 
+                incremental,
+                changedFiles 
+            });
         } catch (e) {
             // Error handled by command
         } finally {
             this.isDeploying = false;
+            
+            // Se houve mudanças durante a compilação, processa imediatamente
+            if (this.hasPendingChanges) {
+                const pending = [...this.pendingFiles];
+                this.pendingFiles.clear();
+                this.hasPendingChanges = false;
+                
+                Logger.watcher(`Processing ${pending.length} pending change(s)...`, 'warn');
+                
+                // Pequeno delay para garantir que os arquivos foram salvos completamente
+                setTimeout(() => {
+                    this.run(true, pending);
+                }, 100);
+            }
         }
     }
 

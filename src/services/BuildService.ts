@@ -129,17 +129,119 @@ export class BuildService {
 		await this.fastSync(srcDir, destDir);
 	}
 
-	async syncClasses(customSrc?: string): Promise<string | null> {
+	async syncClasses(changedFiles?: string[]): Promise<string | null> {
 		const appFolder = this.projectService.getInferredAppName();
 		const webappPath = path.join(this.tomcatConfig.path, "webapps", appFolder);
 		const targetLib = path.join(webappPath, "WEB-INF", "classes");
-		const sourceDir = customSrc || this.projectService.getClassesDir();
+		const sourceDir = this.projectService.getClassesDir();
 
 		if (!existsSync(sourceDir)) return null;
 		if (!existsSync(targetLib)) mkdirSync(targetLib, { recursive: true });
 
-		await this.fastSync(sourceDir, targetLib);
+		// Se temos uma lista específica de arquivos modificados, sincroniza apenas eles
+		if (changedFiles && changedFiles.length > 0) {
+			await this.syncSpecificFiles(changedFiles, sourceDir, targetLib);
+		} else {
+			// Caso contrário, sincroniza tudo (comportamento padrão)
+			await this.fastSync(sourceDir, targetLib);
+		}
+		
 		return appFolder;
+	}
+
+	/**
+	 * Sincroniza apenas arquivos específicos baseado nos arquivos .java modificados.
+	 * Converte .java para .class e sincroniza apenas os arquivos realmente modificados.
+	 */
+	private async syncSpecificFiles(changedFiles: string[], sourceDir: string, targetLib: string): Promise<void> {
+		const tasks: Promise<void>[] = [];
+		const syncedCount = { value: 0 };
+		
+		for (const javaFile of changedFiles) {
+			// Converte caminho do .java para caminho do .class
+			// Ex: src/main/java/com/example/Foo.java -> target/classes/com/example/Foo.class
+			const relativePath = this.javaToClassPath(javaFile);
+			if (!relativePath) continue;
+			
+			const sourcePath = path.join(sourceDir, relativePath);
+			const targetPath = path.join(targetLib, relativePath);
+			
+			if (!existsSync(sourcePath)) {
+				// Se o .class não existe, talvez seja um arquivo excluído ou inner class
+				// Neste caso, faz sync completo como fallback
+				continue;
+			}
+			
+			tasks.push((async () => {
+				const targetDir = path.dirname(targetPath);
+				if (!existsSync(targetDir)) mkdirSync(targetDir, { recursive: true });
+				
+				const srcStat = statSync(sourcePath);
+				const destStat = existsSync(targetPath) ? statSync(targetPath) : null;
+				
+				if (!destStat || srcStat.mtimeMs > destStat.mtimeMs) {
+					await fs.copyFile(sourcePath, targetPath);
+					syncedCount.value++;
+				}
+			})());
+		}
+		
+		await Promise.all(tasks);
+		
+		// Se não conseguimos sincronizar nenhum arquivo específico, faz sync completo
+		if (syncedCount.value === 0) {
+			await this.fastSync(sourceDir, targetLib);
+		} else if (!this.projectConfig.quiet) {
+			Logger.info("sync", `${syncedCount.value} classe(s) sincronizada(s)`);
+		}
+	}
+	
+	/**
+	 * Converte caminho de arquivo .java para caminho relativo de .class
+	 */
+	private javaToClassPath(javaFile: string): string | null {
+		// Remove prefixos comuns de diretórios source
+		const parts = javaFile.split(/[/\\]/);
+		
+		// Encontra o índice após "java" ou "src/main/java" ou "src"
+		let startIndex = -1;
+		
+		for (let i = 0; i < parts.length; i++) {
+			if (parts[i] === "java" && i > 0 && (parts[i-1] === "main" || parts[i-1] === "test")) {
+				startIndex = i + 1;
+				break;
+			}
+		}
+		
+		// Se não encontrou padrão maven, tenta achar "src"
+		if (startIndex === -1) {
+			const srcIndex = parts.indexOf("src");
+			if (srcIndex !== -1 && srcIndex < parts.length - 1) {
+				// Pula "src" e possível "main/java"
+				if (parts[srcIndex + 1] === "main" && parts[srcIndex + 2] === "java") {
+					startIndex = srcIndex + 3;
+				} else {
+					startIndex = srcIndex + 1;
+				}
+			}
+		}
+		
+		// Se ainda não encontrou, assume que o caminho já é relativo ao package
+		if (startIndex === -1) {
+			startIndex = 0;
+		}
+		
+		// Pega o caminho relativo
+		const relativeParts = parts.slice(startIndex);
+		if (relativeParts.length === 0) return null;
+		
+		// Substitui extensão .java por .class
+		const fileName = relativeParts[relativeParts.length - 1];
+		if (!fileName || !fileName.endsWith(".java")) return null;
+		
+		relativeParts[relativeParts.length - 1] = fileName.replace(".java", ".class");
+		
+		return path.join(...relativeParts);
 	}
 
 	private async fastSync(src: string, dest: string) {

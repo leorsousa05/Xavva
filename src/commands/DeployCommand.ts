@@ -14,6 +14,7 @@ export class DeployCommand implements Command {
     async execute(config: AppConfig, args?: CLIArguments): Promise<void> {
         const incremental = args?.watch && args?.incremental;
         const isWatching = !!args?.watch;
+        const changedFiles = args?.changedFiles;
         const tomcat = this.tomcat;
         const builder = this.builder;
 
@@ -46,11 +47,11 @@ export class DeployCommand implements Command {
             }
 
             if (incremental) {
-                const actualAppFolder = await builder.syncClasses(); 
+                const actualAppFolder = await builder.syncClasses(changedFiles); 
                 const actualContextPath = contextPath || actualAppFolder || "";
                 const actualAppUrl = `http://localhost:${config.tomcat.port}/${actualContextPath}`;
                 await BrowserService.reload(actualAppUrl);
-                Logger.success("redeploy completed");
+                Logger.success(`redeploy completed (${changedFiles?.length || 'all'} file(s))`);
                 return;
             }
 
@@ -98,7 +99,7 @@ export class DeployCommand implements Command {
             const finalAppUrl = `http://localhost:${config.tomcat.port}/${finalContextPath}`;
             
             tomcat.onReady = async () => {
-                await this.handleServerReady(config, finalAppUrl, finalContextPath, tomcat, incremental);
+                await this.handleServerReady(config, finalAppUrl, finalContextPath, tomcat, !!incremental);
             };
 
             tomcat.start(config, isWatching);
