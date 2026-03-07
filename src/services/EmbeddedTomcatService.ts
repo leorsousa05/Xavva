@@ -10,6 +10,17 @@ import {
 import path from "path";
 import os from "os";
 import { spawn } from "child_process";
+import {
+	getPlatform,
+	isWindows,
+	getTomcatArchiveName,
+	getTomcatDownloadUrl,
+	getTomcatArchiveUrl,
+	getExtractCommand,
+	getPortCheckCommand,
+	getCatalinaScript,
+	hasCatalinaScript,
+} from "../utils/platform";
 
 export interface EmbeddedTomcatOptions {
 	version?: string;
@@ -35,20 +46,18 @@ export class EmbeddedTomcatService {
 	private isInstalled: boolean = false;
 
 	// Versões estáveis do Tomcat (atualizadas: 2026-03-04)
+	// URLs são construídas dinamicamente baseadas na plataforma
 	private static readonly VERSIONS: Record<
 		string,
-		{ url: string; sha512: string }
+		{ sha512: string }
 	> = {
 			"10.1.52": {
-				url: "https://dlcdn.apache.org/tomcat/tomcat-10/v10.1.52/bin/apache-tomcat-10.1.52-windows-x64.zip",
 				sha512: "",
 			},
 			"9.0.115": {
-				url: "https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.115/bin/apache-tomcat-9.0.115-windows-x64.zip",
 				sha512: "",
 			},
 			"11.0.18": {
-				url: "https://dlcdn.apache.org/tomcat/tomcat-11/v11.0.18/bin/apache-tomcat-11.0.18-windows-x64.zip",
 				sha512: "",
 			},
 		};
@@ -61,14 +70,14 @@ export class EmbeddedTomcatService {
 		this.baseDir = path.join(os.homedir(), ".xavva", "tomcat");
 		this.tomcatHome = path.join(this.baseDir, this.version);
 
-		// Se a versão não está na lista, usa URL padrão
+		// Constrói URL de download baseada na plataforma
 		const versionInfo = EmbeddedTomcatService.VERSIONS[this.version];
 		if (versionInfo) {
-			this.downloadUrl = versionInfo.url;
+			// Usa URL primária (CDN Apache)
+			this.downloadUrl = getTomcatDownloadUrl(this.version);
 		} else {
-			// Tenta inferir URL baseado no padrão Apache
-			const majorVersion = this.version.split(".")[0];
-			this.downloadUrl = `https://archive.apache.org/dist/tomcat/tomcat-${majorVersion}/v${this.version}/bin/apache-tomcat-${this.version}-windows-x64.zip`;
+			// Tenta inferir URL baseado no padrão Apache (archive)
+			this.downloadUrl = getTomcatArchiveUrl(this.version);
 		}
 	}
 
@@ -76,8 +85,7 @@ export class EmbeddedTomcatService {
 	 * Verifica se o Tomcat já está instalado
 	 */
 	checkInstallation(): boolean {
-		const catalinaBat = path.join(this.tomcatHome, "bin", "catalina.bat");
-		this.isInstalled = existsSync(catalinaBat);
+		this.isInstalled = hasCatalinaScript(this.tomcatHome);
 		return this.isInstalled;
 	}
 
@@ -100,13 +108,8 @@ export class EmbeddedTomcatService {
 
 		for (const entry of entries) {
 			if (entry.isDirectory()) {
-				const catalinaBat = path.join(
-					baseDir,
-					entry.name,
-					"bin",
-					"catalina.bat",
-				);
-				if (existsSync(catalinaBat)) {
+				const tomcatPath = path.join(baseDir, entry.name);
+				if (hasCatalinaScript(tomcatPath)) {
 					versions.push(entry.name);
 				}
 			}
@@ -133,10 +136,8 @@ export class EmbeddedTomcatService {
 			mkdirSync(this.baseDir, { recursive: true });
 		}
 
-		const zipPath = path.join(
-			this.baseDir,
-			`apache-tomcat-${this.version}.zip`,
-		);
+		const archiveName = getTomcatArchiveName(this.version);
+		const zipPath = path.join(this.baseDir, archiveName);
 
 		try {
 			// Download
@@ -300,21 +301,24 @@ export class EmbeddedTomcatService {
 	 */
 	async isPortAvailable(): Promise<boolean> {
 		return new Promise((resolve) => {
-			const netstat = spawn("cmd", [
-				"/c",
-				`netstat -ano | findstr :${this.port}`,
-			]);
+			const cmd = getPortCheckCommand(this.port);
+			const checkProcess = spawn(cmd[0], cmd.slice(1));
 			let output = "";
 
-			netstat.stdout?.on("data", (data) => {
+			checkProcess.stdout?.on("data", (data) => {
 				output += data.toString();
 			});
 
-			netstat.on("close", () => {
+			checkProcess.stderr?.on("data", (data) => {
+				output += data.toString();
+			});
+
+			checkProcess.on("close", () => {
+				// Se houver output, a porta está em uso
 				resolve(output.trim().length === 0);
 			});
 
-			netstat.on("error", () => {
+			checkProcess.on("error", () => {
 				resolve(true); // Assume disponível se não conseguir verificar
 			});
 		});
@@ -382,18 +386,23 @@ export class EmbeddedTomcatService {
 	}
 
 	/**
-	 * Extrai arquivo ZIP usando PowerShell
+	 * Extrai arquivo de arquivos (ZIP ou tar.gz)
 	 */
 	private async extractZip(zipPath: string, destDir: string): Promise<void> {
 		const spinner = Logger.spinner("Extraindo arquivos...");
 
 		return new Promise((resolve, reject) => {
-			const ps = spawn("powershell", [
-				"-command",
-				`Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force`,
-			]);
+			const cmd = getExtractCommand(zipPath, destDir);
+			
+			if (!cmd) {
+				spinner(false);
+				reject(new Error(`Formato de arquivo não suportado: ${path.extname(zipPath)}`));
+				return;
+			}
 
-			ps.on("close", (code) => {
+			const extractProcess = spawn(cmd[0], cmd.slice(1));
+
+			extractProcess.on("close", (code) => {
 				if (code === 0) {
 					spinner(true);
 					resolve();
@@ -403,7 +412,7 @@ export class EmbeddedTomcatService {
 				}
 			});
 
-			ps.on("error", (err) => {
+			extractProcess.on("error", (err) => {
 				spinner(false);
 				reject(err);
 			});

@@ -5,6 +5,14 @@ import { ProjectService } from "./ProjectService";
 import { existsSync, mkdirSync, writeFileSync, statSync, promises as fs } from "fs";
 import path from "path";
 import os from "os";
+import {
+	getCatalinaPath,
+	getMemoryCommand,
+	getKillCommand,
+	getPortCheckCommand,
+	getJavaPath,
+	isWindows,
+} from "../utils/platform";
 
 export class TomcatService {
 	private activeConfig: TomcatConfig;
@@ -25,23 +33,55 @@ export class TomcatService {
 	async getMemoryUsage(): Promise<string> {
 		if (!this.pid) return "0 MB";
 		try {
-			const { stdout } = Bun.spawnSync(["powershell", "-command", `(Get-Process -Id ${this.pid}).WorkingSet64 / 1MB`]);
+			const cmd = getMemoryCommand(this.pid);
+			if (!cmd) return "N/A";
+			
+			const { stdout } = Bun.spawnSync(cmd);
 			const mem = await new Response(stdout).text();
-			return `${Math.round(parseFloat(mem))} MB`;
+			const memValue = parseFloat(mem.trim());
+			
+			if (isNaN(memValue)) return "N/A";
+			
+			// No Linux/macOS, ps retorna em KB, convertemos para MB
+			if (!isWindows()) {
+				return `${Math.round(memValue / 1024)} MB`;
+			}
+			
+			return `${Math.round(memValue)} MB`;
 		} catch (e) {
 			return "N/A";
 		}
 	}
 
 	async killConflict() {
-		const { stdout } = Bun.spawnSync(["cmd", "/c", `netstat -ano | findstr :${this.activeConfig.port}`]);
+		const cmd = getPortCheckCommand(this.activeConfig.port);
+		const { stdout } = Bun.spawnSync(cmd);
 		const output = await new Response(stdout).text();
 
 		if (output) {
-			const lines = output.trim().split('\n');
-			const pid = lines[0].trim().split(/\s+/).pop();
-			Logger.step(`Freeing port ${this.activeConfig.port}`);
-			Bun.spawnSync(["taskkill", "/F", "/PID", pid]);
+			// Extrai PID do output
+			let pid: string | undefined;
+			
+			if (isWindows()) {
+				// Windows: netstat output, última coluna é o PID
+				const lines = output.trim().split('\n');
+				pid = lines[0].trim().split(/\s+/).pop();
+			} else {
+				// Linux/Mac: tenta extrair PID de lsof, ss ou netstat
+				// lsof -i :port: formato tem PID na coluna 2
+				// ss -tlnp: tem pid=XXXX
+				// netstat -tlnp: tem /XXXX no final
+				const match = output.match(/\b(\d+)\b/) || // número isolado (lsof)
+							  output.match(/pid=(\d+)/) ||     // ss format
+							  output.match(/\/(\d+)/);         // netstat format
+				if (match) pid = match[1];
+			}
+			
+			if (pid) {
+				Logger.step(`Freeing port ${this.activeConfig.port}`);
+				const killCmd = getKillCommand(pid);
+				Bun.spawnSync(killCmd);
+			}
 		}
 	}
 
@@ -105,21 +145,54 @@ export class TomcatService {
 			
 			Logger.step("Downloading HotswapAgent v2.0.3 (Global)...");
 			const url = "https://github.com/HotswapProjects/HotswapAgent/releases/download/RELEASE-2.0.3/hotswap-agent-2.0.3.jar";
-			const response = await fetch(url);
-			if (!response.ok) throw new Error(`Status: ${response.status}`);
+			
+			Logger.debug(`URL: ${url}`);
+			Logger.debug(`Destino: ${agentPath}`);
+			
+			const response = await fetch(url, {
+				redirect: "follow",
+			});
+			
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+			}
+			
+			const contentLength = response.headers.get("content-length");
+			Logger.debug(`Content-Length: ${contentLength || "unknown"}`);
 			
 			const buffer = await response.arrayBuffer();
+			Logger.debug(`Downloaded: ${buffer.byteLength} bytes`);
+			
+			if (buffer.byteLength < 1000) {
+				throw new Error(`Arquivo muito pequeno (${buffer.byteLength} bytes)`);
+			}
+			
 			writeFileSync(agentPath, Buffer.from(buffer));
+			
+			// Verifica se foi escrito corretamente
+			const stats = statSync(agentPath);
+			Logger.debug(`Escrito: ${stats.size} bytes`);
+			
 			Logger.success("HotswapAgent v2.0.3 installed globally!");
 			return agentPath;
-		} catch (e) {
-			Logger.warn("Falha ao baixar HotswapAgent. Usando hot swap padrão da JVM.");
+		} catch (e: any) {
+			Logger.warn(`Falha ao baixar HotswapAgent: ${e.message}`);
+			Logger.warn("Usando hot swap padrão da JVM.");
+			
+			// Limpa arquivo parcial se existir
+			if (existsSync(agentPath)) {
+				try {
+					await fs.unlink(agentPath);
+					Logger.debug("Arquivo parcial removido");
+				} catch {}
+			}
+			
 			return null;
 		}
 	}
 
 	async start(config: AppConfig, isWatching: boolean = false) {
-		const binPath = `${this.activeConfig.path}\\bin\\catalina.bat`;
+		const binPath = getCatalinaPath(this.activeConfig.path);
 		const args = (config.project.debug || isWatching) ? ["jpda", "run"] : ["run"];
 		
 		const catalinaOpts = [process.env.CATALINA_OPTS || ""];
@@ -134,7 +207,7 @@ export class TomcatService {
 					javaBin = path.join(process.env.JAVA_HOME, "bin", "java.exe");
 				}
 
-				const javaVer = Bun.spawnSync([javaBin, "-version"]);
+				const javaVer = Bun.spawnSync([getJavaPath(), "-version"]);
 				const output = (javaVer.stderr.toString() + javaVer.stdout.toString()).toLowerCase();
 				
 				if (output.includes("dcevm") || output.includes("jbr") || output.includes("trava")) {

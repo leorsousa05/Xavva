@@ -5,6 +5,14 @@ import path from "path";
 import fs from "fs";
 import { glob } from "glob";
 import readline from "readline";
+import {
+	getJavaPath,
+	getMavenCommand,
+	getGradleCommand,
+	getClasspathSeparator,
+	normalizeClasspathPath,
+	isWindows,
+} from "../utils/platform";
 
 export class RunCommand implements Command {
     async execute(config: AppConfig, args?: CLIArguments): Promise<void> {
@@ -36,7 +44,8 @@ export class RunCommand implements Command {
         const { localCp, dependencyCp } = await this.getClasspath(config);
         const pathingJar = await this.createPathingJar(dependencyCp);
         
-        const finalCp = `${localCp};${pathingJar}`;
+        const sep = getClasspathSeparator();
+        const finalCp = `${localCp}${sep}${pathingJar}`;
 
         const javaArgs = [
             "-classpath", finalCp,
@@ -60,7 +69,7 @@ export class RunCommand implements Command {
             Logger.warn(`🚀 Executando ${className}...`);
         }
 
-        const bin = process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, "bin", "java.exe") : "java";
+        const bin = getJavaPath();
         
         const proc = Bun.spawn([bin, ...javaArgs], {
             stdout: "inherit",
@@ -220,9 +229,10 @@ export class RunCommand implements Command {
         const xavvaDir = path.join(process.cwd(), ".xavva");
         const jarPath = path.join(xavvaDir, "classpath.jar");
 
-        const paths = dependencyCp.split(";").filter(p => p.trim());
+        const sep = getClasspathSeparator();
+        const paths = dependencyCp.split(sep).filter(p => p.trim());
         const relativePaths = paths.map(p => {
-            let rel = path.relative(xavvaDir, p).replace(/\\/g, "/");
+            let rel = normalizeClasspathPath(path.relative(xavvaDir, p));
             if (fs.existsSync(p) && fs.statSync(p).isDirectory() && !rel.endsWith("/")) rel += "/";
             // Robust URL encoding for Class-Path as per Java Spec
             return encodeURI(rel)
@@ -296,10 +306,9 @@ export class RunCommand implements Command {
             const stopSpinner = Logger.spinner("Generating project classpath");
             try {
                 if (config.project.buildTool === "maven") {
-                    const mvnCmd = process.platform === "win32" ? "mvn.cmd" : "mvn";
-                    Bun.spawnSync([mvnCmd, "dependency:build-classpath", `-Dmdep.outputFile=${cpFile}`]);
+                    Bun.spawnSync([getMavenCommand(), "dependency:build-classpath", `-Dmdep.outputFile=${cpFile}`]);
                 } else if (config.project.buildTool === "gradle") {
-                    const gradleCmd = process.platform === "win32" ? "gradle.bat" : "gradle";
+                    const gradleCmd = getGradleCommand();
                     const initScriptPath = path.join(xavvaDir, "init-cp.gradle");
                     const normalizedCpFile = cpFile.replace(/\\/g, "/");
                     const initScriptContent = `
@@ -335,9 +344,10 @@ export class RunCommand implements Command {
 
         let dependencyCp = fs.existsSync(cpFile) ? fs.readFileSync(cpFile, "utf8").trim() : "";
         
-        // Normalize platform specific separators to semicolon for consistency
-        if (path.delimiter !== ";") {
-            dependencyCp = dependencyCp.split(path.delimiter).join(";");
+        // Normalize platform specific separators para o separador consistente
+        const sep = getClasspathSeparator();
+        if (path.delimiter !== sep) {
+            dependencyCp = dependencyCp.split(path.delimiter).join(sep);
         }
 
         const localFolders = [
@@ -356,7 +366,7 @@ export class RunCommand implements Command {
         const localCp = localFolders
             .map(p => path.join(process.cwd(), p))
             .filter(p => fs.existsSync(p))
-            .join(";");
+            .join(getClasspathSeparator());
 
         return { localCp, dependencyCp };
     }

@@ -1,8 +1,8 @@
 # XAVVA CLI 🚀
 
-> Ultra-fast development toolkit for Java Enterprise (Tomcat) on Windows
+> Ultra-fast development toolkit for Java Enterprise (Tomcat) on Windows, Linux & macOS
 
-[![Version](https://img.shields.io/badge/version-2.4.0-blue.svg)](https://github.com/leorsousa05/Xavva)
+[![Version](https://img.shields.io/badge/version-2.6.0-blue.svg)](https://github.com/leorsousa05/Xavva)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Xavva is a high-performance CLI built with **Bun** that transforms the Java/Tomcat development experience. It brings modern development workflows (like Node.js/Vite) to the Java Enterprise ecosystem with hot-reload, smart logging, and automated deployment.
@@ -25,7 +25,7 @@ Xavva is a high-performance CLI built with **Bun** that transforms the Java/Tomc
 
 ## 📦 Installation
 
-```powershell
+```bash
 # Via NPM
 npm install -g @archznn/xavva
 
@@ -196,11 +196,13 @@ Create `xavva.json` in your project root:
     "tui": false
   },
   "tomcat": {
-    "path": "C:/apache-tomcat",
+    "path": "/home/user/apache-tomcat",
     "port": 8080
   }
 }
 ```
+
+> **Note:** On Windows use `"path": "C:/apache-tomcat"` format.
 
 ### CLI Options
 
@@ -221,6 +223,25 @@ Create `xavva.json` in your project root:
 | `--cache`              | Use build cache (faster)        |
 | `-y, --yes`            | Auto-install Tomcat (no prompt) |
 | `-V, --verbose`        | Detailed output                 |
+
+---
+
+## 💻 Platform Support
+
+Xavva works on all major platforms:
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Windows  | ✅ Full | PowerShell for system integration |
+| Linux    | ✅ Full | Bash/Zsh auto-configuration |
+| macOS    | ✅ Full | Native terminal support |
+
+### Requirements
+
+- **Bun** runtime (latest version)
+- **Java** 11 or higher (JDK)
+- **Maven** 3.6+ or **Gradle** 7+
+- **Git** (optional, for version info)
 
 ---
 

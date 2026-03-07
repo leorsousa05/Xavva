@@ -93,7 +93,7 @@ async function main() {
 		// Registrar ação de restart manual na TUI
 		if (dashboard.isTuiActive()) {
 			dashboard.onAction("r", () => {
-				dashboard.log(Logger.C.yellow + "Restart manual solicitado via TUI...");
+				dashboard.log(Logger.C.warning + "Restart manual solicitado via TUI...");
 				deployCmd.execute(config, false, true); // Executa deploy completo mas mantém o watch
 			});
 		}

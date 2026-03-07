@@ -77,7 +77,7 @@ export class LogAnalyzer {
         const isProject = this.projectPrefixes.some(p => trimmed.includes(p));
         
         if (isProject) {
-            return `    ${Logger.C.bold}${Logger.C.yellow}${trimmed}${Logger.C.reset}`;
+            return `    ${Logger.C.bold}${Logger.C.warning}${trimmed}${Logger.C.reset}`;
         } else {
             return `    ${Logger.C.dim}${trimmed}${Logger.C.reset}`;
         }
@@ -100,7 +100,7 @@ export class LogAnalyzer {
 
         let color = Logger.C.primary;
         let symbol = "●";
-        if (level === "WARN") { color = Logger.C.yellow; symbol = "▲"; }
+        if (level === "WARN") { color = Logger.C.warning; symbol = "▲"; }
         else if (level === "ERROR") { color = Logger.C.red; symbol = "✖"; }
         
         return `${color}${symbol} ${Logger.C.bold}Hotswap:${Logger.C.reset} ${msg}`;
@@ -113,7 +113,7 @@ export class LogAnalyzer {
         
         let color = Logger.C.dim;
         let symbol = "ℹ";
-        if (label === "WARNING") { color = Logger.C.yellow; symbol = "▲"; }
+        if (label === "WARNING") { color = Logger.C.warning; symbol = "▲"; }
         else if (label === "SEVERE" || label === "ERROR") { color = Logger.C.red; symbol = "✖"; }
         
         msg = msg.replace(/^(org\.apache|com\.sun|java\..*?|org\.glassfish)\.[a-zA-Z0-9.]+\s/, "").trim();
@@ -129,7 +129,7 @@ export class LogAnalyzer {
         
         let color = Logger.C.dim;
         let symbol = "ℹ";
-        if (label === "WARNING" || label === "WARN") { color = Logger.C.yellow; symbol = "▲"; }
+        if (label === "WARNING" || label === "WARN") { color = Logger.C.warning; symbol = "▲"; }
         else if (label === "SEVERE" || label === "ERROR") { color = Logger.C.red; symbol = "✖"; }
         
         msg = msg.replace(/^(org\.apache|com\.sun|java\..*?)\.[a-zA-Z0-9.]+\s/, "").trim();

@@ -7,6 +7,11 @@ import { TomcatService } from "../services/TomcatService";
 import { Logger } from "../utils/ui";
 import { EndpointService } from "../services/EndpointService";
 import { BrowserService } from "../services/BrowserService";
+import {
+	getJavaPath,
+	getWarExtractCommand,
+	isWindows,
+} from "../utils/platform";
 
 export class DeployCommand implements Command {
     constructor(private tomcat: TomcatService, private builder: BuildService) {}
@@ -78,15 +83,28 @@ export class DeployCommand implements Command {
                         Bun.spawnSync(["jar", "xf", artifactInfo.path], { cwd: appWebappPath });
                         Logger.server("extracted WAR");
                     } catch (e) {
-                        const extractCmd = `Expand-Archive -Path $env:ARTIFACT_PATH -DestinationPath $env:DEST_PATH -Force`;
-                        Bun.spawnSync(["powershell", "-command", extractCmd], {
-                            env: {
-                                ...process.env,
-                                ARTIFACT_PATH: artifactInfo.path,
-                                DEST_PATH: appWebappPath
+                        // Fallback para extração com jar (funciona em todas as plataformas)
+                        if (isWindows()) {
+                            const extractCmd = `Expand-Archive -Path $env:ARTIFACT_PATH -DestinationPath $env:DEST_PATH -Force`;
+                            Bun.spawnSync(["powershell", "-command", extractCmd], {
+                                env: {
+                                    ...process.env,
+                                    ARTIFACT_PATH: artifactInfo.path,
+                                    DEST_PATH: appWebappPath
+                                }
+                            });
+                        } else {
+                            // Linux/Mac: usa unzip ou jar
+                            try {
+                                Bun.spawnSync(["unzip", "-q", "-o", artifactInfo.path, "-d", appWebappPath]);
+                            } catch {
+                                // Fallback final para jar
+                                Bun.spawnSync(getWarExtractCommand(artifactInfo.path, appWebappPath), {
+                                    cwd: appWebappPath
+                                });
                             }
-                        });
-                        Logger.server("extracted WAR (legacy)");
+                        }
+                        Logger.server("extracted WAR (fallback)");
                     }
                 } else {
                     Logger.server("webapp up to date");
@@ -117,13 +135,7 @@ export class DeployCommand implements Command {
         Logger.config("watch", isWatching);
         Logger.config("debug", config.project.debug ? `port ${config.project.debugPort}` : false);
 
-        let javaBin = "java";
-        if (process.env.JAVA_HOME) {
-            const homeBin = path.join(process.env.JAVA_HOME, "bin", "java.exe");
-            if (fs.existsSync(homeBin)) javaBin = homeBin;
-        }
-        
-        const javaVer = Bun.spawnSync([javaBin, "-version"]);
+        const javaVer = Bun.spawnSync([getJavaPath(), "-version"]);
         const output = (javaVer.stderr.toString() + javaVer.stdout.toString()).toLowerCase();
         const hasDcevm = ["dcevm", "jetbrains", "trava", "jbr"].some(v => output.includes(v));
         

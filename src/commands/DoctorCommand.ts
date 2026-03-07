@@ -4,6 +4,17 @@ import { Logger } from "../utils/ui";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import {
+	getCatalinaScript,
+	getWhichCommand,
+	getJbrDownloadUrl,
+	getTarExtractCommand,
+	getJavaPath,
+	getJavaBinary,
+	isWindows,
+	isLinux,
+	isMacOS,
+} from "../utils/platform";
 
 export class DoctorCommand implements Command {
 	async execute(config: AppConfig, values: CLIArguments = {}): Promise<void> {
@@ -25,7 +36,7 @@ export class DoctorCommand implements Command {
 
 		if (!jvmInfo.dcevm) {
 			Logger.log(
-				`    ${Logger.C.yellow}💡 Dica: Sua JVM não suporta mudanças estruturais (novos métodos/campos).${Logger.C.reset}`,
+				`    ${Logger.C.warning}💡 Dica: Sua JVM não suporta mudanças estruturais (novos métodos/campos).${Logger.C.reset}`,
 			);
 			if (values.fix) {
 				await this.installDCEVM();
@@ -41,12 +52,12 @@ export class DoctorCommand implements Command {
 
 		if (tomcatOk) {
 			const binOk = fs.existsSync(
-				path.join(config.tomcat.path, "bin", "catalina.bat"),
+				path.join(config.tomcat.path, "bin", getCatalinaScript()),
 			);
 			this.check(
 				"Tomcat Bin",
 				binOk,
-				binOk ? "OK" : "catalina.bat não encontrado",
+				binOk ? "OK" : `${getCatalinaScript()} não encontrado`,
 			);
 		}
 
@@ -211,10 +222,7 @@ export class DoctorCommand implements Command {
 
 	private checkBinary(name: string): boolean {
 		try {
-			const proc = Bun.spawnSync([
-				process.platform === "win32" ? "where" : "which",
-				name,
-			]);
+			const proc = Bun.spawnSync(getWhichCommand(name));
 			return proc.exitCode === 0;
 		} catch {
 			return false;
@@ -224,11 +232,7 @@ export class DoctorCommand implements Command {
     private checkJVM(): { name: string, dcevm: boolean } {
         try {
             // Tentar primeiro o binário do JAVA_HOME para evitar cache do Path
-            let javaBin = "java";
-            if (process.env.JAVA_HOME) {
-                const homeBin = path.join(process.env.JAVA_HOME, "bin", "java.exe");
-                if (fs.existsSync(homeBin)) javaBin = homeBin;
-            }
+            let javaBin = getJavaPath();
 
             const proc = Bun.spawnSync([javaBin, "-version"]);
             const output = (proc.stderr.toString() + proc.stdout.toString()).toLowerCase();
@@ -251,8 +255,8 @@ export class DoctorCommand implements Command {
         Logger.section("Instalação do JetBrains Runtime (JBR 21)");
         Logger.log("Baixando JDK moderna com DCEVM nativo (JBR 21 SDK)...");
         
-        // URL para o JetBrains Runtime 21 SDK Windows x64
-        const url = "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-21.0.6-windows-x64-b895.97.tar.gz";
+        // URL para o JetBrains Runtime 21 SDK (multiplataforma)
+        const url = getJbrDownloadUrl("21");
         const installDir = path.join(os.homedir(), ".xavva", "jdk-dcevm");
         
         // Limpar instalação anterior se existir
@@ -272,21 +276,15 @@ export class DoctorCommand implements Command {
             
             Logger.success("Download concluído. Extraindo binários...");
             
-            // Usar PowerShell para extrair .tar.gz (nativo no Windows 10/11)
-            const extractCmd = `tar -xzf $env:TAR_PATH -C $env:INSTALL_DIR`;
-            Bun.spawnSync(["powershell", "-command", extractCmd], {
-                env: {
-                    ...process.env,
-                    TAR_PATH: tarPath,
-                    INSTALL_DIR: installDir
-                }
-            });
+            // Extrair .tar.gz usando comando apropriado para a plataforma
+            const extractCmd = getTarExtractCommand(tarPath, installDir);
+            Bun.spawnSync(extractCmd);
             
             fs.rmSync(tarPath);
 
-            // Busca recursiva para encontrar onde está o bin/java.exe
+            // Busca recursiva para encontrar onde está o bin/java
             const findJdkRoot = (dir: string): string | null => {
-                if (fs.existsSync(path.join(dir, "bin", "java.exe"))) return dir;
+                if (fs.existsSync(path.join(dir, "bin", getJavaBinary()))) return dir;
                 const subdirs = fs.readdirSync(dir, { withFileTypes: true })
                     .filter(d => d.isDirectory())
                     .map(d => path.join(dir, d.name));
@@ -299,55 +297,110 @@ export class DoctorCommand implements Command {
 
             const jdkPath = findJdkRoot(installDir) || installDir;
             const binPath = path.join(jdkPath, "bin");
-			            
-			                                    Logger.process("Configurando variáveis de ambiente do SISTEMA...");
-			                        
-			                                                const setEnvCmd = `
-			                                                    $jdk = $env:JDK_PATH;
-			                                                    $bin = $env:BIN_PATH;
-			                                                    try {
-			                                                        [Environment]::SetEnvironmentVariable('JAVA_HOME', $jdk, 'Machine');
-			                                                        $pathVar = [Environment]::GetEnvironmentVariable('Path', 'Machine');
-			                                                        $paths = $pathVar -split ';' | Where-Object { $_ -ne '' };
-			                                                        $normalizedBin = $bin.TrimEnd('\\').ToLower();
-			                                                        
-			                                                        $exists = $false;
-			                                                        foreach ($p in $paths) {
-			                                                            if ($p.TrimEnd('\\').ToLower() -eq $normalizedBin) { $exists = $true; break; }
-			                                                        }
-			                                    
-			                                                        if (-not $exists) {
-			                                                            $newPath = "$bin;" + $pathVar;
-			                                                            [Environment]::SetEnvironmentVariable('Path', $newPath, 'Machine');
-			                                                        }
-			                                                        Write-Output "OK";
-			                                                    } catch {
-			                                                        Write-Error $_.Exception.Message;
-			                                                    }
-			                                                `.replace(/\n/g, ' ');
-			                                    			                                    const result = Bun.spawnSync(["powershell", "-command", setEnvCmd], {
-                                                                            env: {
-                                                                                ...process.env,
-                                                                                JDK_PATH: jdkPath,
-                                                                                BIN_PATH: binPath
-                                                                            }
-                                                                        });
-			                                    const output = result.stdout.toString() + result.stderr.toString();
-			                        
-			                                    if (output.includes("ACCESS_DENIED")) {
-			                                        Logger.error("Falha ao configurar variáveis do SISTEMA (Acesso Negado).");
-			                                        Logger.warn("Dica: Execute o terminal como ADMINISTRADOR para permitir esta alteração.");
-			                                        Logger.info("JAVA_HOME manual", jdkPath);
-			                                    } else {
-			                                        Logger.success(`DCEVM configurado no SISTEMA com sucesso!`);
-			                                        Logger.info("JAVA_HOME", jdkPath);
-			                                    }
-			                        
-			                                    Logger.newline();
-			                                    Logger.warn("IMPORTANTE: Reinicie seu terminal (ou o VS Code) para as mudanças surtirem efeito.");
-			                                } catch (e) {
-			                        
-			            			Logger.error(`Falha na instalação: ${e.message}`);
-		}
-	}
+            
+            if (isWindows()) {
+                await this.configureWindowsEnv(jdkPath, binPath);
+            } else {
+                await this.configureUnixEnv(jdkPath, binPath);
+            }
+        } catch (e: any) {
+            Logger.error(`Falha na instalação: ${e.message}`);
+        }
+    }
+
+    private async configureWindowsEnv(jdkPath: string, binPath: string) {
+        Logger.process("Configurando variáveis de ambiente do SISTEMA...");
+
+        const setEnvCmd = `
+            $jdk = $env:JDK_PATH;
+            $bin = $env:BIN_PATH;
+            try {
+                [Environment]::SetEnvironmentVariable('JAVA_HOME', $jdk, 'Machine');
+                $pathVar = [Environment]::GetEnvironmentVariable('Path', 'Machine');
+                $paths = $pathVar -split ';' | Where-Object { $_ -ne '' };
+                $normalizedBin = $bin.TrimEnd('\\\\').ToLower();
+                
+                $exists = $false;
+                foreach ($p in $paths) {
+                    if ($p.TrimEnd('\\\\').ToLower() -eq $normalizedBin) { $exists = $true; break; }
+                }
+
+                if (-not $exists) {
+                    $newPath = "$bin;" + $pathVar;
+                    [Environment]::SetEnvironmentVariable('Path', $newPath, 'Machine');
+                }
+                Write-Output "OK";
+            } catch {
+                Write-Error $_.Exception.Message;
+            }
+        `.replace(/\n/g, ' ');
+
+        const result = Bun.spawnSync(["powershell", "-command", setEnvCmd], {
+            env: {
+                ...process.env,
+                JDK_PATH: jdkPath,
+                BIN_PATH: binPath
+            }
+        });
+        const output = result.stdout.toString() + result.stderr.toString();
+
+        if (output.includes("ACCESS_DENIED")) {
+            Logger.error("Falha ao configurar variáveis do SISTEMA (Acesso Negado).");
+            Logger.warn("Dica: Execute o terminal como ADMINISTRADOR para permitir esta alteração.");
+            Logger.info("JAVA_HOME manual", jdkPath);
+        } else {
+            Logger.success(`DCEVM configurado no SISTEMA com sucesso!`);
+            Logger.info("JAVA_HOME", jdkPath);
+        }
+
+        Logger.newline();
+        Logger.warn("IMPORTANTE: Reinicie seu terminal (ou o VS Code) para as mudanças surtirem efeito.");
+    }
+
+    private async configureUnixEnv(jdkPath: string, binPath: string) {
+        Logger.process("Configurando variáveis de ambiente...");
+
+        const shell = process.env.SHELL || "/bin/bash";
+        let rcFile = path.join(os.homedir(), ".bashrc");
+        
+        if (shell.includes("zsh")) {
+            rcFile = path.join(os.homedir(), ".zshrc");
+        } else if (shell.includes("fish")) {
+            rcFile = path.join(os.homedir(), ".config/fish/config.fish");
+        }
+
+        // Verifica se já existe JAVA_HOME configurado
+        const exportLine = `export JAVA_HOME="${jdkPath}"`;
+        const pathLine = `export PATH="${binPath}:$PATH"`;
+
+        let rcContent = "";
+        if (fs.existsSync(rcFile)) {
+            rcContent = fs.readFileSync(rcFile, "utf8");
+        }
+
+        // Remove linhas antigas do Xavva JBR
+        const lines = rcContent.split("\n");
+        const filteredLines = lines.filter(line => 
+            !line.includes("# Xavva JBR") && 
+            !line.includes("JAVA_HOME=") &&
+            !line.includes("# Added by Xavva")
+        );
+
+        // Adiciona novas configurações
+        filteredLines.push("# Added by Xavva - JetBrains Runtime (DCEVM)");
+        filteredLines.push(exportLine);
+        filteredLines.push(pathLine);
+
+        fs.writeFileSync(rcFile, filteredLines.join("\n") + "\n");
+
+        Logger.success(`DCEVM configurado em ${rcFile}`);
+        Logger.info("JAVA_HOME", jdkPath);
+        Logger.newline();
+        Logger.warn("IMPORTANTE: Execute 'source " + rcFile + "' ou reinicie seu terminal para aplicar permanentemente.");
+        Logger.info("Dica", "Para esta sessão, o JAVA_HOME já foi configurado temporariamente.");
+        
+        // Configura JAVA_HOME temporariamente para o processo atual
+        process.env.JAVA_HOME = jdkPath;
+        process.env.PATH = `${binPath}:${process.env.PATH}`;
+    }
 }

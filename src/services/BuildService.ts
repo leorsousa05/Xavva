@@ -30,6 +30,11 @@ export class BuildService {
 			this.cache.clearCache();
 		}
 
+		// Sempre limpa a pasta de build antes (target/ ou build/)
+		if (!incremental) {
+			await this.cleanBuildDirectory();
+		}
+
 		// Cache só é usado se --cache for passado ou em modo incremental
 		const useCache = this.projectConfig.cache || incremental;
 		
@@ -54,7 +59,8 @@ export class BuildService {
 			if (incremental) {
 				command.push("compile");
 			} else {
-				if (this.projectConfig.clean) command.push("clean");
+				// Sempre executa clean antes do build
+				command.push("clean");
 				// Use 'package' para gerar .war ou 'war:exploded' para pasta
 				if (this.projectConfig.war) {
 					command.push("package");
@@ -76,7 +82,8 @@ export class BuildService {
 			if (incremental) {
 				command.push("classes");
 			} else {
-				if (this.projectConfig.clean) command.push("clean");
+				// Sempre executa clean antes do build
+				command.push("clean");
 				command.push("war");
 				command.push("--parallel", "--build-cache");
 			}
@@ -120,6 +127,26 @@ export class BuildService {
 
 		if (!incremental) {
 			this.cache.saveCache(this.projectConfig.buildTool);
+		}
+	}
+
+	/**
+	 * Limpa fisicamente o diretório de build (target/ ou build/)
+	 * Garante build limpo antes de cada execução
+	 */
+	private async cleanBuildDirectory(): Promise<void> {
+		const buildDir = this.projectConfig.buildTool === 'maven' 
+			? path.join(process.cwd(), 'target')
+			: path.join(process.cwd(), 'build');
+		
+		if (existsSync(buildDir)) {
+			try {
+				Logger.step(`Cleaning ${path.basename(buildDir)}/ directory...`);
+				await fs.rm(buildDir, { recursive: true, force: true });
+				Logger.debug(`Removed ${buildDir}`);
+			} catch (e) {
+				Logger.warn(`Could not fully remove ${buildDir}, continuing...`);
+			}
 		}
 	}
 

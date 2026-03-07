@@ -60,7 +60,7 @@ export class LogsCommand implements Command {
                     currentSize = newStats.size;
                 } else if (newStats.size < currentSize) {
                     currentSize = newStats.size;
-                    dashboard.log(Logger.C.yellow + "Arquivo de log foi resetado/rotacionado.");
+                    dashboard.log(Logger.C.warning + "Arquivo de log foi resetado/rotacionado.");
                 }
             }
         });
