@@ -2,7 +2,7 @@
 
 > Ultra-fast development toolkit for Java Enterprise (Tomcat) on Windows, Linux & macOS
 
-[![Version](https://img.shields.io/badge/version-2.6.0-blue.svg)](https://github.com/leorsousa05/Xavva)
+[![Version](https://img.shields.io/badge/version-2.9.0-blue.svg)](https://github.com/leorsousa05/Xavva)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Xavva is a high-performance CLI built with **Bun** that transforms the Java/Tomcat development experience. It brings modern development workflows (like Node.js/Vite) to the Java Enterprise ecosystem with hot-reload, smart logging, and automated deployment.
@@ -21,6 +21,11 @@ Xavva is a high-performance CLI built with **Bun** that transforms the Java/Tomc
 - 🐱 **Embedded Tomcat** — Auto-install Tomcat, no manual setup needed
 - 📦 **WAR Generation** — Build as .war file or exploded directory
 - 🔤 **Encoding Converter** — Convert file encodings (UTF-8, Windows-1252, ISO-8859-1) and fix mojibake
+- 🧙 **Interactive Wizard** — `xavva init` for easy project setup
+- 🔔 **Desktop Notifications** — Get notified when builds/deploys complete
+- 📜 **Command History** — Track and replay commands with `xavva history` and `xavva redo`
+- 🏥 **Health Check** — Verify environment (Java, ports, memory, disk) with `xavva health`
+- 🔮 **Shell Completions** — Auto-complete for bash, zsh, and fish
 
 ---
 
@@ -39,6 +44,9 @@ bunx @archznn/xavva dev
 ## 🚀 Quick Start
 
 ```bash
+# Initialize project configuration (interactive wizard)
+xavva init
+
 # Start development mode with dashboard
 xavva dev --tui
 
@@ -62,6 +70,18 @@ xavva encoding convert --to cp1252 --backup src/main/java/
 
 # Use embedded Tomcat (auto-install)
 xavva dev --yes
+
+# Check environment health
+xavva health
+
+# View command history
+xavva history
+
+# Repeat last command
+xavva redo
+
+# Enable shell completions (bash example)
+eval "$(xavva completion bash)"
 ```
 
 ---
@@ -96,6 +116,19 @@ xavva dev --yes
 | `xavva docs`     | Generate endpoint documentation                           |
 | `xavva tomcat`   | Manage embedded Tomcat installations                      |
 | `xavva encoding` | Convert file encodings (UTF-8, CP1252, ISO-8859-1)        |
+| `xavva health`   | Check environment health (Java, ports, memory, disk)      |
+
+### Project Management
+
+| Command                 | Description                                    |
+| ----------------------- | ---------------------------------------------- |
+| `xavva init`            | Initialize project configuration (wizard)      |
+| `xavva config`          | View current configuration                     |
+| `xavva config --interactive` | Edit configuration interactively         |
+| `xavva history`         | Show command history                           |
+| `xavva history --clear` | Clear command history                          |
+| `xavva redo`            | Repeat the last executed command               |
+| `xavva completion <shell>` | Generate shell completions (bash/zsh/fish)  |
 
 ---
 
@@ -278,6 +311,82 @@ Create `xavva.json` in your project root:
 | `--cache`              | Use build cache (faster)        |
 | `-y, --yes`            | Auto-install Tomcat (no prompt) |
 | `-V, --verbose`        | Detailed output                 |
+| `-i, --interactive`    | Interactive mode (for config)   |
+
+---
+
+## 🧙 Interactive Wizard
+
+Initialize a new project with the interactive setup wizard:
+
+```bash
+xavva init
+```
+
+The wizard will guide you through:
+- Build tool selection (auto-detected from pom.xml or build.gradle)
+- Application name
+- Profile selection (detects profiles from your build file)
+- Tomcat port configuration
+- Embedded Tomcat settings
+- Build cache and TUI preferences
+
+---
+
+## 🏥 Health Check
+
+Verify your development environment:
+
+```bash
+# Check all components
+xavva health
+
+# Checks include:
+# - Java version (JDK 11+ recommended)
+# - Maven/Gradle availability
+# - Tomcat configuration
+# - Port availability
+# - Memory and disk space
+```
+
+---
+
+## 📜 Command History
+
+Track and replay your commands:
+
+```bash
+# Show recent commands
+xavva history
+
+# Show more entries
+xavva history --limit 20
+
+# Clear history
+xavva history --clear
+
+# Repeat last command
+xavva redo
+```
+
+---
+
+## 🔮 Shell Completions
+
+Enable tab completion for your shell:
+
+```bash
+# Bash (add to ~/.bashrc)
+eval "$(xavva completion bash)"
+
+# Zsh (add to ~/.zshrc)
+eval "$(xavva completion zsh)"
+
+# Fish
+xavva completion fish > ~/.config/fish/completions/xavva.fish
+```
+
+Supported shells: `bash`, `zsh`, `fish`
 
 ---
 
