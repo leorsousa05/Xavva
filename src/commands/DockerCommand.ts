@@ -19,8 +19,19 @@ export class DockerCommand implements Command {
         // Verifica se Docker está disponível
         const isAvailable = await service.isDockerAvailable();
         if (!isAvailable) {
-            Logger.error("Docker is not available");
+            Logger.error("Docker CLI not found");
             Logger.info("Install", "https://docs.docker.com/get-docker/");
+            await processManager.shutdown(1);
+            return;
+        }
+
+        // Verifica se o daemon está rodando
+        const isRunning = await service.isDaemonRunning();
+        if (!isRunning) {
+            Logger.error("Docker daemon is not running");
+            Logger.info("Windows", "Start Docker Desktop from the system tray");
+            Logger.info("Linux", "Run: sudo systemctl start docker");
+            Logger.info("macOS", "Start Docker Desktop from Applications");
             await processManager.shutdown(1);
             return;
         }

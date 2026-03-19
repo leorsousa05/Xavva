@@ -46,6 +46,17 @@ export class DockerService {
     }
 
     /**
+     * Verifica se o Docker daemon está rodando
+     */
+    async isDaemonRunning(): Promise<boolean> {
+        return new Promise((resolve) => {
+            const child = spawn("docker", ["info"], { shell: true });
+            child.on("close", (code) => resolve(code === 0));
+            child.on("error", () => resolve(false));
+        });
+    }
+
+    /**
      * Gera Dockerfile para o projeto
      */
     async generateDockerfile(config: DockerConfig = {}): Promise<void> {
