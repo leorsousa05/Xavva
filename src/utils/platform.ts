@@ -243,8 +243,8 @@ export function getOpenBrowserCommand(): string {
 export function getOpenBrowserArgs(url: string): string[] {
     const cmd = getOpenBrowserCommand();
     if (isWindows()) {
-        // Windows: start "" "url" (o "" é necessário para títulos de janela)
-        return [cmd, "", url];
+        // Windows: usa cmd /c start "" "url" (start é comando interno do cmd)
+        return ["cmd", "/c", "start", "", url];
     }
     return [cmd, url];
 }

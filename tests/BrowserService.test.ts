@@ -52,12 +52,15 @@ describe("BrowserService", () => {
         expect(call[0][0]).toBe("powershell");
     });
 
-    test("deve abrir URL com 'start' no Windows", () => {
+    test("deve usar PowerShell para abrir URL no Windows (com CDP)", () => {
         Object.defineProperty(process, 'platform', { value: 'win32' });
         
         BrowserService.open("http://localhost:8080/app");
         
-        expect(spawnSpy).toHaveBeenCalledWith(["cmd", "/c", "start", "http://localhost:8080/app"]);
+        // Agora usa PowerShell para abrir com remote debugging
+        expect(spawnSpy).toHaveBeenCalled();
+        const call = spawnSpy.mock.calls[0];
+        expect(call[0][0]).toBe("powershell");
     });
 
     test("deve abrir URL com 'open' no macOS", () => {

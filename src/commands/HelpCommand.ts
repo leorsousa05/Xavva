@@ -30,6 +30,7 @@ export class HelpCommand implements Command {
     ${this.c("green", "profiles")}         List available Maven/Gradle profiles
     ${this.c("green", "tomcat")}           Manage embedded Tomcat (install, list, installed, use, status)
     ${this.c("green", "docs")}             Generate endpoint documentation
+    ${this.c("green", "encoding")}         Convert file encoding (detect, convert, fix, list)
 
   ${this.c("yellow", "GENERAL OPTIONS")}
     ${this.c("cyan", "-p, --path")} <path>     Tomcat installation path
@@ -65,6 +66,13 @@ export class HelpCommand implements Command {
     ${this.c("cyan", "--strict")}              Fail on critical conflicts (for CI/CD)
     ${this.c("cyan", "-o, --output")} <file>   Export report as JSON
 
+  ${this.c("yellow", "ENCODING OPTIONS")}  ${this.c("dim", "(for xavva encoding)")}
+    ${this.c("cyan", "--from")} <encoding>     Source encoding (auto-detect if not specified)
+    ${this.c("cyan", "--to")} <encoding>       Target encoding (default: from xavva.json or UTF-8)
+    ${this.c("cyan", "--backup")}              Create backup before conversion
+    ${this.c("cyan", "--dry-run")}             Simulate without modifying files
+    ${this.c("cyan", "--src")} <path>          Source directory (default: src/)
+
   ${this.c("yellow", "EXAMPLES")}
     ${this.c("dim", "# Development with hot reload and dashboard")}
     xavva dev --tui --watch
@@ -96,6 +104,13 @@ export class HelpCommand implements Command {
     xavva tomcat use 9.0.115       # Switch to version for this project
     xavva tomcat status
     xavva tomcat uninstall 9.0.115
+
+    ${this.c("dim", "# Convert file encoding")}
+    xavva encoding detect src/main/java/MinhaClasse.java
+    xavva encoding convert --from utf-8 --to cp1252 src/main/java/
+    xavva encoding convert --to cp1252 --backup src/main/java/MinhaClasse.java
+    xavva encoding fix src/main/java/MinhaClasse.java    # Fix mojibake
+    xavva encoding list                                   # List all file encodings
 
   ${this.c("yellow", "CONFIGURATION")}
     Settings are loaded from ${this.c("cyan", "xavva.json")} in the project root:

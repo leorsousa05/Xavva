@@ -62,7 +62,7 @@ describe("CommandRegistry", () => {
 
         await registry.execute("test", config, args);
 
-        expect(mockExecute).toHaveBeenCalledWith(config, args);
+        expect(mockExecute).toHaveBeenCalledWith(config, args, undefined);
     });
 
     test("deve tratar comando inexistente chamando o Help e saindo", async () => {

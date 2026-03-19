@@ -1,7 +1,8 @@
 import fs from "fs";
 import path from "path";
-import type { TomcatConfig } from "../types/config";
+import type { TomcatConfig } from "../types";
 import { Logger } from "../utils/ui";
+import { AuditError } from "../errors/XavvaError";
 
 export interface Vulnerability {
     id: string;
@@ -125,7 +126,7 @@ export class AuditService {
 
             return { groupId, artifactId, version };
         } catch (e) {
-            return {};
+            throw new AuditError(`Falha ao extrair informações do JAR: ${(e as Error).message}`);
         }
     }
 

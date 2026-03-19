@@ -260,10 +260,11 @@ export class DeployCommand implements Command {
                 if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
 
                 fs.copyFileSync(filename, targetPath);
-                if (!config.project.quiet) Logger.success(`Synced ${path.basename(filename)} directly to Tomcat!`);
+                Logger.success(`${path.basename(filename)} updated → Tomcat`);
                 
                 const appUrl = `http://localhost:${config.tomcat.port}/${appFolder}`;
                 await BrowserService.reload(appUrl);
+                Logger.ready(`Browser reloaded`);
             } catch (e) {
                 Logger.error(`Failed to sync resource: ${filename}`);
             }

@@ -62,6 +62,12 @@ export interface CLIArguments {
     war?: boolean;
     cache?: boolean;
     changedFiles?: string[];
+    from?: string;
+    to?: string;
+    backup?: boolean;
+    "dry-run"?: boolean;
+    force?: boolean;
+    src?: string;
 }
 
 export interface CommandContext {

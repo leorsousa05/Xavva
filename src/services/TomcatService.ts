@@ -1,4 +1,6 @@
-import type { TomcatConfig, AppConfig } from "../types/config";
+import type { TomcatConfig, AppConfig } from "../types";
+import { getHotswapAgentUrl, VERSIONS } from "../config/versions";
+import { NetworkError } from "../errors/XavvaError";
 import { Logger } from "../utils/ui";
 import type { Subprocess } from "bun";
 import { ProjectService } from "./ProjectService";
@@ -21,6 +23,7 @@ export class TomcatService {
 	public onReady?: () => void;
 	private pid: number | null = null;
 	private projectService: ProjectService | null = null;
+	private hasReadyBeenCalled: boolean = false;
 
 	constructor(customConfig: TomcatConfig) {
 		this.activeConfig = customConfig;
@@ -136,7 +139,7 @@ export class TomcatService {
 
 	private async ensureHotswapAgent(): Promise<string | null> {
 		const agentDir = path.join(os.homedir(), ".xavva", "agents");
-		const agentPath = path.join(agentDir, "hotswap-agent-2.0.3.jar");
+		const agentPath = path.join(agentDir, `hotswap-agent-${VERSIONS.HOTSWAP_AGENT.VERSION}.jar`);
 
 		if (existsSync(agentPath) && statSync(agentPath).size > 1000) return agentPath;
 
@@ -173,10 +176,10 @@ export class TomcatService {
 			const stats = statSync(agentPath);
 			Logger.debug(`Escrito: ${stats.size} bytes`);
 			
-			Logger.success("HotswapAgent v2.0.3 installed globally!");
+			Logger.success(`HotswapAgent v${VERSIONS.HOTSWAP_AGENT.VERSION} installed globally!`);
 			return agentPath;
 		} catch (e: any) {
-			Logger.warn(`Falha ao baixar HotswapAgent: ${e.message}`);
+			throw new NetworkError(url, e);
 			Logger.warn("Usando hot swap padrão da JVM.");
 			
 			// Limpa arquivo parcial se existir
@@ -331,7 +334,8 @@ export class TomcatService {
 						this.stopStartupSpinner(isSuccess);
 						this.stopStartupSpinner = undefined;
 					}
-					if (isSuccess && this.onReady) {
+					if (isSuccess && this.onReady && !this.hasReadyBeenCalled) {
+						this.hasReadyBeenCalled = true;
 						this.onReady();
 					}
 				}

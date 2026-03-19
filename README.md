@@ -20,6 +20,7 @@ Xavva is a high-performance CLI built with **Bun** that transforms the Java/Tomc
 - 🔧 **Auto-Healing** — Automatic diagnosis and repair of common issues
 - 🐱 **Embedded Tomcat** — Auto-install Tomcat, no manual setup needed
 - 📦 **WAR Generation** — Build as .war file or exploded directory
+- 🔤 **Encoding Converter** — Convert file encodings (UTF-8, Windows-1252, ISO-8859-1) and fix mojibake
 
 ---
 
@@ -56,6 +57,9 @@ xavva deps --update-safe
 # Check for security vulnerabilities
 xavva audit
 
+# Convert file encoding (UTF-8 → Windows-1252)
+xavva encoding convert --to cp1252 --backup src/main/java/
+
 # Use embedded Tomcat (auto-install)
 xavva dev --yes
 ```
@@ -91,6 +95,7 @@ xavva dev --yes
 | `xavva profiles` | List available Maven/Gradle profiles                      |
 | `xavva docs`     | Generate endpoint documentation                           |
 | `xavva tomcat`   | Manage embedded Tomcat installations                      |
+| `xavva encoding` | Convert file encodings (UTF-8, CP1252, ISO-8859-1)        |
 
 ---
 
@@ -122,6 +127,56 @@ xavva tomcat uninstall 9.0.115
 
 # Or use with flags
 xavva dev --tomcat-version 9.0.115
+```
+
+---
+
+## 🔤 File Encoding
+
+The `xavva encoding` command helps you convert file encodings and fix mojibake (corrupted characters):
+
+```bash
+# Detect encoding of a file
+xavva encoding detect src/main/java/MyClass.java
+
+# Convert from UTF-8 to Windows-1252 (with backup)
+xavva encoding convert --from utf-8 --to cp1252 --backup src/main/java/
+
+# Convert a single file
+xavva encoding convert --to cp1252 --backup src/main/java/MyClass.java
+
+# Fix mojibake (e.g., "A��o" → "Ação")
+xavva encoding fix src/main/java/MyClass.java
+
+# List encodings of all files in src/
+xavva encoding list
+
+# Simulate conversion without modifying files
+xavva encoding convert --from utf-8 --to cp1252 --dry-run src/
+```
+
+### Supported Encodings
+
+- **utf-8** / **utf8** — UTF-8 (default)
+- **windows-1252** / **cp1252** — Windows CP1252 (ANSI)
+- **iso-8859-1** / **latin1** — ISO-8859-1 (Latin-1)
+
+### Configuration
+
+Set default encoding in `xavva.json`:
+
+```json
+{
+  "project": {
+    "encoding": "cp1252"
+  }
+}
+```
+
+Then use without `--to`:
+
+```bash
+xavva encoding convert --backup src/main/java/
 ```
 
 ---

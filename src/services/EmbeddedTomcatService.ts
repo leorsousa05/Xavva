@@ -1,4 +1,5 @@
 import { Logger } from "../utils/ui";
+import { VERSIONS, getAvailableTomcatVersions, isSupportedTomcatVersion } from "../config/versions";
 import {
 	existsSync,
 	mkdirSync,
@@ -45,25 +46,10 @@ export class EmbeddedTomcatService {
 	private downloadUrl: string;
 	private isInstalled: boolean = false;
 
-	// Versões estáveis do Tomcat (atualizadas: 2026-03-04)
-	// URLs são construídas dinamicamente baseadas na plataforma
-	private static readonly VERSIONS: Record<
-		string,
-		{ sha512: string }
-	> = {
-			"10.1.52": {
-				sha512: "",
-			},
-			"9.0.115": {
-				sha512: "",
-			},
-			"11.0.18": {
-				sha512: "",
-			},
-		};
+	// Versões agora centralizadas em src/config/versions.ts
 
 	constructor(options: EmbeddedTomcatOptions) {
-		this.version = options.version || "10.1.52";
+		this.version = options.version || VERSIONS.TOMCAT.DEFAULT;
 		this.port = options.port || 8080;
 		this.webappPath = path.resolve(options.webappPath);
 		this.contextPath = options.contextPath || "/";
@@ -71,7 +57,7 @@ export class EmbeddedTomcatService {
 		this.tomcatHome = path.join(this.baseDir, this.version);
 
 		// Constrói URL de download baseada na plataforma
-		const versionInfo = EmbeddedTomcatService.VERSIONS[this.version];
+		const versionInfo = isSupportedTomcatVersion(this.version) ? { sha512: "" } : null;
 		if (versionInfo) {
 			// Usa URL primária (CDN Apache)
 			this.downloadUrl = getTomcatDownloadUrl(this.version);
@@ -354,7 +340,7 @@ export class EmbeddedTomcatService {
 	 * Lista versões disponíveis
 	 */
 	static getAvailableVersions(): string[] {
-		return Object.keys(EmbeddedTomcatService.VERSIONS);
+		return getAvailableTomcatVersions();
 	}
 
 	/**
