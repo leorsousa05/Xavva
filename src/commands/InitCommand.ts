@@ -1,7 +1,7 @@
 import { input, select, confirm, number } from "@inquirer/prompts";
-import { writeFile, access } from "fs/promises";
+import { writeFile, access, readFile } from "fs/promises";
 import { join } from "path";
-import { constants } from "fs";
+import { constants, existsSync } from "fs";
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
 import { Logger } from "../utils/ui";
@@ -9,78 +9,106 @@ import { Logger } from "../utils/ui";
 export class InitCommand implements Command {
     async execute(_config: AppConfig, _args?: CLIArguments): Promise<void> {
         Logger.banner("init");
-        Logger.section("Wizard de Configuração");
-        Logger.info("Vamos configurar seu projeto Xavva");
+        Logger.section("Project Setup Wizard");
+        Logger.info("Let's configure your Xavva project");
         Logger.newline();
 
-        // Detectar build tool
+        // Detect build tool and available profiles
         const buildTool = await this.detectBuildTool();
+        const availableProfiles = await this.detectProfiles(buildTool);
         
-        // Nome da aplicação
+        // Application name
         const appName = await input({
-            message: "Nome da aplicação:",
+            message: "Application name:",
             default: process.cwd().split(/[/\\]/).pop() || "my-app",
-            validate: (value) => value.length > 0 || "Nome é obrigatório"
+            validate: (value) => value.length > 0 || "Name is required"
         });
 
-        // Profile
-        const profile = await select({
-            message: "Profile padrão:",
-            choices: [
-                { name: "desenvolvimento", value: "dev" },
-                { name: "teste", value: "test" },
-                { name: "produção", value: "prod" },
-                { name: "customizado", value: "custom" }
-            ],
-            default: "dev"
-        });
+        // Profile selection with explanation
+        Logger.newline();
+        Logger.dim("The profile is used to activate Maven/Gradle build configurations");
+        Logger.dim("(e.g., 'dev' for development, 'prod' for production)");
+        
+        let profile: string;
+        
+        if (availableProfiles.length > 0) {
+            // Profiles found in build file
+            const profileChoices = [
+                ...availableProfiles.map(p => ({ 
+                    name: `${p.name}${p.description ? ` - ${p.description}` : ''}`, 
+                    value: p.name 
+                })),
+                { name: "Other (custom)", value: "custom" }
+            ];
+            
+            profile = await select({
+                message: "Select a profile from your build file:",
+                choices: profileChoices,
+                default: availableProfiles.find(p => p.name === "dev")?.name || availableProfiles[0]?.name
+            });
+        } else {
+            // No profiles detected, show common options
+            profile = await select({
+                message: "Default profile:",
+                choices: [
+                    { name: "dev - Development environment", value: "dev" },
+                    { name: "test - Testing environment", value: "test" },
+                    { name: "prod - Production environment", value: "prod" },
+                    { name: "Other (custom)", value: "custom" }
+                ],
+                default: "dev"
+            });
+        }
 
-        const customProfile = profile === "custom" ? await input({
-            message: "Nome do profile:",
-            default: "local"
-        }) : profile;
+        if (profile === "custom") {
+            profile = await input({
+                message: "Profile name:",
+                default: "local",
+                validate: (value) => value.length > 0 || "Profile name is required"
+            });
+        }
 
-        // Porta do Tomcat
+        // Tomcat port
         const port = await number({
-            message: "Porta do Tomcat:",
+            message: "Tomcat port:",
             default: 8080,
-            validate: (value) => (value && value > 0 && value < 65536) || "Porta inválida"
+            validate: (value) => (value && value > 0 && value < 65536) || "Invalid port"
         }) || 8080;
 
-        // Configurações opcionais
+        // Optional settings
         Logger.newline();
-        Logger.dim("Configurações avançadas:");
+        Logger.dim("Advanced settings:");
         
         const useEmbedded = await confirm({
-            message: "Usar Tomcat embutido (auto-download)?",
+            message: "Use embedded Tomcat (auto-download)?",
             default: true
         });
 
         const enableCache = await confirm({
-            message: "Habilitar cache de build?",
+            message: "Enable build cache?",
             default: true
         });
 
         const enableTui = await confirm({
-            message: "Habilitar dashboard TUI?",
+            message: "Enable TUI dashboard?",
             default: true
         });
 
         const encoding = await select({
-            message: "Encoding:",
+            message: "Source encoding:",
             choices: [
-                { name: "UTF-8", value: "UTF-8" },
-                { name: "ISO-8859-1", value: "ISO-8859-1" },
+                { name: "UTF-8 (recommended)", value: "UTF-8" },
+                { name: "ISO-8859-1 (Latin-1)", value: "ISO-8859-1" },
                 { name: "Windows-1252", value: "Windows-1252" }
             ],
             default: "UTF-8"
         });
 
-        // Montar configuração
+        // Build config object
         const config: Record<string, unknown> = {
             appName,
             buildTool,
-            profile: customProfile,
+            profile,
             port,
             cache: enableCache,
             tui: enableTui,
@@ -89,60 +117,127 @@ export class InitCommand implements Command {
 
         if (useEmbedded) {
             config.embedded = true;
-            config.tomcatVersion = "10.1.52";
+            config.tomcatVersion = await select({
+                message: "Tomcat version:",
+                choices: [
+                    { name: "10.1.52 (Jakarta EE 10, recommended)", value: "10.1.52" },
+                    { name: "9.0.115 (Java EE 8)", value: "9.0.115" },
+                    { name: "11.0.18 (Jakarta EE 11, preview)", value: "11.0.18" }
+                ],
+                default: "10.1.52"
+            });
         } else {
             const tomcatPath = await input({
-                message: "Caminho do Tomcat (CATALINA_HOME):",
+                message: "Tomcat path (CATALINA_HOME):",
                 validate: async (value) => {
-                    if (!value) return "Caminho é obrigatório";
+                    if (!value) return "Path is required";
                     try {
                         await access(value, constants.R_OK);
                         return true;
                     } catch {
-                        return "Caminho não acessível";
+                        return "Path not accessible";
                     }
                 }
             });
             config.tomcatPath = tomcatPath;
         }
 
-        // Salvar arquivo
+        // Save file
         Logger.newline();
-        Logger.step("Salvando configuração...");
+        Logger.step("Saving configuration...");
 
         const configPath = join(process.cwd(), "xavva.json");
         await writeFile(configPath, JSON.stringify(config, null, 2));
 
-        Logger.success(`Configuração salva em ${configPath}`);
+        Logger.success(`Configuration saved to ${configPath}`);
         Logger.newline();
-        Logger.ready("Projeto configurado!");
-        Logger.info("Próximos passos:");
-        Logger.log(`  ${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.primary}xavva build${Logger.C.reset}  ${Logger.C.gray}- Compilar projeto${Logger.C.reset}`);
+        Logger.ready("Project configured!");
+        Logger.info("Next steps:");
+        Logger.log(`  ${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.primary}xavva build${Logger.C.reset}  ${Logger.C.gray}- Compile project${Logger.C.reset}`);
         Logger.log(`  ${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.primary}xavva deploy${Logger.C.reset} ${Logger.C.gray}- Build + deploy${Logger.C.reset}`);
-        Logger.log(`  ${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.primary}xavva doctor${Logger.C.reset} ${Logger.C.gray}- Verificar ambiente${Logger.C.reset}`);
+        Logger.log(`  ${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.primary}xavva health${Logger.C.reset} ${Logger.C.gray}- Check environment${Logger.C.reset}`);
         Logger.done();
     }
 
     private async detectBuildTool(): Promise<"maven" | "gradle"> {
-        try {
-            await access(join(process.cwd(), "pom.xml"), constants.R_OK);
-            Logger.info("Detectado: Projeto Maven");
+        const hasPom = existsSync(join(process.cwd(), "pom.xml"));
+        const hasGradle = existsSync(join(process.cwd(), "build.gradle")) || 
+                          existsSync(join(process.cwd(), "build.gradle.kts"));
+
+        if (hasPom && !hasGradle) {
+            Logger.info("Detected: Maven project");
             return "maven";
-        } catch {
-            try {
-                await access(join(process.cwd(), "build.gradle"), constants.R_OK);
-                Logger.info("Detectado: Projeto Gradle");
-                return "gradle";
-            } catch {
-                const choice = await select({
-                    message: "Build tool:",
-                    choices: [
-                        { name: "Maven", value: "maven" },
-                        { name: "Gradle", value: "gradle" }
-                    ]
-                });
-                return choice;
-            }
         }
+        
+        if (hasGradle && !hasPom) {
+            Logger.info("Detected: Gradle project");
+            return "gradle";
+        }
+
+        if (hasPom && hasGradle) {
+            Logger.warn("Both pom.xml and build.gradle found");
+            const choice = await select({
+                message: "Select build tool:",
+                choices: [
+                    { name: "Maven (pom.xml)", value: "maven" },
+                    { name: "Gradle (build.gradle)", value: "gradle" }
+                ]
+            });
+            return choice;
+        }
+
+        // Neither found
+        const choice = await select({
+            message: "Build tool:",
+            choices: [
+                { name: "Maven", value: "maven" },
+                { name: "Gradle", value: "gradle" }
+            ]
+        });
+        return choice;
+    }
+
+    private async detectProfiles(buildTool: "maven" | "gradle"): Promise<Array<{name: string, description?: string}>> {
+        const profiles: Array<{name: string, description?: string}> = [];
+        
+        try {
+            if (buildTool === "maven") {
+                const pomPath = join(process.cwd(), "pom.xml");
+                if (existsSync(pomPath)) {
+                    const content = await readFile(pomPath, "utf-8");
+                    // Parse profiles from pom.xml
+                    const profileMatches = content.matchAll(/<profile>[\s\S]*?<id>([^<]+)<\/id>[\s\S]*?<\/profile>/g);
+                    for (const match of profileMatches) {
+                        const profileContent = match[0];
+                        const id = match[1].trim();
+                        // Try to extract description or properties
+                        const descMatch = profileContent.match(/<description>([^<]+)<\/description>/);
+                        const desc = descMatch ? descMatch[1].trim() : undefined;
+                        profiles.push({ name: id, description: desc });
+                    }
+                }
+            } else {
+                const gradlePath = join(process.cwd(), "build.gradle");
+                const gradleKtsPath = join(process.cwd(), "build.gradle.kts");
+                const gradleFile = existsSync(gradlePath) ? gradlePath : gradleKtsPath;
+                
+                if (existsSync(gradleFile)) {
+                    const content = await readFile(gradleFile, "utf-8");
+                    // Look for common profile-like configurations
+                    // Gradle doesn't have built-in profiles like Maven, but can use:
+                    // - Properties (-Pprofile=dev)
+                    // - Custom configurations
+                    // - apply from: "profiles/${profile}.gradle"
+                    const profileMatches = content.matchAll(/(?:apply from:|def\s+\w*[Pp]rofile|ext\.\w*[Pp]rofile)\s*=\s*["']([^"']+)["']/g);
+                    for (const match of profileMatches) {
+                        profiles.push({ name: match[1] });
+                    }
+                }
+            }
+        } catch {
+            // Ignore errors, return empty profiles
+        }
+        
+        return profiles;
     }
 }
