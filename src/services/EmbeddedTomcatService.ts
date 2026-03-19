@@ -1,4 +1,5 @@
 import { Logger } from "../utils/ui";
+import { ProgressBar, ThemedSpinner } from "../utils/ProgressBar";
 import { VERSIONS, getAvailableTomcatVersions, isSupportedTomcatVersion } from "../config/versions";
 import {
 	existsSync,
@@ -347,27 +348,69 @@ export class EmbeddedTomcatService {
 	 * Download com progresso
 	 */
 	private async downloadFile(url: string, destPath: string): Promise<void> {
-		const spinner = Logger.spinner(`Baixando Tomcat ${this.version}...`);
+		const response = await fetch(url);
 
-		try {
-			const response = await fetch(url);
+		if (!response.ok) {
+			throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+		}
 
-			if (!response.ok) {
-				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+		const totalSize = parseInt(response.headers.get("content-length") || "0");
+		
+		// Se temos content-length, usar progress bar
+		if (totalSize > 0) {
+			const progress = new ProgressBar({
+				title: `Baixando Tomcat ${this.version}`,
+				total: totalSize,
+				width: 25
+			});
+
+			const reader = response.body?.getReader();
+			if (!reader) {
+				throw new Error("Response body não disponível");
 			}
 
-			const totalSize = parseInt(response.headers.get("content-length") || "0");
-			const buffer = await response.arrayBuffer();
+			const chunks: Uint8Array[] = [];
+			let received = 0;
 
-			writeFileSync(destPath, Buffer.from(buffer));
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				
+				chunks.push(value);
+				received += value.length;
+				progress.update(received);
+			}
 
-			spinner(true);
+			progress.complete();
 
-			const sizeMB = (buffer.byteLength / 1024 / 1024).toFixed(1);
+			// Concatena chunks e salva
+			const allChunks = new Uint8Array(received);
+			let position = 0;
+			for (const chunk of chunks) {
+				allChunks.set(chunk, position);
+				position += chunk.length;
+			}
+
+			await fsPromises.writeFile(destPath, allChunks);
+			
+			const sizeMB = (received / 1024 / 1024).toFixed(1);
 			Logger.info("Download", `${sizeMB} MB baixados`);
-		} catch (error) {
-			spinner(false);
-			throw error;
+		} else {
+			// Sem content-length, usar spinner temático
+			const spinner = new ThemedSpinner();
+			const stop = spinner.start(`Baixando Tomcat ${this.version}`, "dots", "download");
+
+			try {
+				const buffer = await response.arrayBuffer();
+				await fsPromises.writeFile(destPath, Buffer.from(buffer));
+				stop(true);
+				
+				const sizeMB = (buffer.byteLength / 1024 / 1024).toFixed(1);
+				Logger.info("Download", `${sizeMB} MB baixados`);
+			} catch (error) {
+				stop(false);
+				throw error;
+			}
 		}
 	}
 
@@ -375,13 +418,14 @@ export class EmbeddedTomcatService {
 	 * Extrai arquivo de arquivos (ZIP ou tar.gz)
 	 */
 	private async extractZip(zipPath: string, destDir: string): Promise<void> {
-		const spinner = Logger.spinner("Extraindo arquivos...");
+		const spinner = new ThemedSpinner();
+		const stop = spinner.start("Extraindo arquivos", "pulse", "build");
 
 		return new Promise((resolve, reject) => {
 			const cmd = getExtractCommand(zipPath, destDir);
 			
 			if (!cmd) {
-				spinner(false);
+				stop(false);
 				reject(new Error(`Formato de arquivo não suportado: ${path.extname(zipPath)}`));
 				return;
 			}
@@ -390,16 +434,16 @@ export class EmbeddedTomcatService {
 
 			extractProcess.on("close", (code) => {
 				if (code === 0) {
-					spinner(true);
+					stop(true);
 					resolve();
 				} else {
-					spinner(false);
+					stop(false);
 					reject(new Error(`Falha ao extrair (código ${code})`));
 				}
 			});
 
 			extractProcess.on("error", (err) => {
-				spinner(false);
+				stop(false);
 				reject(err);
 			});
 		});

@@ -109,6 +109,21 @@ export interface EncodingCommandArgs extends BaseArgs, EncodingArgs {
     // Herda de EncodingArgs
 }
 
+// ===== Args dos Novos Comandos UX =====
+export interface ConfigArgs extends BaseArgs {
+    interactive?: boolean;
+    i?: boolean;
+}
+
+export interface HistoryArgs extends BaseArgs {
+    clear?: boolean;
+    limit?: string;
+}
+
+export interface CompletionArgs extends BaseArgs {
+    shell?: string;
+}
+
 // ===== CLIArguments Legado (para compatibilidade) =====
 // Será gradualmente removido
 export interface CLIArguments extends 

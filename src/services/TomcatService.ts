@@ -2,6 +2,7 @@ import type { TomcatConfig, AppConfig } from "../types";
 import { getHotswapAgentUrl, VERSIONS } from "../config/versions";
 import { NetworkError } from "../errors/XavvaError";
 import { Logger } from "../utils/ui";
+import { ProgressBar, ThemedSpinner } from "../utils/ProgressBar";
 import type { Subprocess } from "bun";
 import { ProjectService } from "./ProjectService";
 import { existsSync, mkdirSync, writeFileSync, statSync, promises as fs } from "fs";
@@ -146,47 +147,75 @@ export class TomcatService {
 		try {
 			if (!existsSync(agentDir)) mkdirSync(agentDir, { recursive: true });
 			
-			Logger.step("Downloading HotswapAgent v2.0.3 (Global)...");
-			const url = "https://github.com/HotswapProjects/HotswapAgent/releases/download/RELEASE-2.0.3/hotswap-agent-2.0.3.jar";
-			
-			Logger.debug(`URL: ${url}`);
-			Logger.debug(`Destino: ${agentPath}`);
-			
-			const response = await fetch(url, {
-				redirect: "follow",
-			});
+			const url = getHotswapAgentUrl();
+			const response = await fetch(url, { redirect: "follow" });
 			
 			if (!response.ok) {
 				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 			}
 			
-			const contentLength = response.headers.get("content-length");
-			Logger.debug(`Content-Length: ${contentLength || "unknown"}`);
+			const totalSize = parseInt(response.headers.get("content-length") || "0");
 			
-			const buffer = await response.arrayBuffer();
-			Logger.debug(`Downloaded: ${buffer.byteLength} bytes`);
-			
-			if (buffer.byteLength < 1000) {
-				throw new Error(`Arquivo muito pequeno (${buffer.byteLength} bytes)`);
+			if (totalSize > 0) {
+				// Usar progress bar
+				const progress = new ProgressBar({
+					title: `Baixando HotswapAgent v${VERSIONS.HOTSWAP_AGENT.VERSION}`,
+					total: totalSize,
+					width: 25
+				});
+
+				const reader = response.body?.getReader();
+				if (!reader) throw new Error("Response body não disponível");
+
+				const chunks: Uint8Array[] = [];
+				let received = 0;
+
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+					
+					chunks.push(value);
+					received += value.length;
+					progress.update(received);
+				}
+
+				progress.complete();
+
+				// Concatena e salva
+				const allChunks = new Uint8Array(received);
+				let position = 0;
+				for (const chunk of chunks) {
+					allChunks.set(chunk, position);
+					position += chunk.length;
+				}
+
+				await fs.writeFile(agentPath, allChunks);
+			} else {
+				// Sem content-length, usar spinner
+				const spinner = new ThemedSpinner();
+				const stop = spinner.start(`Baixando HotswapAgent v${VERSIONS.HOTSWAP_AGENT.VERSION}`, "dots", "download");
+				
+				const buffer = await response.arrayBuffer();
+				writeFileSync(agentPath, Buffer.from(buffer));
+				
+				stop(true);
 			}
-			
-			writeFileSync(agentPath, Buffer.from(buffer));
 			
 			// Verifica se foi escrito corretamente
 			const stats = statSync(agentPath);
-			Logger.debug(`Escrito: ${stats.size} bytes`);
+			if (stats.size < 1000) {
+				throw new Error(`Arquivo muito pequeno (${stats.size} bytes)`);
+			}
 			
-			Logger.success(`HotswapAgent v${VERSIONS.HOTSWAP_AGENT.VERSION} installed globally!`);
+			Logger.success(`HotswapAgent v${VERSIONS.HOTSWAP_AGENT.VERSION} instalado!`);
 			return agentPath;
 		} catch (e: any) {
-			throw new NetworkError(url, e);
-			Logger.warn("Usando hot swap padrão da JVM.");
+			Logger.warn("Falha ao baixar HotswapAgent. Usando hot swap padrão da JVM.");
 			
 			// Limpa arquivo parcial se existir
 			if (existsSync(agentPath)) {
 				try {
 					await fs.unlink(agentPath);
-					Logger.debug("Arquivo parcial removido");
 				} catch {}
 			}
 			

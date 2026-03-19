@@ -24,6 +24,14 @@ import { DepsCommand } from "../commands/DepsCommand";
 import { TomcatCommand } from "../commands/TomcatCommand";
 import { EncodingCommand } from "../commands/EncodingCommand";
 import { DocsCommand } from "../commands/DocsCommand";
+import { InitCommand } from "../commands/InitCommand";
+import { ConfigCommand } from "../commands/ConfigCommand";
+import { HistoryCommand } from "../commands/HistoryCommand";
+import { RedoCommand } from "../commands/RedoCommand";
+import { HealthCommand } from "../commands/HealthCommand";
+import { CompletionCommand } from "../commands/CompletionCommand";
+import { HistoryService } from "../services/HistoryService";
+import { NotificationService } from "../services/NotificationService";
 import type { Command } from "../commands/Command";
 import { Logger } from "../utils/ui";
 
@@ -35,6 +43,7 @@ export interface Services {
     auditService: AuditService;
     dashboardService: DashboardService;
     logAnalyzer: LogAnalyzer;
+    historyService: HistoryService;
 }
 
 export interface Commands {
@@ -53,6 +62,12 @@ export interface Commands {
     tomcat: TomcatCommand;
     encoding: EncodingCommand;
     docs: DocsCommand;
+    init: InitCommand;
+    config: ConfigCommand;
+    history: HistoryCommand;
+    redo: RedoCommand;
+    health: HealthCommand;
+    completion: CompletionCommand;
 }
 
 export class DIContainer {
@@ -101,6 +116,7 @@ export class DIContainer {
         tomcatService.setProjectService(projectService);
 
         const auditService = new AuditService(this.config.tomcat);
+        const historyService = new HistoryService();
 
         this.services = {
             projectService,
@@ -110,6 +126,7 @@ export class DIContainer {
             auditService,
             dashboardService,
             logAnalyzer,
+            historyService,
         };
     }
 
@@ -140,6 +157,12 @@ export class DIContainer {
             tomcat: new TomcatCommand(),
             encoding: new EncodingCommand(),
             docs: new DocsCommand(),
+            init: new InitCommand(),
+            config: new ConfigCommand(),
+            history: new HistoryCommand(),
+            redo: new RedoCommand(),
+            health: new HealthCommand(),
+            completion: new CompletionCommand(),
         };
     }
 

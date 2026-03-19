@@ -23,7 +23,8 @@ async function main() {
     const commandNames = [
         "deploy", "build", "start", "dev", "doctor", "run", 
         "debug", "logs", "docs", "audit", "profiles", 
-        "deps", "tomcat", "encoding"
+        "deps", "tomcat", "encoding", "init", "config", 
+        "history", "redo", "health", "completion", "help"
     ];
     const commandName = positionals.find(p => commandNames.includes(p)) || "deploy";
 
@@ -96,15 +97,52 @@ async function main() {
         registry.register("encoding", commands.encoding);
         registry.register("deploy", commands.deploy);
         registry.register("dev", commands.dev);
+        registry.register("init", commands.init);
+        registry.register("config", commands.config);
+        registry.register("history", commands.history);
+        registry.register("redo", commands.redo);
+        registry.register("health", commands.health);
+        registry.register("completion", commands.completion);
 
         // Configura flags específicas
         if (commandName === "debug") values.debug = true;
         if (commandName === "run") values.debug = false;
 
+        // Registra comando no histórico antes da execução
+        const startTime = Date.now();
+        let success = true;
+
         try {
             await registry.execute(commandName, config, values as CLIArguments, positionals);
         } catch (error) {
+            success = false;
             await ErrorHandler.getInstance().handle(error, { phase: "command-execution", command: commandName });
+        } finally {
+            // Salva no histórico
+            const duration = (Date.now() - startTime) / 1000;
+            const filteredPositionals = positionals.filter(p => p !== commandName && !commandNames.includes(p));
+            services.historyService.add({
+                command: commandName,
+                args: [...filteredPositionals, ...Object.entries(values)
+                    .filter(([, v]) => v !== undefined && typeof v !== "object")
+                    .flatMap(([k, v]) => [`--${k}`, String(v)])],
+                success,
+                duration
+            }).catch(() => { /* ignore history errors */ });
+
+            // Envia notificação para comandos longos
+            if (duration > 5 && commandName !== "logs" && commandName !== "history") {
+                const { NotificationService } = await import("./services/NotificationService");
+                if (success) {
+                    if (commandName === "build" || commandName === "deploy") {
+                        NotificationService.buildSuccess(duration);
+                    } else if (commandName === "start") {
+                        NotificationService.deployComplete(config.project.appName);
+                    }
+                } else {
+                    NotificationService.buildFailed(`Comando ${commandName} falhou`);
+                }
+            }
         }
     }
 }

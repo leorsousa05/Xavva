@@ -31,6 +31,13 @@ export class HelpCommand implements Command {
     ${this.c("green", "tomcat")}           Manage embedded Tomcat (install, list, installed, use, status)
     ${this.c("green", "docs")}             Generate endpoint documentation
     ${this.c("green", "encoding")}         Convert file encoding (detect, convert, fix, list)
+    
+    ${this.c("cyan", "init")}              Initialize project configuration (wizard)
+    ${this.c("cyan", "config")}            View/edit configuration (--interactive)
+    ${this.c("cyan", "history")}           Show command history
+    ${this.c("cyan", "redo")}              Repeat last command
+    ${this.c("cyan", "health")}            Check environment health
+    ${this.c("cyan", "completion")}        Generate shell completions (bash/zsh/fish)
 
   ${this.c("yellow", "GENERAL OPTIONS")}
     ${this.c("cyan", "-p, --path")} <path>     Tomcat installation path
@@ -111,6 +118,26 @@ export class HelpCommand implements Command {
     xavva encoding convert --to cp1252 --backup src/main/java/MinhaClasse.java
     xavva encoding fix src/main/java/MinhaClasse.java    # Fix mojibake
     xavva encoding list                                   # List all file encodings
+
+    ${this.c("dim", "# Initialize new project")}
+    xavva init                     # Interactive wizard
+    
+    ${this.c("dim", "# Manage configuration")}
+    xavva config                   # View current config
+    xavva config --interactive     # Edit config interactively
+    
+    ${this.c("dim", "# Command history")}
+    xavva history                  # Show recent commands
+    xavva history --clear          # Clear history
+    xavva redo                     # Repeat last command
+    
+    ${this.c("dim", "# Health check")}
+    xavva health                   # Check environment health
+    
+    ${this.c("dim", "# Shell completions")}
+    xavva completion bash          # Generate bash completions
+    xavva completion zsh           # Generate zsh completions
+    eval "$(xavva completion bash)" # Enable in current shell
 
   ${this.c("yellow", "CONFIGURATION")}
     Settings are loaded from ${this.c("cyan", "xavva.json")} in the project root:
