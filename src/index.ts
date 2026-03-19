@@ -31,7 +31,8 @@ async function main() {
         "deploy", "build", "start", "dev", "doctor", "run", 
         "debug", "logs", "docs", "audit", "profiles", 
         "deps", "tomcat", "encoding", "init", "config", 
-        "history", "redo", "health", "completion", "changelog", "help"
+        "history", "redo", "health", "completion", "changelog",
+        "test", "db", "http", "docker", "help"
     ];
     const commandName = positionals.find(p => commandNames.includes(p)) || "deploy";
 
@@ -111,6 +112,10 @@ async function main() {
         registry.register("health", commands.health);
         registry.register("completion", commands.completion);
         registry.register("changelog", commands.changelog);
+        registry.register("test", commands.test);
+        registry.register("db", commands.db);
+        registry.register("http", commands.http);
+        registry.register("docker", commands.docker);
 
         // Configura flags específicas
         if (commandName === "debug") values.debug = true;

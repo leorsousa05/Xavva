@@ -2,7 +2,7 @@
 
 > Ultra-fast development toolkit for Java Enterprise (Tomcat) on Windows, Linux & macOS
 
-[![Version](https://img.shields.io/badge/version-2.9.0-blue.svg)](https://github.com/leorsousa05/Xavva)
+[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/leorsousa05/Xavva)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Xavva is a high-performance CLI built with **Bun** that transforms the Java/Tomcat development experience. It brings modern development workflows (like Node.js/Vite) to the Java Enterprise ecosystem with hot-reload, smart logging, and automated deployment.
@@ -26,6 +26,11 @@ Xavva is a high-performance CLI built with **Bun** that transforms the Java/Tomc
 - 📜 **Command History** — Track and replay commands with `xavva history` and `xavva redo`
 - 🏥 **Health Check** — Verify environment (Java, ports, memory, disk) with `xavva health`
 - 🔮 **Shell Completions** — Auto-complete for bash, zsh, and fish
+- 🧪 **Test Runner** — Run JUnit/TestNG tests with watch mode and coverage
+- 🗄️ **Database Migrations** — Flyway/Liquibase integration
+- 🌐 **HTTP Client** — Test APIs without leaving the terminal
+- 🐳 **Docker Integration** — Generate configs, build and run containers
+- 🌍 **Multi-Environment** — Dev, test, staging configurations
 
 ---
 
@@ -80,6 +85,29 @@ xavva history
 # Repeat last command
 xavva redo
 
+# Run tests
+xavva test
+xavva test --watch
+xavva test --coverage
+
+# Database migrations
+xavva db status
+xavva db migrate
+xavva db reset --force
+
+# HTTP API testing
+xavva http GET /api/users
+xavva http POST /api/users --body '{"name":"John"}'
+
+# Docker integration
+xavva docker init
+xavva docker build
+xavva docker up
+
+# Multi-environment
+xavva deploy --env staging
+xavva dev --env dev
+
 # Enable shell completions (bash example)
 eval "$(xavva completion bash)"
 ```
@@ -129,6 +157,56 @@ eval "$(xavva completion bash)"
 | `xavva history --clear` | Clear command history                          |
 | `xavva redo`            | Repeat the last executed command               |
 | `xavva completion <shell>` | Generate shell completions (bash/zsh/fish)  |
+
+### Testing & Database
+
+| Command | Description |
+|---------|-------------|
+| `xavva test` | Run all tests (JUnit/TestNG) |
+| `xavva test --watch` | Run tests in watch mode |
+| `xavva test --coverage` | Generate coverage report |
+| `xavva test <filter>` | Run specific test class |
+| `xavva db status` | Show migration status |
+| `xavva db migrate` | Run pending migrations |
+| `xavva db reset --force` | Reset database (⚠️ destructive) |
+| `xavva db seed` | Populate with test data |
+
+### HTTP Client
+
+| Command | Description |
+|---------|-------------|
+| `xavva http GET <path>` | Send GET request |
+| `xavva http POST <path> --body '{}'` | Send POST request |
+| `xavva http <path> --param key=value` | Add query parameters |
+| `xavva http <path> --header "Auth: token"` | Add custom headers |
+
+### Docker
+
+| Command | Description |
+|---------|-------------|
+| `xavva docker init` | Generate Dockerfile & docker-compose.yml |
+| `xavva docker build` | Build Docker image |
+| `xavva docker up` | Start with docker-compose |
+| `xavva docker down` | Stop containers |
+| `xavva docker run` | Run development container |
+| `xavva docker status` | Show container status |
+
+### Multi-Environment
+
+| Command | Description |
+|---------|-------------|
+| `xavva deploy --env <name>` | Deploy to specific environment |
+| `xavva dev --env <name>` | Use environment configuration |
+
+Configure environments in `xavva.json`:
+```json
+{
+  "environments": {
+    "dev": { "port": 8080, "profile": "dev" },
+    "staging": { "port": 8081, "profile": "staging" }
+  }
+}
+```
 
 ---
 

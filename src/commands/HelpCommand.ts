@@ -40,6 +40,11 @@ export class HelpCommand implements Command {
     ${this.c("cyan", "completion")}        Generate shell completions (bash/zsh/fish)
     ${this.c("cyan", "changelog")}         Generate changelog from conventional commits
 
+    ${this.c("magenta", "test")}             Run tests (JUnit/TestNG)
+    ${this.c("magenta", "db")}               Database migrations (Flyway/Liquibase)
+    ${this.c("magenta", "http")}             HTTP client for API testing
+    ${this.c("magenta", "docker")}           Docker integration (build, run, compose)
+
   ${this.c("yellow", "GENERAL OPTIONS")}
     ${this.c("cyan", "-p, --path")} <path>     Tomcat installation path
     ${this.c("cyan", "-t, --tool")} <tool>     Build tool: maven | gradle
@@ -150,6 +155,33 @@ export class HelpCommand implements Command {
     xavva deploy --debug-level verbose  # Verbose logging
     xavva deploy --debug-level trace    # Trace all operations
     xavva deploy --debug-level silly    # Everything including config
+
+    ${this.c("dim", "# Multi-environment")}
+    xavva deploy --env staging          # Deploy to staging environment
+    xavva dev --env dev                 # Use dev environment config
+
+    ${this.c("dim", "# Test runner")}
+    xavva test                          # Run all tests
+    xavva test --watch                  # Watch mode
+    xavva test --coverage               # Generate coverage report
+    xavva test UserServiceTest          # Run specific test class
+
+    ${this.c("dim", "# Database migrations")}
+    xavva db status                     # Show migration status
+    xavva db migrate                    # Run pending migrations
+    xavva db reset --force              # Reset database (drops all!)
+    xavva db seed                       # Populate with test data
+
+    ${this.c("dim", "# HTTP Client")}
+    xavva http GET /api/users           # Test endpoint
+    xavva http POST /api/users --body '{"name":"John"}'
+    xavva http GET /api/users --param page=1 --param size=10
+
+    ${this.c("dim", "# Docker")}
+    xavva docker init                   # Generate Dockerfile & compose
+    xavva docker build                  # Build image
+    xavva docker up                     # Start with docker-compose
+    xavva docker run                    # Run dev container
 
   ${this.c("yellow", "CONFIGURATION")}
     Settings are loaded from ${this.c("cyan", "xavva.json")} in the project root:

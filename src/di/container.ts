@@ -32,6 +32,10 @@ import { HealthCommand } from "../commands/HealthCommand";
 import { CompletionCommand } from "../commands/CompletionCommand";
 import { ChangelogCommand } from "../commands/ChangelogCommand";
 import { HistoryService } from "../services/HistoryService";
+import { TestCommand } from "../commands/TestCommand";
+import { DbCommand } from "../commands/DbCommand";
+import { HttpCommand } from "../commands/HttpCommand";
+import { DockerCommand } from "../commands/DockerCommand";
 import { NotificationService } from "../services/NotificationService";
 import type { Command } from "../commands/Command";
 import { Logger } from "../utils/ui";
@@ -70,6 +74,10 @@ export interface Commands {
     health: HealthCommand;
     completion: CompletionCommand;
     changelog: ChangelogCommand;
+    test: TestCommand;
+    db: DbCommand;
+    http: HttpCommand;
+    docker: DockerCommand;
 }
 
 export class DIContainer {
@@ -166,6 +174,10 @@ export class DIContainer {
             health: new HealthCommand(),
             completion: new CompletionCommand(),
             changelog: new ChangelogCommand(),
+            test: new TestCommand(),
+            db: new DbCommand(),
+            http: new HttpCommand(),
+            docker: new DockerCommand(),
         };
     }
 

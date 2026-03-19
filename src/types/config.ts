@@ -1,3 +1,16 @@
+export interface EnvironmentConfig {
+    port?: number;
+    profile?: string;
+    db?: {
+        url?: string;
+        username?: string;
+        password?: string;
+        driver?: string;
+    };
+    tomcat?: Partial<TomcatConfig>;
+    env?: Record<string, string>;
+}
+
 export interface TomcatConfig {
     path: string;
     port: number;
@@ -24,6 +37,8 @@ export interface ProjectConfig {
     encoding?: string;
     war?: boolean;
     cache?: boolean;
+    environment?: string;
+    environments?: Record<string, EnvironmentConfig>;
 }
 
 export interface AppConfig {
@@ -68,6 +83,29 @@ export interface CLIArguments {
     "dry-run"?: boolean;
     force?: boolean;
     src?: string;
+    // Multi-environment
+    env?: string;
+    environment?: string;
+    // Test runner
+    coverage?: boolean;
+    "fail-fast"?: boolean;
+    parallel?: boolean;
+    // HTTP client
+    interactive?: boolean;
+    "base-url"?: string;
+    body?: string;
+    file?: string;
+    header?: string | string[];
+    "content-type"?: string;
+    accept?: string;
+    param?: string | string[];
+    timeout?: string;
+    // Docker
+    tag?: string;
+    "java-version"?: string;
+    detached?: boolean;
+    registry?: string;
+    namespace?: string;
 }
 
 export interface CommandContext {

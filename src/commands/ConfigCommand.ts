@@ -141,6 +141,54 @@ export class ConfigCommand implements Command {
                 default: String(config.tomcatPath || "")
             });
         }
+
+        // Edit environments
+        const editEnvs = await confirm({
+            message: "Editar environments?",
+            default: false
+        });
+
+        if (editEnvs) {
+            await this.editEnvironments(config);
+        }
+    }
+
+    private async editEnvironments(config: Record<string, unknown>): Promise<void> {
+        const environments = (config.environments as Record<string, unknown>) || {};
+        
+        const envNames = Object.keys(environments);
+        if (envNames.length > 0) {
+            Logger.info("Environments existentes:", envNames.join(", "));
+        }
+
+        const addNew = await confirm({
+            message: "Adicionar novo environment?",
+            default: envNames.length === 0
+        });
+
+        if (addNew) {
+            const name = await input({
+                message: "Nome do environment:",
+                default: "staging"
+            });
+
+            const port = await number({
+                message: `Porta para ${name}:`,
+                default: 8080
+            });
+
+            const profile = await input({
+                message: `Profile para ${name}:`,
+                default: name
+            });
+
+            environments[name] = {
+                port,
+                profile
+            };
+        }
+
+        config.environments = environments;
     }
 
     private async editBuild(config: Record<string, unknown>): Promise<void> {

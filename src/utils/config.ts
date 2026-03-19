@@ -44,6 +44,29 @@ export class ConfigManager {
                 "dry-run": { type: "boolean" },
                 force: { type: "boolean" },
                 src: { type: "string" },
+                // Multi-environment
+                env: { type: "string" },
+                environment: { type: "string" },
+                // Test runner
+                coverage: { type: "boolean" },
+                "fail-fast": { type: "boolean" },
+                parallel: { type: "boolean" },
+                // HTTP client
+                interactive: { type: "boolean", short: "i" },
+                "base-url": { type: "string" },
+                body: { type: "string" },
+                file: { type: "string" },
+                header: { type: "string", multiple: true },
+                "content-type": { type: "string" },
+                accept: { type: "string" },
+                param: { type: "string", multiple: true },
+                timeout: { type: "string" },
+                // Docker
+                tag: { type: "string" },
+                "java-version": { type: "string" },
+                detached: { type: "boolean", short: "d" },
+                registry: { type: "string" },
+                namespace: { type: "string" },
             },
             strict: false,
             allowPositionals: true,
@@ -142,19 +165,30 @@ export class ConfigManager {
             tomcatPath = embeddedService.getTomcatHome();
         }
 
+        // Detectar environment
+        const environment = String(cliValues.env || cliValues.environment || xavvaJson.env || xavvaJson.environment || "");
+        const envConfig = environment && (xavvaJson as any).environments?.[environment];
+
+        // Merge environment config
+        const finalPort = envConfig?.port 
+            ? parseInt(String(envConfig.port)) 
+            : parseInt(String(cliValues.port || xavvaJson.port || String(DEFAULT_TOMCAT_PORT)));
+        const finalProfile = envConfig?.profile || String(cliValues.profile || xavvaJson.profile || "");
+
         const config: AppConfig = {
             tomcat: {
                 path: tomcatPath,
-                port: parseInt(String(cliValues.port || xavvaJson.port || String(DEFAULT_TOMCAT_PORT))),
+                port: finalPort,
                 webapps: "webapps",
                 grep: cliValues.grep || xavvaJson.grep ? String(cliValues.grep || xavvaJson.grep) : "",
                 embedded: useEmbedded,
                 version: embeddedVersion,
+                ...(envConfig?.tomcat || {})
             },
             project: {
                 appName: cliValues.name || xavvaJson.name ? String(cliValues.name || xavvaJson.name) : "",
                 buildTool: (cliValues.tool as any) || (xavvaJson.tool as any) || detectedTool,
-                profile: String(cliValues.profile || xavvaJson.profile || ""),
+                profile: finalProfile,
                 skipBuild: !!(cliValues["no-build"] ?? xavvaJson["no-build"]),
                 skipScan: cliValues.scan !== undefined ? !cliValues.scan : (xavvaJson.scan !== undefined ? !xavvaJson.scan : true),
                 clean: !!(cliValues.clean ?? xavvaJson.clean),
@@ -168,6 +202,8 @@ export class ConfigManager {
                 encoding: cliValues.encoding || xavvaJson.encoding || "",
                 war: !!(cliValues.war ?? xavvaJson.war),
                 cache: !!(cliValues.cache ?? xavvaJson.cache),
+                environment,
+                environments: (xavvaJson as any).environments
             }
         };
 

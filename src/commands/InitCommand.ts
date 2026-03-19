@@ -104,6 +104,12 @@ export class InitCommand implements Command {
             default: "UTF-8"
         });
 
+        // Multi-environment setup
+        const enableMultiEnv = await confirm({
+            message: "Configure multiple environments?",
+            default: false
+        });
+
         // Build config object
         const config: Record<string, unknown> = {
             appName,
@@ -140,6 +146,70 @@ export class InitCommand implements Command {
                 }
             });
             config.tomcatPath = tomcatPath;
+        }
+
+        // Add environments if enabled
+        if (enableMultiEnv) {
+            Logger.newline();
+            Logger.dim("Environment Configuration:");
+            
+            const environments: Record<string, unknown> = {};
+            
+            // Dev environment
+            const devPort = await number({
+                message: "Dev environment port:",
+                default: port
+            }) || port;
+            environments.dev = {
+                port: devPort,
+                profile: "dev"
+            };
+            
+            // Test environment
+            const testPort = await number({
+                message: "Test environment port:",
+                default: port + 1
+            }) || port + 1;
+            environments.test = {
+                port: testPort,
+                profile: "test"
+            };
+            
+            // Staging environment
+            const hasStaging = await confirm({
+                message: "Add staging environment?",
+                default: true
+            });
+            
+            if (hasStaging) {
+                const stagingPort = await number({
+                    message: "Staging environment port:",
+                    default: port + 2
+                }) || port + 2;
+                environments.staging = {
+                    port: stagingPort,
+                    profile: "staging"
+                };
+            }
+            
+            config.environments = environments;
+            
+            // Add DB config example
+            const addDbExample = await confirm({
+                message: "Add database configuration example?",
+                default: true
+            });
+            
+            if (addDbExample) {
+                environments.dev = {
+                    ...environments.dev,
+                    db: {
+                        url: "jdbc:h2:mem:devdb",
+                        username: "sa",
+                        password: ""
+                    }
+                };
+            }
         }
 
         // Save file
