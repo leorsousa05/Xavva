@@ -5,6 +5,7 @@ import { createContainer, type DIContainer } from "./di/container";
 import { DeployWatcher } from "./services/DeployWatcher";
 import { ErrorHandler } from "./errors/ErrorHandler";
 import { ProcessManager } from "./utils/processManager";
+import { LoggerLevel } from "./utils/LoggerLevel";
 import pkg from "../package.json";
 import { Logger } from "./utils/ui";
 import type { CLIArguments } from "./types/args";
@@ -19,12 +20,18 @@ async function main() {
         await processManager.shutdown(0);
     }
 
+    // Configura debug level
+    if (values["debug-level"]) {
+        LoggerLevel.setLevel(values["debug-level"]);
+        LoggerLevel.verbose(`Debug level set to: ${values["debug-level"]}`, {});
+    }
+
     // Identifica comando
     const commandNames = [
         "deploy", "build", "start", "dev", "doctor", "run", 
         "debug", "logs", "docs", "audit", "profiles", 
         "deps", "tomcat", "encoding", "init", "config", 
-        "history", "redo", "health", "completion", "help"
+        "history", "redo", "health", "completion", "changelog", "help"
     ];
     const commandName = positionals.find(p => commandNames.includes(p)) || "deploy";
 
@@ -103,6 +110,7 @@ async function main() {
         registry.register("redo", commands.redo);
         registry.register("health", commands.health);
         registry.register("completion", commands.completion);
+        registry.register("changelog", commands.changelog);
 
         // Configura flags específicas
         if (commandName === "debug") values.debug = true;

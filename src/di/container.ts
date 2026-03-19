@@ -30,6 +30,7 @@ import { HistoryCommand } from "../commands/HistoryCommand";
 import { RedoCommand } from "../commands/RedoCommand";
 import { HealthCommand } from "../commands/HealthCommand";
 import { CompletionCommand } from "../commands/CompletionCommand";
+import { ChangelogCommand } from "../commands/ChangelogCommand";
 import { HistoryService } from "../services/HistoryService";
 import { NotificationService } from "../services/NotificationService";
 import type { Command } from "../commands/Command";
@@ -68,6 +69,7 @@ export interface Commands {
     redo: RedoCommand;
     health: HealthCommand;
     completion: CompletionCommand;
+    changelog: ChangelogCommand;
 }
 
 export class DIContainer {
@@ -163,6 +165,7 @@ export class DIContainer {
             redo: new RedoCommand(),
             health: new HealthCommand(),
             completion: new CompletionCommand(),
+            changelog: new ChangelogCommand(),
         };
     }
 

@@ -38,6 +38,7 @@ export class HelpCommand implements Command {
     ${this.c("cyan", "redo")}              Repeat last command
     ${this.c("cyan", "health")}            Check environment health
     ${this.c("cyan", "completion")}        Generate shell completions (bash/zsh/fish)
+    ${this.c("cyan", "changelog")}         Generate changelog from conventional commits
 
   ${this.c("yellow", "GENERAL OPTIONS")}
     ${this.c("cyan", "-p, --path")} <path>     Tomcat installation path
@@ -56,6 +57,7 @@ export class HelpCommand implements Command {
     ${this.c("cyan", "-s, --no-build")}       Skip initial build
     ${this.c("cyan", "-q, --quiet")}          Minimal output
     ${this.c("cyan", "-V, --verbose")}        Detailed output
+    ${this.c("cyan", "--debug-level")} <lvl>   Debug level: error|warn|info|verbose|trace|silly
     ${this.c("cyan", "-h, --help")}           Show this help
     ${this.c("cyan", "-v, --version")}        Show version
 
@@ -138,6 +140,16 @@ export class HelpCommand implements Command {
     xavva completion bash          # Generate bash completions
     xavva completion zsh           # Generate zsh completions
     eval "$(xavva completion bash)" # Enable in current shell
+
+    ${this.c("dim", "# Changelog")}
+    xavva changelog generate       # Generate CHANGELOG.md
+    xavva changelog check          # Validate conventional commits
+    xavva changelog preview        # Preview without saving
+    
+    ${this.c("dim", "# Debug levels")}
+    xavva deploy --debug-level verbose  # Verbose logging
+    xavva deploy --debug-level trace    # Trace all operations
+    xavva deploy --debug-level silly    # Everything including config
 
   ${this.c("yellow", "CONFIGURATION")}
     Settings are loaded from ${this.c("cyan", "xavva.json")} in the project root:

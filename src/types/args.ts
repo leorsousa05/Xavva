@@ -9,6 +9,7 @@ export interface BaseArgs {
     version?: boolean;
     verbose?: boolean;
     quiet?: boolean;
+    "debug-level"?: "silent" | "error" | "warn" | "info" | "verbose" | "trace" | "silly";
 }
 
 // ===== Args de Configuração de Projeto =====

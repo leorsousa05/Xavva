@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xavva Gradle Sample</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            text-align: center;
+        }
+        .logo {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        p {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        .endpoints {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        .endpoint {
+            font-family: 'Courier New', monospace;
+            padding: 8px;
+            margin: 4px 0;
+            background: white;
+            border-radius: 4px;
+            border-left: 3px solid #11998e;
+        }
+        .method {
+            color: #11998e;
+            font-weight: bold;
+        }
+        .btn {
+            display: inline-block;
+            background: #11998e;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            margin: 5px;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background: #0d7a6e;
+        }
+        .code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="logo">⚡</div>
+        <h1>Xavva Gradle Sample</h1>
+        <p>
+            A sample Gradle project with JAX-RS REST API demonstrating Xavva's hot-reload capabilities.
+        </p>
+        
+        <div class="endpoints">
+            <h3>Available Endpoints:</h3>
+            <div class="endpoint"><span class="method">GET</span> /api/hello</div>
+            <div class="endpoint"><span class="method">GET</span> /api/time</div>
+            <div class="endpoint"><span class="method">GET</span> /api/info</div>
+            <div class="endpoint"><span class="method">POST</span> /api/echo</div>
+        </div>
+        
+        <p>
+            <a href="api/hello" class="btn">Test API</a>
+        </p>
+        
+        <p style="margin-top: 30px; font-size: 0.9em;">
+            Try running: <span class="code">xavva dev --watch</span>
+        </p>
+    </div>
+</body>
+</html>

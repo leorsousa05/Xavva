@@ -1,0 +1,82 @@
+plugins {
+    id 'java'
+    id 'war'
+    id 'org.gretty' version '4.1.1'
+}
+
+group = 'com.example'
+version = '1.0.0-SNAPSHOT'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Jakarta EE 10 API
+    providedCompile 'jakarta.servlet:jakarta.servlet-api:6.0.0'
+    implementation 'jakarta.ws.rs:jakarta.ws.rs-api:3.1.0'
+    
+    // Jersey Implementation
+    implementation 'org.glassfish.jersey.containers:jersey-container-servlet:3.1.2'
+    implementation 'org.glassfish.jersey.inject:jersey-hk2:3.1.2'
+    implementation 'org.glassfish.jersey.media:jersey-media-json-jackson:3.1.2'
+    
+    // Test dependencies
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.9.3'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+war {
+    archiveFileName = 'gradle-xavva-sample.war'
+}
+
+gretty {
+    servletContainer = 'tomcat10'
+    httpPort = 8080
+    contextPath = '/gradle-xavva-sample'
+    
+    // JVM arguments for debugging
+    jvmArgs = ['-Xmx1024m']
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+// Custom tasks for Xavva integration
+tasks.register('xavvaBuild') {
+    group = 'xavva'
+    description = 'Build for Xavva deployment'
+    dependsOn 'war'
+    doLast {
+        println "Built: ${war.archiveFileName.get()}"
+        println "Location: ${war.archiveFile.get()}"
+    }
+}
+
+// Profile-based configuration (Gradle-style)
+if (hasProperty('profile')) {
+    def activeProfile = property('profile')
+    println "Active profile: $activeProfile"
+    
+    if (activeProfile == 'dev') {
+        tasks.withType(JavaCompile) {
+            options.debug = true
+            options.debugOptions.debugLevel = 'source,lines,vars'
+        }
+    } else if (activeProfile == 'prod') {
+        tasks.withType(JavaCompile) {
+            options.debug = false
+            options.optimize = true
+        }
+    }
+}
