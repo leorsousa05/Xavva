@@ -16,6 +16,13 @@ export class EncodingCommand implements Command {
     async execute(config: AppConfig, args?: CLIArguments, positionals?: string[]): Promise<void> {
         const processManager = ProcessManager.getInstance();
         
+        // Mostra help se solicitado
+        if (args?.help) {
+            this.showHelp();
+            await processManager.shutdown(0);
+            return;
+        }
+
         // Parse subcomando
         const subcommand = positionals?.[1] || "help";
         const fileArg = positionals?.[2]; // Arquivo específico (opcional)

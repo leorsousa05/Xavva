@@ -6,7 +6,32 @@ import path from "path";
 import fs from "fs";
 
 export class TomcatCommand implements Command {
+    private showHelp(): void {
+        Logger.section("Tomcat Command");
+        Logger.log(`${Logger.C.bold}Usage:${Logger.C.reset} xavva tomcat <action> [options]`);
+        Logger.newline();
+        Logger.log(`${Logger.C.bold}Actions:${Logger.C.reset}`);
+        Logger.log(`  ${Logger.C.primary}list${Logger.C.reset}         List available Tomcat versions`);
+        Logger.log(`  ${Logger.C.primary}installed${Logger.C.reset}    List installed versions`);
+        Logger.log(`  ${Logger.C.primary}install${Logger.C.reset}      Install a version`);
+        Logger.log(`  ${Logger.C.primary}use${Logger.C.reset}          Set version for this project`);
+        Logger.log(`  ${Logger.C.primary}uninstall${Logger.C.reset}    Remove a version`);
+        Logger.log(`  ${Logger.C.primary}status${Logger.C.reset}       Show current configuration`);
+        Logger.newline();
+        Logger.log(`${Logger.C.bold}Examples:${Logger.C.reset}`);
+        Logger.log(`  xavva tomcat list`);
+        Logger.log(`  xavva tomcat install 9.0.115`);
+        Logger.log(`  xavva tomcat use 10.1.52`);
+        Logger.log(`  xavva tomcat status`);
+    }
+
     async execute(config: AppConfig, args?: CLIArguments, positionals?: string[]): Promise<void> {
+        // Mostra help se solicitado
+        if (args?.help) {
+            this.showHelp();
+            return;
+        }
+
         // A ação vem como positional após "tomcat" (ex: xavva tomcat list)
         const tomcatIndex = positionals?.indexOf("tomcat") ?? -1;
         const action = positionals && tomcatIndex >= 0 && positionals[tomcatIndex + 1] 

@@ -49,9 +49,15 @@ async function main() {
 
     // Handler de help
     if (values.help) {
-        const { HelpCommand } = await import("./commands/HelpCommand");
-        new HelpCommand().execute(config, values as CLIArguments);
-        await processManager.shutdown(0);
+        // Se for help de comando específico, deixa o comando tratar
+        if (commandName !== "help" && commandName !== "deploy") {
+            // O comando específico vai tratar o --help
+        } else {
+            // Help geral
+            const { HelpCommand } = await import("./commands/HelpCommand");
+            new HelpCommand().execute(config, values as CLIArguments);
+            await processManager.shutdown(0);
+        }
     }
 
     // Inicializa Container de DI

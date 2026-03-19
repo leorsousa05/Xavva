@@ -10,8 +10,35 @@ import { Logger } from "../utils/ui";
 import { ProcessManager } from "../utils/processManager";
 
 export class DbCommand implements Command {
+    private showHelp(): void {
+        Logger.section("Database Command");
+        Logger.log(`${Logger.C.bold}Usage:${Logger.C.reset} xavva db <action> [options]`);
+        Logger.newline();
+        Logger.log(`${Logger.C.bold}Actions:${Logger.C.reset}`);
+        Logger.log(`  ${Logger.C.primary}status${Logger.C.reset}     Show migration status`);
+        Logger.log(`  ${Logger.C.primary}migrate${Logger.C.reset}    Run pending migrations`);
+        Logger.log(`  ${Logger.C.primary}reset${Logger.C.reset}      Reset database (⚠️ destructive)`);
+        Logger.log(`  ${Logger.C.primary}seed${Logger.C.reset}       Populate with test data`);
+        Logger.newline();
+        Logger.log(`${Logger.C.bold}Options:${Logger.C.reset}`);
+        Logger.log(`  --force           Confirm destructive operations`);
+        Logger.log(`  --env <name>      Use environment config`);
+        Logger.newline();
+        Logger.log(`${Logger.C.bold}Examples:${Logger.C.reset}`);
+        Logger.log(`  xavva db status`);
+        Logger.log(`  xavva db migrate`);
+        Logger.log(`  xavva db reset --force`);
+    }
+
     async execute(config: AppConfig, args?: CLIArguments, positionals?: string[]): Promise<void> {
         const processManager = ProcessManager.getInstance();
+
+        // Mostra help se solicitado
+        if (args?.help) {
+            this.showHelp();
+            return;
+        }
+
         const action = positionals?.[1] || "status";
         
         const service = new DbService(config.project.buildTool);

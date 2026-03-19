@@ -10,8 +10,39 @@ import { Logger } from "../utils/ui";
 import { ProcessManager } from "../utils/processManager";
 
 export class DockerCommand implements Command {
+    private showHelp(): void {
+        Logger.section("Docker Command");
+        Logger.log(`${Logger.C.bold}Usage:${Logger.C.reset} xavva docker <action> [options]`);
+        Logger.newline();
+        Logger.log(`${Logger.C.bold}Actions:${Logger.C.reset}`);
+        Logger.log(`  ${Logger.C.primary}init${Logger.C.reset}       Generate Dockerfile & docker-compose.yml`);
+        Logger.log(`  ${Logger.C.primary}build${Logger.C.reset}      Build Docker image`);
+        Logger.log(`  ${Logger.C.primary}run${Logger.C.reset}        Run development container`);
+        Logger.log(`  ${Logger.C.primary}up${Logger.C.reset}         Start with docker-compose`);
+        Logger.log(`  ${Logger.C.primary}down${Logger.C.reset}       Stop containers`);
+        Logger.log(`  ${Logger.C.primary}status${Logger.C.reset}     Show container status`);
+        Logger.newline();
+        Logger.log(`${Logger.C.bold}Options:${Logger.C.reset}`);
+        Logger.log(`  --name <n>        Image name`);
+        Logger.log(`  --tag <t>         Image tag`);
+        Logger.log(`  --port <p>        Port mapping`);
+        Logger.log(`  -d, --detached    Run in background`);
+        Logger.newline();
+        Logger.log(`${Logger.C.bold}Examples:${Logger.C.reset}`);
+        Logger.log(`  xavva docker init`);
+        Logger.log(`  xavva docker build --tag myapp:1.0`);
+        Logger.log(`  xavva docker up -d`);
+    }
+
     async execute(config: AppConfig, args?: CLIArguments, positionals?: string[]): Promise<void> {
         const processManager = ProcessManager.getInstance();
+
+        // Mostra help se solicitado
+        if (args?.help) {
+            this.showHelp();
+            return;
+        }
+
         const action = positionals?.[1] || "status";
 
         const service = new DockerService();

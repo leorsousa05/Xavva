@@ -14,8 +14,34 @@ import fs from "fs";
 import path from "path";
 
 export class HttpCommand implements Command {
+    private showHelp(): void {
+        Logger.section("HTTP Client");
+        Logger.log(`${Logger.C.bold}Usage:${Logger.C.reset} xavva http <method> <path> [options]`);
+        Logger.log(`${Logger.C.bold}   or:${Logger.C.reset} xavva http --interactive`);
+        Logger.newline();
+        Logger.log(`${Logger.C.bold}Methods:${Logger.C.reset} GET, POST, PUT, DELETE, PATCH`);
+        Logger.newline();
+        Logger.log(`${Logger.C.bold}Options:${Logger.C.reset}`);
+        Logger.log(`  --body <data>        Request body (JSON)`);
+        Logger.log(`  --param <k=v>        Query parameter (can use multiple)`);
+        Logger.log(`  --header <h>         Custom header`);
+        Logger.log(`  --base-url <url>     Override base URL`);
+        Logger.log(`  -i, --interactive    Interactive mode`);
+        Logger.newline();
+        Logger.log(`${Logger.C.bold}Examples:${Logger.C.reset}`);
+        Logger.log(`  xavva http GET /api/users`);
+        Logger.log(`  xavva http POST /api/users --body '{"name":"John"}'`);
+        Logger.log(`  xavva http GET /api/users --param page=1 --param size=10`);
+    }
+
     async execute(config: AppConfig, args?: CLIArguments, positionals?: string[]): Promise<void> {
         const processManager = ProcessManager.getInstance();
+
+        // Mostra help se solicitado
+        if (args?.help) {
+            this.showHelp();
+            return;
+        }
         
         // Modo interativo
         if (args?.interactive || positionals?.length === 1) {

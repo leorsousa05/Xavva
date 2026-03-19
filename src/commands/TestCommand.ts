@@ -12,8 +12,32 @@ import { ProcessManager } from "../utils/processManager";
 export class TestCommand implements Command {
     private service: TestService | null = null;
 
+    private showHelp(): void {
+        Logger.section("Test Runner");
+        Logger.log(`${Logger.C.bold}Usage:${Logger.C.reset} xavva test [options] [filter]`);
+        Logger.newline();
+        Logger.log(`${Logger.C.bold}Options:${Logger.C.reset}`);
+        Logger.log(`  -w, --watch          Watch mode (run on file change)`);
+        Logger.log(`      --coverage       Generate JaCoCo coverage report`);
+        Logger.log(`      --fail-fast      Stop on first failure`);
+        Logger.log(`      --parallel       Run tests in parallel`);
+        Logger.log(`  -V, --verbose        Verbose output`);
+        Logger.newline();
+        Logger.log(`${Logger.C.bold}Examples:${Logger.C.reset}`);
+        Logger.log(`  xavva test                    # Run all tests`);
+        Logger.log(`  xavva test --watch            # Watch mode`);
+        Logger.log(`  xavva test --coverage         # With coverage`);
+        Logger.log(`  xavva test UserServiceTest    # Run specific test`);
+    }
+
     async execute(config: AppConfig, args?: CLIArguments, positionals?: string[]): Promise<void> {
         const processManager = ProcessManager.getInstance();
+
+        // Mostra help se solicitado
+        if (args?.help) {
+            this.showHelp();
+            return;
+        }
         
         // Extrai filtros de teste dos positionals (após o comando "test")
         const filter = positionals?.slice(1).join(" ") || undefined;
