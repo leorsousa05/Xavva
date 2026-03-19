@@ -6,8 +6,9 @@ import { existsSync } from "fs";
 
 export class ChangelogCommand implements Command {
     async execute(_config: AppConfig, args?: CLIArguments, positionals?: string[]): Promise<void> {
-        const action = positionals?.[0] || "generate";
-        const output = args?.["output"] || "CHANGELOG.md";
+        // Pula o nome do comando "changelog" e pega a ação
+        const action = positionals?.find(p => !["changelog", "gen"].includes(p)) || "generate";
+        const output = args?.["output"] || args?.["o"] || "CHANGELOG.md";
 
         Logger.banner("changelog");
 
