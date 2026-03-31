@@ -32,6 +32,9 @@ export class BuildService {
 			this.cache.clearCache();
 		}
 
+		// Detecta modo Spring Boot - nunca usa war:exploded neste caso
+		const isSpringBoot = this.projectConfig.executionMode === 'springboot';
+
 		// Sempre limpa a pasta de build antes (target/ ou build/)
 		if (!incremental) {
 			await this.cleanBuildDirectory();
@@ -50,6 +53,9 @@ export class BuildService {
 		const command = [];
 		const env: Record<string, string | undefined> = { ...process.env };
 		
+		// Encoding padrão UTF-8 para evitar erros de encoding
+		const encoding = this.projectConfig.encoding || 'UTF-8';
+		
 		if (this.projectConfig.buildTool === 'maven') {
 			command.push(process.platform === "win32" ? "mvn.cmd" : "mvn");
 
@@ -58,7 +64,11 @@ export class BuildService {
 				command.push("-o");
 			}
 
-			if (incremental) {
+			if (incremental || isSpringBoot) {
+				// Spring Boot ou incremental: apenas compile, sem war:exploded
+				if (!incremental) {
+					command.push("clean");
+				}
 				command.push("compile");
 			} else {
 				// Sempre executa clean antes do build
@@ -73,15 +83,20 @@ export class BuildService {
 			}
 			command.push("-Dmaven.test.skip=true", "-Dmaven.javadoc.skip=true");
 			if (this.projectConfig.profile) command.push(`-P${this.projectConfig.profile}`);
-			if (this.projectConfig.encoding) {
-				command.push(`-Dproject.build.sourceEncoding=${this.projectConfig.encoding}`);
-				command.push(`-Dproject.reporting.outputEncoding=${this.projectConfig.encoding}`);
-			}
+			
+			// Sempre define encoding para evitar erros
+			command.push(`-Dproject.build.sourceEncoding=${encoding}`);
+			command.push(`-Dproject.reporting.outputEncoding=${encoding}`);
 
-			env.MAVEN_OPTS = "-Xms512m -Xmx1024m -XX:+UseParallelGC";
+			// MAVEN_OPTS com encoding e memory settings
+			env.MAVEN_OPTS = `-Xms512m -Xmx1024m -XX:+UseParallelGC -Dfile.encoding=${encoding}`;
 		} else {
 			command.push(process.platform === "win32" ? "gradle.bat" : "gradle");
-			if (incremental) {
+			if (incremental || isSpringBoot) {
+				// Spring Boot ou incremental: apenas classes, sem war
+				if (!incremental) {
+					command.push("clean");
+				}
 				command.push("classes");
 			} else {
 				// Sempre executa clean antes do build
@@ -91,11 +106,11 @@ export class BuildService {
 			}
 			command.push("-x", "test", "-x", "javadoc");
 			if (this.projectConfig.profile) command.push(`-Pprofile=${this.projectConfig.profile}`);
-			if (this.projectConfig.encoding) {
-				command.push(`-Dfile.encoding=${this.projectConfig.encoding}`);
-			}
+			
+			// Sempre define encoding
+			command.push(`-Dfile.encoding=${encoding}`);
 
-			env.GRADLE_OPTS = "-Xmx1024m -Dorg.gradle.daemon=true";
+			env.GRADLE_OPTS = `-Xmx1024m -Dorg.gradle.daemon=true -Dfile.encoding=${encoding}`;
 		}
 
 		const spinner = this.projectConfig.verbose ? null : this.logger.spinner(incremental ? "Compilação incremental" : "Build completo do projeto");
