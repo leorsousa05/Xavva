@@ -85,11 +85,13 @@ export class RunCommand implements Command {
             let debugOptions: string;
             
             if (attachLater) {
+                // Modo attach-later: não suspende, permite conectar depois
                 debugOptions = "transport=dt_socket,server=y,suspend=n,address=5005";
                 this.logger.info("Modo attach-later: aplicação vai iniciar imediatamente");
                 this.logger.info("Você pode conectar o debugger a qualquer momento na porta 5005");
             } else {
-                debugOptions = "transport=dt_socket,server=y,suspend=y,address=5005";
+                // Modo debug normal: suspende até conectar, sem timeout
+                debugOptions = "transport=dt_socket,server=y,suspend=y,address=5005,timeout=0";
             }
             
             javaArgs.push(`-agentlib:jdwp=${debugOptions}`);
@@ -309,9 +311,13 @@ export class RunCommand implements Command {
      * Aguarda countdown com mensagem visual
      */
     private async waitCountdown(seconds: number): Promise<void> {
-        this.logger.warn(`🚀 Aguardando ${seconds} segundos para conectar o debugger...`);
-        this.logger.info("Dica: No VS Code ou IntelliJ, use 'Attach to Remote JVM' na porta 5005.");
+        this.logger.warn(`🚀 Modo debug ativado na porta 5005`);
         this.logger.newline();
+        this.logger.info("Instruções:");
+        this.logger.info("  1. No VS Code: Ctrl+Shift+D → 'Attach to Remote JVM' → Start Debugging");
+        this.logger.info("  2. No IntelliJ: Run → Attach to Process → selecione a porta 5005");
+        this.logger.newline();
+        this.logger.warn(`Aguardando ${seconds} segundos...`);
 
         for (let i = seconds; i > 0; i--) {
             process.stdout.write(`\r  ${this.getSpinnerFrame(i)} Conecte o debugger agora... ${i}s `);
@@ -326,7 +332,10 @@ export class RunCommand implements Command {
      */
     private async waitForPrompt(): Promise<void> {
         this.logger.warn(`🚀 Modo debug ativado na porta 5005`);
-        this.logger.info("Configure seu IDE para 'Attach to Remote JVM' na porta 5005");
+        this.logger.newline();
+        this.logger.info("Instruções:");
+        this.logger.info("  1. No VS Code: Ctrl+Shift+D → 'Attach to Remote JVM' → Start Debugging");
+        this.logger.info("  2. No IntelliJ: Run → Attach to Process → selecione a porta 5005");
         this.logger.newline();
 
         // Limpa qualquer input residual no stdin (ex: do discoverClass)
@@ -340,8 +349,10 @@ export class RunCommand implements Command {
                 output: process.stdout
             });
 
-            rl.question("  Pressione ENTER depois de conectar o debugger... ", () => {
+            rl.question("  Pressione ENTER depois que o debugger estiver conectado... ", () => {
                 rl.close();
+                this.logger.newline();
+                this.logger.success("✓ Debugger conectado! Iniciando aplicação...");
                 this.logger.newline();
                 resolve();
             });
