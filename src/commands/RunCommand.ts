@@ -31,7 +31,7 @@ export class RunCommand implements Command {
     }
 
     async execute(config: AppConfig, args?: CLIArguments): Promise<void> {
-        const isDebug = args?.debug !== false;
+        const isDebug = args?.debug === true;
         const attachLater = args?.["attach-later"] === true;
         const waitSeconds = args?.wait ? parseInt(args.wait) : 0;
         const usePrompt = args?.prompt === true;
