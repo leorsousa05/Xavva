@@ -42,7 +42,11 @@ async function main() {
         if (config.project.encoding) {
             Logger.config("Encoding", config.project.encoding);
         }
-        if (config.tomcat.embedded) {
+        // Mostra modo de execução (Spring Boot ou Tomcat)
+        const executionMode = (config.project as any).executionMode;
+        if (executionMode === 'springboot') {
+            Logger.config("Runtime", "Spring Boot");
+        } else if (config.tomcat.embedded) {
             Logger.config("Tomcat", `Embutido ${config.tomcat.version}`);
         }
     }

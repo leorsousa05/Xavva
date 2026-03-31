@@ -25,6 +25,14 @@ export class DeployCommand implements Command {
 		const tomcat = this.tomcat;
 		const builder = this.builder;
 
+		// Verifica modo de execução (Spring Boot vs Tomcat tradicional)
+		const executionMode = (config.project as any).executionMode || 'embedded';
+		
+		if (executionMode === 'springboot') {
+			await this.executeSpringBoot(config, args);
+			return;
+		}
+
 		// Cria operação para rastreamento
 		const operation = new OperationLogger(incremental ? 'hot-reload' : 'deploy');
 
@@ -145,6 +153,105 @@ export class DeployCommand implements Command {
 			operation.fail('Deploy falhou', error as Error);
 			throw error;
 		}
+	}
+
+	/**
+	 * Executa aplicação Spring Boot
+	 */
+	private async executeSpringBoot(config: AppConfig, args?: CLIArguments): Promise<void> {
+		const isWatching = !!args?.watch;
+		const builder = this.builder;
+		
+		this.logger.section("Spring Boot Development");
+		this.logger.newline();
+		this.logger.config("Runtime", config.project.buildTool);
+		this.logger.config("Profile", config.project.profile || "default");
+		this.logger.config("Watch", isWatching ? "sim" : "não");
+		this.logger.newline();
+
+		const operation = new OperationLogger('springboot');
+		operation.start('Iniciando Spring Boot');
+
+		// Build
+		if (!config.project.skipBuild) {
+			const buildStep = operation.step('build', 'Compilando projeto...');
+			await builder.runBuild(false);
+			buildStep.success('Compilação concluída');
+		}
+
+		// Inicia Spring Boot
+		const runStep = operation.step('run', 'Iniciando aplicação...');
+		
+		const port = config.tomcat.port;
+		const profile = config.project.profile || 'local';
+		
+		if (config.project.buildTool === 'maven') {
+			await this.runMavenSpringBoot(port, profile, isWatching);
+		} else {
+			await this.runGradleSpringBoot(port, profile, isWatching);
+		}
+		
+		runStep.success('Aplicação iniciada');
+	}
+
+	/**
+	 * Executa Spring Boot com Maven
+	 */
+	private async runMavenSpringBoot(port: number, profile: string, watch: boolean): Promise<void> {
+		const { getMavenCommand } = await import('../utils/platform');
+		
+		const args = [
+			getMavenCommand(),
+			'spring-boot:run',
+			`-Dspring-boot.run.profiles=${profile}`,
+			`-Dserver.port=${port}`,
+			'-DskipTests'
+		];
+
+		if (watch) {
+			this.logger.info('Modo watch: use Ctrl+C para parar');
+		}
+
+		this.logger.info(`Iniciando: ${args.join(' ')}`);
+		this.logger.newline();
+
+		const proc = Bun.spawn(args, {
+			stdout: 'inherit',
+			stderr: 'inherit',
+			stdin: 'inherit'
+		});
+
+		await proc.exited;
+	}
+
+	/**
+	 * Executa Spring Boot com Gradle
+	 */
+	private async runGradleSpringBoot(port: number, profile: string, watch: boolean): Promise<void> {
+		const { getGradleCommand } = await import('../utils/platform');
+		
+		const args = [
+			getGradleCommand(),
+			'bootRun',
+			`-Pprofile=${profile}`,
+			`-Dserver.port=${port}`,
+			'-x', 'test'
+		];
+
+		if (watch) {
+			this.logger.info('Modo watch: use Ctrl+C para parar');
+		}
+
+		this.logger.info(`Iniciando: ${args.join(' ')}`);
+		this.logger.newline();
+
+		const proc = Bun.spawn(args, {
+			stdout: 'inherit',
+			stderr: 'inherit',
+			stdin: 'inherit'
+		});
+
+		await proc.exited;
 	}
 
 	private logConfiguration(config: AppConfig, isWatching: boolean) {
