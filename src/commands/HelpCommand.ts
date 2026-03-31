@@ -33,7 +33,7 @@ export class HelpCommand implements Command {
    ${c("cyan", "profiles")}    List Maven/Gradle profiles
 
  ${c("yellow", "UTILITIES")}
-   ${c("magenta", "init")}         Initialize project (wizard)
+   ${c("magenta", "init")}         Initialize project (detects Spring Boot, Maven, Gradle)
    ${c("magenta", "config")}       View/edit configuration
    ${c("magenta", "encoding")}     Convert file encodings
    ${c("magenta", "tomcat")}       Manage embedded Tomcat
@@ -63,6 +63,16 @@ export class HelpCommand implements Command {
    --profile              Show performance    --dry-run              Simulate only
    -V, --verbose          Detailed output     -h, --help             Show help
    -v, --version          Show version
+
+ ${c("yellow", "INIT & SETUP")}
+   xavva init                             # Initialize project (interactive wizard)
+   xavva init --spring-boot               # Detect and configure Spring Boot
+   xavva init --execution-mode=embedded   # Use embedded Tomcat
+
+ ${c("yellow", "SPRING BOOT")}
+   xavva dev                              # Start Spring Boot with hot-reload
+   xavva dev --execution-mode=springboot  # Force Spring Boot mode
+   xavva run --main-class=MinhaApp        # Run specific main class
 
  ${c("yellow", "EXAMPLES")}
    xavva dev --tui --watch                # Dev mode with dashboard

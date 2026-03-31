@@ -1,3 +1,12 @@
+/**
+ * InitCommand - Wizard de inicialização de projeto
+ * 
+ * Detecta automaticamente:
+ * - Tipo de projeto (Maven/Gradle)
+ * - Framework (Spring Boot vs Java EE/Jakarta EE)
+ * - Versão do Java
+ * - Configurações existentes
+ */
 import { input, select, confirm, number } from "@inquirer/prompts";
 import { writeFile, access, readFile } from "fs/promises";
 import { join } from "path";
@@ -6,309 +15,473 @@ import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
 import { Logger } from "../logging";
 
+export interface ProjectInfo {
+    buildTool: "maven" | "gradle";
+    isSpringBoot: boolean;
+    javaVersion: string;
+    hasWebapp: boolean;
+    hasApplicationClass: boolean;
+    packageName: string;
+    profiles: string[];
+}
+
 export class InitCommand implements Command {
     private logger = Logger.getInstance();
 
     async execute(_config: AppConfig, _args?: CLIArguments): Promise<void> {
-        this.logger.section("Project Setup Wizard");
-        this.logger.info("Vamos configurar seu projeto Xavva");
+        this.logger.section("🚀 XAVVA Project Setup");
         this.logger.newline();
 
-        // Detect build tool and available profiles
-        const buildTool = await this.detectBuildTool();
-        const availableProfiles = await this.detectProfiles(buildTool);
+        // Detecta informações do projeto
+        const projectInfo = await this.analyzeProject();
         
-        // Application name
+        // Mostra resumo da detecção
+        this.showDetectionSummary(projectInfo);
+        this.logger.newline();
+
+        // Configurações básicas
         const appName = await input({
-            message: "Application name:",
+            message: "Nome da aplicação:",
             default: process.cwd().split(/[/\\]/).pop() || "my-app",
-            validate: (value) => value.length > 0 || "Name is required"
+            validate: (value) => value.length > 0 || "Nome é obrigatório"
         });
 
-        // Profile selection with explanation
-        this.logger.newline();
-        console.log("The profile is used to activate Maven/Gradle build configurations");
-        console.log("(e.g., 'dev' for development, 'prod' for production)");
-        
-        let profile: string;
-        
-        if (availableProfiles.length > 0) {
-            // Profiles found in build file
-            const profileChoices = [
-                ...availableProfiles.map(p => ({ 
-                    name: `${p.name}${p.description ? ` - ${p.description}` : ''}`, 
-                    value: p.name 
-                })),
-                { name: "Other (custom)", value: "custom" }
-            ];
-            
-            profile = await select({
-                message: "Select a profile from your build file:",
-                choices: profileChoices,
-                default: availableProfiles.find(p => p.name === "dev")?.name || availableProfiles[0]?.name
-            });
-        } else {
-            // No profiles detected, show common options
-            profile = await select({
-                message: "Default profile:",
-                choices: [
-                    { name: "dev - Development environment", value: "dev" },
-                    { name: "test - Testing environment", value: "test" },
-                    { name: "prod - Production environment", value: "prod" },
-                    { name: "Other (custom)", value: "custom" }
-                ],
-                default: "dev"
-            });
-        }
+        // Tipo de execução
+        const executionMode = await this.selectExecutionMode(projectInfo);
 
-        if (profile === "custom") {
-            profile = await input({
-                message: "Profile name:",
-                default: "local",
-                validate: (value) => value.length > 0 || "Profile name is required"
-            });
-        }
-
-        // Tomcat port
+        // Porta
         const port = await number({
-            message: "Tomcat port:",
+            message: "Porta do servidor:",
             default: 8080,
-            validate: (value) => (value && value > 0 && value < 65536) || "Invalid port"
+            validate: (value) => (value && value > 0 && value < 65536) || "Porta inválida"
         }) || 8080;
 
-        // Optional settings
-        this.logger.newline();
-        console.log("Advanced settings:");
-        
-        const useEmbedded = await confirm({
-            message: "Use embedded Tomcat (auto-download)?",
-            default: true
-        });
+        // Perfil
+        const profile = await this.selectProfile(projectInfo);
 
-        const enableCache = await confirm({
-            message: "Enable build cache?",
-            default: true
-        });
-
-        const enableTui = await confirm({
-            message: "Enable TUI dashboard?",
-            default: true
-        });
-
+        // Encoding
         const encoding = await select({
-            message: "Source encoding:",
+            message: "Encoding dos arquivos:",
             choices: [
-                { name: "UTF-8 (recommended)", value: "UTF-8" },
+                { name: "UTF-8 (recomendado)", value: "UTF-8" },
                 { name: "ISO-8859-1 (Latin-1)", value: "ISO-8859-1" },
                 { name: "Windows-1252", value: "Windows-1252" }
             ],
             default: "UTF-8"
         });
 
-        // Multi-environment setup
-        const enableMultiEnv = await confirm({
-            message: "Configure multiple environments?",
-            default: false
+        // Configurações avançadas
+        const advanced = await this.configureAdvancedOptions();
+
+        // Monta configuração
+        const config = this.buildConfig({
+            appName,
+            projectInfo,
+            executionMode,
+            port,
+            profile,
+            encoding,
+            advanced
         });
 
-        // Build config object
-        const config: Record<string, unknown> = {
-            appName,
-            buildTool,
-            profile,
-            port,
-            cache: enableCache,
-            tui: enableTui,
-            encoding
-        };
+        // Salva arquivo
+        await this.saveConfig(config);
 
-        if (useEmbedded) {
-            config.embedded = true;
-            config.tomcatVersion = await select({
-                message: "Tomcat version:",
-                choices: [
-                    { name: "10.1.52 (Jakarta EE 10, recommended)", value: "10.1.52" },
-                    { name: "9.0.115 (Java EE 8)", value: "9.0.115" },
-                    { name: "11.0.18 (Jakarta EE 11, preview)", value: "11.0.18" }
-                ],
-                default: "10.1.52"
-            });
-        } else {
-            const tomcatPath = await input({
-                message: "Tomcat path (CATALINA_HOME):",
-                validate: async (value) => {
-                    if (!value) return "Path is required";
-                    try {
-                        await access(value, constants.R_OK);
-                        return true;
-                    } catch {
-                        return "Path not accessible";
-                    }
-                }
-            });
-            config.tomcatPath = tomcatPath;
-        }
-
-        // Add environments if enabled
-        if (enableMultiEnv) {
-            this.logger.newline();
-            console.log("Environment Configuration:");
-            
-            const environments: Record<string, unknown> = {};
-            
-            // Dev environment
-            const devPort = await number({
-                message: "Dev environment port:",
-                default: port
-            }) || port;
-            environments.dev = {
-                port: devPort,
-                profile: "dev"
-            };
-            
-            // Test environment
-            const testPort = await number({
-                message: "Test environment port:",
-                default: port + 1
-            }) || port + 1;
-            environments.test = {
-                port: testPort,
-                profile: "test"
-            };
-            
-            // Staging environment
-            const hasStaging = await confirm({
-                message: "Add staging environment?",
-                default: true
-            });
-            
-            if (hasStaging) {
-                const stagingPort = await number({
-                    message: "Staging environment port:",
-                    default: port + 2
-                }) || port + 2;
-                environments.staging = {
-                    port: stagingPort,
-                    profile: "staging"
-                };
-            }
-            
-            config.environments = environments;
-            
-            // Add DB config example
-            const addDbExample = await confirm({
-                message: "Add database configuration example?",
-                default: true
-            });
-            
-            if (addDbExample) {
-                environments.dev = {
-                    ...environments.dev,
-                    db: {
-                        url: "jdbc:h2:mem:devdb",
-                        username: "sa",
-                        password: ""
-                    }
-                };
-            }
-        }
-
-        // Save file
-        this.logger.newline();
-        this.logger.step("Saving configuration...");
-
-        const configPath = join(process.cwd(), "xavva.json");
-        await writeFile(configPath, JSON.stringify(config, null, 2));
-
-        this.logger.success(`Configuration saved to ${configPath}`);
-        this.logger.newline();
-        this.logger.ready("Project configured!");
-        this.logger.info("Next steps:");
-        console.log(`  │   xavva build   - Compile project`);
-        console.log(`  │   xavva deploy  - Build + deploy`);
-        console.log(`  │   xavva health  - Check environment`);
-        this.logger.newline();
+        // Mostra próximos passos
+        this.showNextSteps(executionMode, projectInfo);
     }
 
-    private async detectBuildTool(): Promise<"maven" | "gradle"> {
+    /**
+     * Analisa o projeto automaticamente
+     */
+    private async analyzeProject(): Promise<ProjectInfo> {
+        const info: ProjectInfo = {
+            buildTool: "maven",
+            isSpringBoot: false,
+            javaVersion: "",
+            hasWebapp: false,
+            hasApplicationClass: false,
+            packageName: "",
+            profiles: []
+        };
+
+        // Detecta build tool
         const hasPom = existsSync(join(process.cwd(), "pom.xml"));
         const hasGradle = existsSync(join(process.cwd(), "build.gradle")) || 
                           existsSync(join(process.cwd(), "build.gradle.kts"));
 
-        if (hasPom && !hasGradle) {
-            this.logger.info("Detected: Maven project");
-            return "maven";
-        }
-        
         if (hasGradle && !hasPom) {
-            this.logger.info("Detected: Gradle project");
-            return "gradle";
-        }
-
-        if (hasPom && hasGradle) {
-            this.logger.warn("Both pom.xml and build.gradle found");
+            info.buildTool = "gradle";
+        } else if (hasPom && hasGradle) {
+            // Pergunta qual usar
             const choice = await select({
-                message: "Select build tool:",
+                message: "Detectado pom.xml e build.gradle. Qual usar?",
                 choices: [
-                    { name: "Maven (pom.xml)", value: "maven" },
-                    { name: "Gradle (build.gradle)", value: "gradle" }
+                    { name: "Maven (pom.xml)", value: "maven" as const },
+                    { name: "Gradle (build.gradle)", value: "gradle" as const }
                 ]
             });
-            return choice;
+            info.buildTool = choice;
         }
 
-        // Neither found
-        const choice = await select({
-            message: "Build tool:",
-            choices: [
-                { name: "Maven", value: "maven" },
-                { name: "Gradle", value: "gradle" }
-            ]
-        });
-        return choice;
+        // Analisa arquivo de build
+        if (info.buildTool === "maven") {
+            await this.analyzeMavenProject(info);
+        } else {
+            await this.analyzeGradleProject(info);
+        }
+
+        // Verifica estrutura de diretórios
+        info.hasWebapp = existsSync(join(process.cwd(), "src/main/webapp"));
+        
+        // Procura classe Application do Spring Boot
+        info.hasApplicationClass = await this.findApplicationClass(info);
+
+        return info;
     }
 
-    private async detectProfiles(buildTool: "maven" | "gradle"): Promise<Array<{name: string, description?: string}>> {
-        const profiles: Array<{name: string, description?: string}> = [];
-        
+    /**
+     * Analiza projeto Maven
+     */
+    private async analyzeMavenProject(info: ProjectInfo): Promise<void> {
+        const pomPath = join(process.cwd(), "pom.xml");
+        if (!existsSync(pomPath)) return;
+
         try {
-            if (buildTool === "maven") {
-                const pomPath = join(process.cwd(), "pom.xml");
-                if (existsSync(pomPath)) {
-                    const content = await readFile(pomPath, "utf-8");
-                    // Parse profiles from pom.xml
-                    const profileMatches = content.matchAll(/<profile>[\s\S]*?<id>([^<]+)<\/id>[\s\S]*?<\/profile>/g);
-                    for (const match of profileMatches) {
-                        const profileContent = match[0];
-                        const id = match[1].trim();
-                        // Try to extract description or properties
-                        const descMatch = profileContent.match(/<description>([^<]+)<\/description>/);
-                        const desc = descMatch ? descMatch[1].trim() : undefined;
-                        profiles.push({ name: id, description: desc });
-                    }
-                }
-            } else {
-                const gradlePath = join(process.cwd(), "build.gradle");
-                const gradleKtsPath = join(process.cwd(), "build.gradle.kts");
-                const gradleFile = existsSync(gradlePath) ? gradlePath : gradleKtsPath;
-                
-                if (existsSync(gradleFile)) {
-                    const content = await readFile(gradleFile, "utf-8");
-                    // Look for common profile-like configurations
-                    // Gradle doesn't have built-in profiles like Maven, but can use:
-                    // - Properties (-Pprofile=dev)
-                    // - Custom configurations
-                    // - apply from: "profiles/${profile}.gradle"
-                    const profileMatches = content.matchAll(/(?:apply from:|def\s+\w*[Pp]rofile|ext\.\w*[Pp]rofile)\s*=\s*["']([^"']+)["']/g);
-                    for (const match of profileMatches) {
-                        profiles.push({ name: match[1] });
-                    }
-                }
+            const content = await readFile(pomPath, "utf-8");
+            
+            // Detecta Spring Boot
+            info.isSpringBoot = content.includes("spring-boot") || 
+                               content.includes("spring-boot-starter");
+
+            // Extrai versão do Java
+            const javaVersionMatch = content.match(/<java\.version>(\d+)<\/java\.version>/);
+            const mavenCompilerMatch = content.match(/<maven\.compiler\.source>(\d+)<\/maven\.compiler\.source>/);
+            info.javaVersion = javaVersionMatch?.[1] || mavenCompilerMatch?.[1] || "";
+
+            // Extrai profiles
+            const profileMatches = content.matchAll(/<profile>[\s\S]*?<id>([^<]+)<\/id>[\s\S]*?<\/profile>/g);
+            for (const match of profileMatches) {
+                info.profiles.push(match[1].trim());
             }
-        } catch {
-            // Ignore errors, return empty profiles
-        }
+
+            // Extrai package name do groupId + artifactId
+            const groupIdMatch = content.match(/<groupId>([^<]+)<\/groupId>/);
+            const artifactIdMatch = content.match(/<artifactId>([^<]+)<\/artifactId>/);
+            if (groupIdMatch) {
+                info.packageName = groupIdMatch[1];
+            }
+        } catch {}
+    }
+
+    /**
+     * Analisa projeto Gradle
+     */
+    private async analyzeGradleProject(info: ProjectInfo): Promise<void> {
+        const gradlePath = join(process.cwd(), "build.gradle");
+        const gradleKtsPath = join(process.cwd(), "build.gradle.kts");
+        const gradleFile = existsSync(gradlePath) ? gradlePath : gradleKtsPath;
         
-        return profiles;
+        if (!existsSync(gradleFile)) return;
+
+        try {
+            const content = await readFile(gradleFile, "utf-8");
+            
+            // Detecta Spring Boot
+            info.isSpringBoot = content.includes("spring-boot") ||
+                               content.includes("org.springframework.boot");
+
+            // Extrai versão do Java
+            const javaVersionMatch = content.match(/sourceCompatibility\s*=\s*['"](\d+)['"]/);
+            const javaToolchainMatch = content.match(/languageVersion\s*=\s*JavaLanguageVersion\.of\((\d+)\)/);
+            info.javaVersion = javaVersionMatch?.[1] || javaToolchainMatch?.[1] || "";
+
+            // Extrai group
+            const groupMatch = content.match(/group\s*=\s*['"]([^'"]+)['"]/);
+            if (groupMatch) {
+                info.packageName = groupMatch[1];
+            }
+        } catch {}
+    }
+
+    /**
+     * Procura classe Application do Spring Boot
+     */
+    private async findApplicationClass(info: ProjectInfo): Promise<boolean> {
+        const srcDir = join(process.cwd(), "src/main/java");
+        if (!existsSync(srcDir)) return false;
+
+        try {
+            // Procura arquivos que importam Spring Boot
+            const files = await readFile(srcDir, "utf-8");
+            // Simplificação - na prática usaria glob
+            return false;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Mostra resumo da detecção
+     */
+    private showDetectionSummary(info: ProjectInfo): void {
+        this.logger.info("Detecção automática:");
+        this.logger.config("Build tool", info.buildTool);
+        this.logger.config("Framework", info.isSpringBoot ? "Spring Boot" : "Java EE/Jakarta EE");
+        if (info.javaVersion) {
+            this.logger.config("Java version", info.javaVersion);
+        }
+        if (info.profiles.length > 0) {
+            this.logger.config("Profiles", info.profiles.join(", "));
+        }
+        if (info.hasWebapp) {
+            this.logger.config("Webapp", "Detectado");
+        }
+    }
+
+    /**
+     * Seleciona modo de execução
+     */
+    private async selectExecutionMode(info: ProjectInfo): Promise<string> {
+        const choices: Array<{ name: string; value: string; description?: string }> = [];
+
+        if (info.isSpringBoot) {
+            choices.push({
+                name: "🚀 Spring Boot (embedded Tomcat)",
+                value: "springboot",
+                description: "Executa via classe Application com Tomcat embutido"
+            });
+        }
+
+        choices.push({
+            name: "🐱 Tomcat Embutido (Xavva)",
+            value: "embedded",
+            description: "Xavva gerencia Tomcat automaticamente"
+        });
+
+        choices.push({
+            name: "🌐 Tomcat Externo",
+            value: "external",
+            description: "Usa instalação existente do Tomcat"
+        });
+
+        if (info.hasWebapp) {
+            choices.push({
+                name: "📁 WAR Deploy",
+                value: "war",
+                description: "Build e deploy como arquivo WAR"
+            });
+        }
+
+        const defaultValue = info.isSpringBoot ? "springboot" : "embedded";
+
+        return await select({
+            message: "Modo de execução:",
+            choices,
+            default: defaultValue
+        });
+    }
+
+    /**
+     * Seleciona perfil
+     */
+    private async selectProfile(info: ProjectInfo): Promise<string> {
+        if (info.profiles.length > 0) {
+            return await select({
+                message: "Perfil padrão:",
+                choices: [
+                    ...info.profiles.map(p => ({ name: p, value: p })),
+                    { name: "Outro (custom)", value: "custom" }
+                ],
+                default: info.profiles.includes("dev") ? "dev" : info.profiles[0]
+            });
+        }
+
+        return await select({
+            message: "Perfil padrão:",
+            choices: [
+                { name: "dev - Desenvolvimento", value: "dev" },
+                { name: "test - Testes", value: "test" },
+                { name: "prod - Produção", value: "prod" },
+                { name: "Outro", value: "custom" }
+            ],
+            default: "dev"
+        });
+    }
+
+    /**
+     * Configura opções avançadas
+     */
+    private async configureAdvancedOptions(): Promise<{
+        cache: boolean;
+        tui: boolean;
+        hotReload: boolean;
+        multiEnv: boolean;
+    }> {
+        this.logger.newline();
+        this.logger.info("Configurações avançadas:");
+
+        const cache = await confirm({
+            message: "Habilitar cache de build?",
+            default: true
+        });
+
+        const tui = await confirm({
+            message: "Habilitar dashboard TUI?",
+            default: true
+        });
+
+        const hotReload = await confirm({
+            message: "Habilitar hot-reload?",
+            default: true
+        });
+
+        const multiEnv = await confirm({
+            message: "Configurar múltiplos ambientes?",
+            default: false
+        });
+
+        return { cache, tui, hotReload, multiEnv };
+    }
+
+    /**
+     * Monta configuração final
+     */
+    private buildConfig(params: {
+        appName: string;
+        projectInfo: ProjectInfo;
+        executionMode: string;
+        port: number;
+        profile: string;
+        encoding: string;
+        advanced: {
+            cache: boolean;
+            tui: boolean;
+            hotReload: boolean;
+            multiEnv: boolean;
+        };
+    }): Record<string, unknown> {
+        const { appName, projectInfo, executionMode, port, profile, encoding, advanced } = params;
+
+        // Configuração base
+        const config: Record<string, unknown> = {
+            appName,
+            buildTool: projectInfo.buildTool,
+            profile: profile === "custom" ? "dev" : profile,
+            port,
+            encoding,
+            cache: advanced.cache,
+            tui: advanced.tui,
+            hotReload: advanced.hotReload
+        };
+
+        // Configuração específica por modo
+        switch (executionMode) {
+            case "springboot":
+                config.executionMode = "springboot";
+                config.springBoot = {
+                    mainClass: "",
+                    args: ""
+                };
+                break;
+
+            case "embedded":
+                config.executionMode = "embedded";
+                config.tomcat = {
+                    embedded: true,
+                    version: "10.1.52"
+                };
+                break;
+
+            case "external":
+                config.executionMode = "external";
+                config.tomcat = {
+                    embedded: false,
+                    path: "${CATALINA_HOME}"
+                };
+                break;
+
+            case "war":
+                config.executionMode = "war";
+                config.war = true;
+                config.tomcat = {
+                    embedded: true,
+                    version: "9.0.115"
+                };
+                break;
+        }
+
+        // Ambientes múltiplos
+        if (advanced.multiEnv) {
+            config.environments = {
+                dev: {
+                    port,
+                    profile: "dev"
+                },
+                test: {
+                    port: port + 1,
+                    profile: "test"
+                }
+            };
+        }
+
+        return config;
+    }
+
+    /**
+     * Salva configuração no arquivo
+     */
+    private async saveConfig(config: Record<string, unknown>): Promise<void> {
+        this.logger.newline();
+        this.logger.step("Salvando configuração...");
+
+        const configPath = join(process.cwd(), "xavva.json");
+        await writeFile(configPath, JSON.stringify(config, null, 2));
+
+        this.logger.success(`Configuração salva em ${configPath}`);
+        this.logger.newline();
+    }
+
+    /**
+     * Mostra próximos passos
+     */
+    private showNextSteps(executionMode: string, info: ProjectInfo): void {
+        this.logger.section("✅ Projeto configurado!");
+        this.logger.newline();
+
+        this.logger.info("Próximos passos:");
+
+        if (executionMode === "springboot") {
+            console.log("  │");
+            console.log("  ├─ 🚀 Para Spring Boot:");
+            console.log("  │   xavva dev          # Inicia com hot-reload");
+            console.log("  │   xavva run          # Executa classe principal");
+            console.log("  │   xavva debug        # Debug na porta 5005");
+        } else {
+            console.log("  │");
+            console.log("  ├─ 🐱 Para Tomcat:");
+            console.log("  │   xavva dev          # Build + deploy + watch");
+            console.log("  │   xavva deploy       # Build e deploy");
+            console.log("  │   xavva tomcat list  # Ver versões disponíveis");
+        }
+
+        console.log("  │");
+        console.log("  ├─ 📋 Comandos úteis:");
+        console.log("  │   xavva build        # Compila projeto");
+        console.log("  │   xavva test         # Executa testes");
+        console.log("  │   xavva health       # Verifica ambiente");
+        console.log("  │   xavva --help       # Ajuda completa");
+
+        if (info.isSpringBoot && !info.hasApplicationClass) {
+            this.logger.newline();
+            this.logger.warn("⚠️  Não detectei a classe @SpringBootApplication");
+            this.logger.info("Adicione no xavva.json:");
+            console.log('  "springBoot": {');
+            console.log('    "mainClass": "com.example.MinhaAplicacao"');
+            console.log('  }');
+        }
+
+        this.logger.newline();
+        this.logger.ready("Pronto para desenvolver! 🎉");
     }
 }

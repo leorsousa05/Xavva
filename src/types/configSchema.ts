@@ -18,10 +18,17 @@ export const TomcatConfigSchema = z.object({
     version: z.string().regex(/^\d+\.\d+\.\d+$/, "Versão deve seguir formato semver").default("10.1.52"),
 });
 
+export const SpringBootConfigSchema = z.object({
+    mainClass: z.string().default(""),
+    args: z.string().default(""),
+    profile: z.string().default(""),
+});
+
 export const ProjectConfigSchema = z.object({
     appName: z.string().default(""),
     buildTool: z.enum(["maven", "gradle"]).default("maven"),
     profile: z.string().default(""),
+    executionMode: z.enum(["springboot", "embedded", "external", "war"]).default("embedded"),
     skipBuild: z.boolean().default(false),
     skipScan: z.boolean().default(true),
     clean: z.boolean().default(false),
@@ -35,8 +42,10 @@ export const ProjectConfigSchema = z.object({
     encoding: z.string().default(""),
     war: z.boolean().default(false),
     cache: z.boolean().default(false),
+    hotReload: z.boolean().default(true),
     environment: z.string().default(""),
     environments: z.record(z.any()).optional(),
+    springBoot: SpringBootConfigSchema.optional(),
 });
 
 export const AppConfigSchema = z.object({
@@ -88,6 +97,7 @@ export const DebugArgsSchema = z.object({
 export type ValidatedTomcatConfig = z.infer<typeof TomcatConfigSchema>;
 export type ValidatedProjectConfig = z.infer<typeof ProjectConfigSchema>;
 export type ValidatedAppConfig = z.infer<typeof AppConfigSchema>;
+export type ValidatedSpringBootConfig = z.infer<typeof SpringBootConfigSchema>;
 
 // ============================================
 // FUNÇÕES DE VALIDAÇÃO

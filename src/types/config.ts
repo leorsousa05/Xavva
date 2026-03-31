@@ -114,7 +114,10 @@ export interface CLIArguments {
     fast?: boolean;
     "no-build"?: boolean;
     build?: boolean;
-}
+    // Spring Boot options
+    "execution-mode"?: string;
+    "main-class"?: string;
+    args?: string;
 
 export interface CommandContext {
     config: AppConfig;

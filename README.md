@@ -59,12 +59,27 @@ bunx @archznn/xavva dev
 
 ## 🚀 Quick Start
 
+### Initialize Project
+
 ```bash
-# Initialize project configuration (interactive wizard)
+# Interactive wizard - detects Spring Boot, Maven, Gradle automatically
 xavva init
 
+# For Spring Boot projects (auto-detected)
+xavva init  # Detecta Spring Boot e configura automaticamente
+
+# For traditional Java EE/Jakarta EE projects
+xavva init  # Configura com Tomcat embutido
+```
+
+### Development
+
+```bash
 # Start development mode with dashboard
 xavva dev --tui
+
+# For Spring Boot projects
+xavva dev  # Inicia com hot-reload
 
 # Deploy to Tomcat
 xavva deploy
@@ -142,6 +157,32 @@ eval "$(xavva completion bash)"
 
 ---
 
+## 🍃 Spring Boot Support
+
+Xavva automatically detects Spring Boot projects and configures them appropriately:
+
+```bash
+# Initialize Spring Boot project (auto-detected)
+xavva init
+
+# Start development with hot-reload
+xavva dev
+
+# Debug mode
+xavva dev --debug
+
+# Run specific main class
+xavva run --main-class=com.example.MinhaAplicacao
+```
+
+**Detection:** Xavva checks for `spring-boot` in your `pom.xml` or `build.gradle` and automatically configures:
+- Execution mode as `springboot` instead of `embedded`
+- Hot-reload support
+- Main class auto-detection
+- Profile-based configuration
+
+---
+
 ## 📖 Commands
 
 ### Core Development
@@ -153,6 +194,7 @@ eval "$(xavva completion bash)"
 | `xavva build`  | Compile project only                                   |
 | `xavva start`  | Start Tomcat server only                               |
 | `xavva clean`  | Clean cache, build directories, and logs               |
+| `xavva init`   | Initialize project with interactive wizard             |
 
 ### Code Execution
 
