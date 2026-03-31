@@ -3,7 +3,7 @@
  * Gera configs e gerencia containers
  */
 
-import { Logger } from "../utils/ui";
+import { Logger, C } from "../utils/ui";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -291,8 +291,8 @@ services:
 
         Logger.divider();
         for (const c of containers) {
-            const statusColor = c.status.includes("Up") ? Logger.C.success : Logger.C.error;
-            Logger.info(c.name, `${statusColor}${c.status}${Logger.C.reset}`);
+            const statusColor = c.status.includes("Up") ? C.success : C.error;
+            Logger.info(c.name, `${statusColor}${c.status}${C.reset}`);
             if (c.ports) {
                 Logger.dim(`  ${c.ports}`);
             }

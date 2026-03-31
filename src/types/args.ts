@@ -125,6 +125,65 @@ export interface CompletionArgs extends BaseArgs {
     shell?: string;
 }
 
+// ===== Args do Novo Comando Clean =====
+export interface CleanArgs extends BaseArgs {
+    all?: boolean;
+    cache?: boolean;
+    build?: boolean;
+    logs?: boolean;
+    tomcat?: boolean;
+}
+
+// ===== Args do Comando Test =====
+export interface TestArgs extends BaseArgs {
+    watch?: boolean;
+    coverage?: boolean;
+    "fail-fast"?: boolean;
+    parallel?: boolean;
+    // Positional: filter
+}
+
+// ===== Args do Comando DB =====
+export interface DbArgs extends BaseArgs {
+    force?: boolean;
+    // Positional: action (status, migrate, reset, seed)
+}
+
+// ===== Args do Comando HTTP =====
+export interface HttpArgs extends BaseArgs {
+    "base-url"?: string;
+    body?: string;
+    file?: string;
+    header?: string[];
+    "content-type"?: string;
+    accept?: string;
+    param?: string[];
+    timeout?: string;
+    // Positional: method, path
+}
+
+// ===== Args do Comando Docker =====
+export interface DockerArgs extends BaseArgs {
+    tag?: string;
+    "java-version"?: string;
+    detached?: boolean;
+    registry?: string;
+    namespace?: string;
+    // Positional: action (init, build, up, down, run, status)
+}
+
+// ===== Args do Comando Changelog =====
+export interface ChangelogArgs extends BaseArgs {
+    output?: string;
+    from?: string;
+    to?: string;
+}
+
+// ===== Args do Novo Comando IDE =====
+export interface IdeArgs extends BaseArgs {
+    ide?: "vscode" | "idea" | "eclipse";
+}
+
 // ===== CLIArguments Legado (para compatibilidade) =====
 // Será gradualmente removido
 export interface CLIArguments extends 
@@ -134,7 +193,15 @@ export interface CLIArguments extends
     DebugArgs, 
     AnalysisArgs, 
     EncodingArgs {
-    // Campos adicionais para compatibilidade
+    // Propriedades de CleanArgs
+    all?: boolean;
+    cache?: boolean;
+    build?: boolean;
+    logs?: boolean;
+    tomcat?: boolean;
+    // Propriedades extras
+    i?: boolean;
+    o?: string;
     [key: string]: unknown;
 }
 

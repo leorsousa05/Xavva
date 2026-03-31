@@ -1,7 +1,7 @@
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
 import { HistoryService } from "../services/HistoryService";
-import { Logger } from "../utils/ui";
+import { Logger, C } from "../utils/ui";
 import { ProcessManager } from "../utils/processManager";
 
 export class RedoCommand implements Command {
@@ -17,7 +17,7 @@ export class RedoCommand implements Command {
 
         const args = lastEntry.args.length > 0 ? lastEntry.args.join(" ") : "";
         Logger.banner("redo");
-        Logger.info(`Repetindo: ${Logger.C.white}xavva ${lastEntry.command}${Logger.C.reset} ${Logger.C.gray}${args}${Logger.C.reset}`);
+        Logger.info(`Repetindo: ${C.white}xavva ${lastEntry.command}${C.reset} ${C.gray}${args}${C.reset}`);
         Logger.newline();
 
         // Re-executar o comando

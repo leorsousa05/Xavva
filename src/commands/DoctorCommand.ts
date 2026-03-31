@@ -1,233 +1,246 @@
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
-import { Logger } from "../utils/ui";
+import { Logger } from "../logging";
 import fs from "fs";
 import path from "path";
 import os from "os";
 import {
-	getCatalinaScript,
-	getWhichCommand,
-	getJbrDownloadUrl,
-	getTarExtractCommand,
-	getJavaPath,
-	getJavaBinary,
-	isWindows,
-	isLinux,
-	isMacOS,
+    getCatalinaScript,
+    getWhichCommand,
+    getJbrDownloadUrl,
+    getTarExtractCommand,
+    getJavaPath,
+    getJavaBinary,
+    isWindows,
+    isLinux,
+    isMacOS,
 } from "../utils/platform";
 
 export class DoctorCommand implements Command {
-	async execute(config: AppConfig, values: CLIArguments = {}): Promise<void> {
-		Logger.section("Xavva Doctor - Ambiente");
+    private logger = Logger.getInstance();
 
-		this.check(
-			"JAVA_HOME",
-			!!process.env.JAVA_HOME,
-			process.env.JAVA_HOME || "Não definido",
-		);
+    async execute(config: AppConfig, values: CLIArguments = {}): Promise<void> {
+        this.logger.section("Xavva Doctor - Diagnóstico");
+        
+        // Se modo fix, mostra aviso
+        if (values.fix) {
+            this.logger.warn("Modo --fix ativado - Problemas serão corrigidos automaticamente");
+            this.logger.newline();
+        }
 
-		const jvmInfo = this.checkJVM();
-		this.check(
-			"JVM Type",
-			jvmInfo.dcevm,
-			jvmInfo.name +
-			(jvmInfo.dcevm ? " (Advanced Hot Reload OK)" : " (Standard)"),
-		);
+        const issues: Array<{ label: string; ok: boolean; detail: string; fixable?: boolean }> = [];
 
-		if (!jvmInfo.dcevm) {
-			Logger.log(
-				`    ${Logger.C.warning}💡 Dica: Sua JVM não suporta mudanças estruturais (novos métodos/campos).${Logger.C.reset}`,
-			);
-			if (values.fix) {
-				await this.installDCEVM();
-			} else {
-				Logger.log(
-					`    ${Logger.C.primary}Use 'xavva doctor --fix' para baixar uma JDK com DCEVM integrado.${Logger.C.reset}`,
-				);
-			}
-		}
+        // Verifica JAVA_HOME
+        const javaHomeOk = !!process.env.JAVA_HOME;
+        issues.push({
+            label: "JAVA_HOME",
+            ok: javaHomeOk,
+            detail: process.env.JAVA_HOME || "Não definido",
+            fixable: true,
+        });
 
-		const tomcatOk = fs.existsSync(config.tomcat.path);
-		this.check("Tomcat Path", tomcatOk, config.tomcat.path);
+        const jvmInfo = this.checkJVM();
+        this.check(
+            "JVM Type",
+            jvmInfo.dcevm,
+            jvmInfo.name +
+            (jvmInfo.dcevm ? " (Advanced Hot Reload OK)" : " (Standard)"),
+        );
 
-		if (tomcatOk) {
-			const binOk = fs.existsSync(
-				path.join(config.tomcat.path, "bin", getCatalinaScript()),
-			);
-			this.check(
-				"Tomcat Bin",
-				binOk,
-				binOk ? "OK" : `${getCatalinaScript()} não encontrado`,
-			);
-		}
+        if (!jvmInfo.dcevm) {
+            console.log(
+                `    💡 Dica: Sua JVM não suporta mudanças estruturais (novos métodos/campos).`,
+            );
+            if (values.fix) {
+                await this.installDCEVM();
+            } else {
+                console.log(
+                    `    Use 'xavva doctor --fix' para baixar uma JDK com DCEVM integrado.`,
+                );
+            }
+        }
 
-		const mvnOk = this.checkBinary("mvn");
-		this.check("Maven", mvnOk, mvnOk ? "Disponível" : "Não encontrado no PATH");
+        const tomcatOk = fs.existsSync(config.tomcat.path);
+        this.check("Tomcat Path", tomcatOk, config.tomcat.path);
 
-		const gradleOk = this.checkBinary("gradle") || this.checkBinary("gradlew");
-		this.check(
-			"Gradle",
-			gradleOk,
-			gradleOk ? "Disponível" : "Não encontrado no PATH",
-		);
+        if (tomcatOk) {
+            const binOk = fs.existsSync(
+                path.join(config.tomcat.path, "bin", getCatalinaScript()),
+            );
+            this.check(
+                "Tomcat Bin",
+                binOk,
+                binOk ? "OK" : `${getCatalinaScript()} não encontrado`,
+            );
+        }
 
-		const gitOk = this.checkBinary("git");
-		this.check("Git", gitOk, gitOk ? "Disponível" : "Não encontrado no PATH");
+        const mvnOk = this.checkBinary("mvn");
+        this.check("Maven", mvnOk, mvnOk ? "Disponível" : "Não encontrado no PATH");
 
-		Logger.section("Xavva Doctor - Integridade de Arquivos");
-		await this.checkJarIntegrity(values.fix, config);
-		await this.checkBOM(values.fix);
+        const gradleOk = this.checkBinary("gradle") || this.checkBinary("gradlew");
+        this.check(
+            "Gradle",
+            gradleOk,
+            gradleOk ? "Disponível" : "Não encontrado no PATH",
+        );
 
-		console.log("");
-	}
+        const gitOk = this.checkBinary("git");
+        this.check("Git", gitOk, gitOk ? "Disponível" : "Não encontrado no PATH");
 
-	private async checkJarIntegrity(fix: boolean, config: AppConfig) {
-		const searchPaths = [
-			path.join(process.cwd(), "target"),
-			path.join(process.cwd(), "build"),
-			path.join(config.tomcat.path, "webapps")
-		].filter(p => fs.existsSync(p));
+        this.logger.section("Xavva Doctor - Integridade de Arquivos");
+        await this.checkJarIntegrity(values.fix, config);
+        await this.checkBOM(values.fix);
 
-		const corruptedJars: string[] = [];
-		const zipEndSignature = Buffer.from([0x50, 0x4b, 0x05, 0x06]);
+        console.log("");
+    }
 
-		const scan = (dir: string) => {
-			try {
-				const list = fs.readdirSync(dir, { withFileTypes: true });
-				for (const item of list) {
-					const res = path.resolve(dir, item.name);
-					if (item.isDirectory()) {
-						if (item.name === "node_modules" || item.name === ".git") continue;
-						scan(res);
-					} else if (item.name.endsWith(".jar")) {
-						try {
-							const stats = fs.statSync(res);
-							if (stats.size < 22) {
-								corruptedJars.push(res);
-								continue;
-							}
+    private async checkJarIntegrity(fix: boolean, config: AppConfig) {
+        const searchPaths = [
+            path.join(process.cwd(), "target"),
+            path.join(process.cwd(), "build"),
+            path.join(config.tomcat.path, "webapps")
+        ].filter(p => fs.existsSync(p));
 
-							// Lê os últimos 1024 bytes para encontrar a assinatura EOCD do ZIP
-							const readSize = Math.min(stats.size, 1024);
-							const buffer = Buffer.alloc(readSize);
-							const fd = fs.openSync(res, "r");
-							fs.readSync(fd, buffer, 0, readSize, stats.size - readSize);
-							fs.closeSync(fd);
+        const corruptedJars: string[] = [];
+        const zipEndSignature = Buffer.from([0x50, 0x4b, 0x05, 0x06]);
 
-							if (!buffer.includes(zipEndSignature)) {
-								corruptedJars.push(res);
-							}
-						} catch (e) {
-							corruptedJars.push(res);
-						}
-					}
-				}
-			} catch (e) {}
-		};
+        const scan = (dir: string) => {
+            try {
+                const list = fs.readdirSync(dir, { withFileTypes: true });
+                for (const item of list) {
+                    const res = path.resolve(dir, item.name);
+                    if (item.isDirectory()) {
+                        if (item.name === "node_modules" || item.name === ".git") continue;
+                        scan(res);
+                    } else if (item.name.endsWith(".jar")) {
+                        try {
+                            const stats = fs.statSync(res);
+                            if (stats.size < 22) {
+                                corruptedJars.push(res);
+                                continue;
+                            }
 
-		for (const p of searchPaths) {
-			scan(p);
-		}
+                            // Lê os últimos 1024 bytes para encontrar a assinatura EOCD do ZIP
+                            const readSize = Math.min(stats.size, 1024);
+                            const buffer = Buffer.alloc(readSize);
+                            const fd = fs.openSync(res, "r");
+                            fs.readSync(fd, buffer, 0, readSize, stats.size - readSize);
+                            fs.closeSync(fd);
 
-		if (corruptedJars.length > 0) {
-			this.check(
-				"Integridade JAR",
-				false,
-				`${corruptedJars.length} arquivos corrompidos detectados.`,
-			);
-			if (fix) {
-				for (const file of corruptedJars) {
-					try {
-						fs.unlinkSync(file);
-						console.log(`    \x1b[32m✔\x1b[0m Removido: ${path.basename(file)}`);
-					} catch (e) {}
-				}
-				Logger.success("JARs corrompidos removidos! Eles serão reconstruídos no próximo build.");
-				
-				// Limpar cache do Tomcat
-				Logger.process("Limpando cache do Tomcat (work/temp)...");
-				const tomcatWork = path.join(config.tomcat.path, "work");
-				const tomcatTemp = path.join(config.tomcat.path, "temp");
-				[tomcatWork, tomcatTemp].forEach(p => {
-					try {
-						if (fs.existsSync(p)) {
-							fs.rmSync(p, { recursive: true, force: true });
-							fs.mkdirSync(p);
-						}
-					} catch (e) {}
-				});
-				Logger.success("Cache do Tomcat limpo com sucesso.");
-			} else {
-				Logger.warn(
-					"Use 'xavva doctor --fix' para remover os JARs corrompidos e limpar o cache.",
-				);
-			}
-		} else {
-			this.check("Integridade JAR", true, "Todos os arquivos JAR parecem íntegros.");
-		}
-	}
+                            if (!buffer.includes(zipEndSignature)) {
+                                corruptedJars.push(res);
+                            }
+                        } catch (e) {
+                            corruptedJars.push(res);
+                        }
+                    }
+                }
+            } catch (e) {}
+        };
 
-	private async checkBOM(fix: boolean) {
-		const srcPath = path.join(process.cwd(), "src");
-		if (!fs.existsSync(srcPath)) return;
+        for (const p of searchPaths) {
+            scan(p);
+        }
 
-		const filesWithBOM: string[] = [];
-		const scan = (dir: string) => {
-			const list = fs.readdirSync(dir, { withFileTypes: true });
-			for (const item of list) {
-				const res = path.resolve(dir, item.name);
-				if (item.isDirectory()) {
-					scan(res);
-				} else if (item.name.endsWith(".java")) {
-					const buffer = fs.readFileSync(res);
-					if (buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
-						filesWithBOM.push(res);
-					}
-				}
-			}
-		};
+        if (corruptedJars.length > 0) {
+            this.check(
+                "Integridade JAR",
+                false,
+                `${corruptedJars.length} arquivos corrompidos detectados.`,
+            );
+            if (fix) {
+                for (const file of corruptedJars) {
+                    try {
+                        fs.unlinkSync(file);
+                        console.log(`    ✔ Removido: ${path.basename(file)}`);
+                    } catch (e) {}
+                }
+                this.logger.success("JARs corrompidos removidos! Eles serão reconstruídos no próximo build.");
+                
+                // Limpar cache do Tomcat
+                this.logger.step("Limpando cache do Tomcat (work/temp)...");
+                const tomcatWork = path.join(config.tomcat.path, "work");
+                const tomcatTemp = path.join(config.tomcat.path, "temp");
+                [tomcatWork, tomcatTemp].forEach(p => {
+                    try {
+                        if (fs.existsSync(p)) {
+                            fs.rmSync(p, { recursive: true, force: true });
+                            fs.mkdirSync(p);
+                        }
+                    } catch (e) {}
+                });
+                this.logger.success("Cache do Tomcat limpo com sucesso.");
+            } else {
+                this.logger.warn(
+                    "Use 'xavva doctor --fix' para remover os JARs corrompidos e limpar o cache.",
+                );
+            }
+        } else {
+            this.check("Integridade JAR", true, "Todos os arquivos JAR parecem íntegros.");
+        }
+    }
 
-		scan(srcPath);
+    private async checkBOM(fix: boolean) {
+        const srcPath = path.join(process.cwd(), "src");
+        if (!fs.existsSync(srcPath)) return;
 
-		if (filesWithBOM.length > 0) {
-			this.check(
-				"Encoding BOM",
-				false,
-				`${filesWithBOM.length} arquivos com BOM (UTF-8 com assinatura)`,
-			);
-			if (fix) {
-				for (const file of filesWithBOM) {
-					const buffer = fs.readFileSync(file);
-					const cleanBuffer = buffer.subarray(3);
-					fs.writeFileSync(file, cleanBuffer);
-					console.log(
-						`    \x1b[32m✔\x1b[0m Corrigido: ${path.basename(file)}`,
-					);
-				}
-				Logger.success("BOM removido de todos os arquivos!");
-			} else {
-				Logger.warn(
-					"Use 'xavva doctor --fix' para remover o BOM automaticamente.",
-				);
-			}
-		} else {
-			this.check("Encoding BOM", true, "Nenhum arquivo com BOM detectado.");
-		}
-	}
+        const filesWithBOM: string[] = [];
+        const scan = (dir: string) => {
+            const list = fs.readdirSync(dir, { withFileTypes: true });
+            for (const item of list) {
+                const res = path.resolve(dir, item.name);
+                if (item.isDirectory()) {
+                    scan(res);
+                } else if (item.name.endsWith(".java")) {
+                    const buffer = fs.readFileSync(res);
+                    if (buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+                        filesWithBOM.push(res);
+                    }
+                }
+            }
+        };
 
-	private check(label: string, ok: boolean, detail: string) {
-		const icon = ok ? "\x1b[32m✔\x1b[0m" : "\x1b[31m✘\x1b[0m";
-		console.log(`  ${icon} ${label.padEnd(15)} ${detail}`);
-	}
+        scan(srcPath);
 
-	private checkBinary(name: string): boolean {
-		try {
-			const proc = Bun.spawnSync(getWhichCommand(name));
-			return proc.exitCode === 0;
-		} catch {
-			return false;
-		}
-	}
+        if (filesWithBOM.length > 0) {
+            this.check(
+                "Encoding BOM",
+                false,
+                `${filesWithBOM.length} arquivos com BOM (UTF-8 com assinatura)`,
+            );
+            if (fix) {
+                for (const file of filesWithBOM) {
+                    const buffer = fs.readFileSync(file);
+                    const cleanBuffer = buffer.subarray(3);
+                    fs.writeFileSync(file, cleanBuffer);
+                    console.log(
+                        `    ✔ Corrigido: ${path.basename(file)}`,
+                    );
+                }
+                this.logger.success("BOM removido de todos os arquivos!");
+            } else {
+                this.logger.warn(
+                    "Use 'xavva doctor --fix' para remover o BOM automaticamente.",
+                );
+            }
+        } else {
+            this.check("Encoding BOM", true, "Nenhum arquivo com BOM detectado.");
+        }
+    }
+
+    private check(label: string, ok: boolean, detail: string) {
+        const icon = ok ? "✔" : "✘";
+        console.log(`  ${icon} ${label.padEnd(15)} ${detail}`);
+    }
+
+    private checkBinary(name: string): boolean {
+        try {
+            const proc = Bun.spawnSync(getWhichCommand(name));
+            return proc.exitCode === 0;
+        } catch {
+            return false;
+        }
+    }
 
     private checkJVM(): { name: string, dcevm: boolean } {
         try {
@@ -252,8 +265,8 @@ export class DoctorCommand implements Command {
     }
 
     private async installDCEVM() {
-        Logger.section("Instalação do JetBrains Runtime (JBR 21)");
-        Logger.log("Baixando JDK moderna com DCEVM nativo (JBR 21 SDK)...");
+        this.logger.section("Instalação do JetBrains Runtime (JBR 21)");
+        this.logger.step("Baixando JDK moderna com DCEVM nativo (JBR 21 SDK)...");
         
         // URL para o JetBrains Runtime 21 SDK (multiplataforma)
         const url = getJbrDownloadUrl("21");
@@ -274,7 +287,7 @@ export class DoctorCommand implements Command {
             const tarPath = path.join(installDir, "jbr.tar.gz");
             fs.writeFileSync(tarPath, Buffer.from(buffer));
             
-            Logger.success("Download concluído. Extraindo binários...");
+            this.logger.success("Download concluído. Extraindo binários...");
             
             // Extrair .tar.gz usando comando apropriado para a plataforma
             const extractCmd = getTarExtractCommand(tarPath, installDir);
@@ -304,12 +317,12 @@ export class DoctorCommand implements Command {
                 await this.configureUnixEnv(jdkPath, binPath);
             }
         } catch (e: any) {
-            Logger.error(`Falha na instalação: ${e.message}`);
+            this.logger.error(`Falha na instalação: ${e.message}`);
         }
     }
 
     private async configureWindowsEnv(jdkPath: string, binPath: string) {
-        Logger.process("Configurando variáveis de ambiente do SISTEMA...");
+        this.logger.step("Configurando variáveis de ambiente do SISTEMA...");
 
         const setEnvCmd = `
             $jdk = $env:JDK_PATH;
@@ -345,20 +358,20 @@ export class DoctorCommand implements Command {
         const output = result.stdout.toString() + result.stderr.toString();
 
         if (output.includes("ACCESS_DENIED")) {
-            Logger.error("Falha ao configurar variáveis do SISTEMA (Acesso Negado).");
-            Logger.warn("Dica: Execute o terminal como ADMINISTRADOR para permitir esta alteração.");
-            Logger.info("JAVA_HOME manual", jdkPath);
+            this.logger.error("Falha ao configurar variáveis do SISTEMA (Acesso Negado).");
+            this.logger.warn("Dica: Execute o terminal como ADMINISTRADOR para permitir esta alteração.");
+            this.logger.config("JAVA_HOME manual", jdkPath);
         } else {
-            Logger.success(`DCEVM configurado no SISTEMA com sucesso!`);
-            Logger.info("JAVA_HOME", jdkPath);
+            this.logger.success(`DCEVM configurado no SISTEMA com sucesso!`);
+            this.logger.config("JAVA_HOME", jdkPath);
         }
 
-        Logger.newline();
-        Logger.warn("IMPORTANTE: Reinicie seu terminal (ou o VS Code) para as mudanças surtirem efeito.");
+        this.logger.newline();
+        this.logger.warn("IMPORTANTE: Reinicie seu terminal (ou o VS Code) para as mudanças surtirem efeito.");
     }
 
     private async configureUnixEnv(jdkPath: string, binPath: string) {
-        Logger.process("Configurando variáveis de ambiente...");
+        this.logger.step("Configurando variáveis de ambiente...");
 
         const shell = process.env.SHELL || "/bin/bash";
         let rcFile = path.join(os.homedir(), ".bashrc");
@@ -393,11 +406,11 @@ export class DoctorCommand implements Command {
 
         fs.writeFileSync(rcFile, filteredLines.join("\n") + "\n");
 
-        Logger.success(`DCEVM configurado em ${rcFile}`);
-        Logger.info("JAVA_HOME", jdkPath);
-        Logger.newline();
-        Logger.warn("IMPORTANTE: Execute 'source " + rcFile + "' ou reinicie seu terminal para aplicar permanentemente.");
-        Logger.info("Dica", "Para esta sessão, o JAVA_HOME já foi configurado temporariamente.");
+        this.logger.success(`DCEVM configurado em ${rcFile}`);
+        this.logger.config("JAVA_HOME", jdkPath);
+        this.logger.newline();
+        this.logger.warn("IMPORTANTE: Execute 'source " + rcFile + "' ou reinicie seu terminal para aplicar permanentemente.");
+        this.logger.info("Dica: Para esta sessão, o JAVA_HOME já foi configurado temporariamente.");
         
         // Configura JAVA_HOME temporariamente para o processo atual
         process.env.JAVA_HOME = jdkPath;

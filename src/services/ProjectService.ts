@@ -1,8 +1,11 @@
 import { existsSync, readdirSync, statSync, readFileSync } from "fs";
 import path from "path";
 import type { ProjectConfig } from "../types/config";
+import { Logger } from "../logging";
 
 export class ProjectService {
+    private logger = Logger.getInstance();
+
     constructor(private config: ProjectConfig) {}
 
     getBuildOutputDir(): string {

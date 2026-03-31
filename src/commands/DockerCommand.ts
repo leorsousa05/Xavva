@@ -6,29 +6,29 @@
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
 import { DockerService, type DockerConfig } from "../services/DockerService";
-import { Logger } from "../utils/ui";
+import { Logger, C } from "../utils/ui";
 import { ProcessManager } from "../utils/processManager";
 
 export class DockerCommand implements Command {
     private showHelp(): void {
         Logger.section("Docker Command");
-        Logger.log(`${Logger.C.bold}Usage:${Logger.C.reset} xavva docker <action> [options]`);
+        Logger.log(`${C.bold}Usage:${C.reset} xavva docker <action> [options]`);
         Logger.newline();
-        Logger.log(`${Logger.C.bold}Actions:${Logger.C.reset}`);
-        Logger.log(`  ${Logger.C.primary}init${Logger.C.reset}       Generate Dockerfile & docker-compose.yml`);
-        Logger.log(`  ${Logger.C.primary}build${Logger.C.reset}      Build Docker image`);
-        Logger.log(`  ${Logger.C.primary}run${Logger.C.reset}        Run development container`);
-        Logger.log(`  ${Logger.C.primary}up${Logger.C.reset}         Start with docker-compose`);
-        Logger.log(`  ${Logger.C.primary}down${Logger.C.reset}       Stop containers`);
-        Logger.log(`  ${Logger.C.primary}status${Logger.C.reset}     Show container status`);
+        Logger.log(`${C.bold}Actions:${C.reset}`);
+        Logger.log(`  ${C.primary}init${C.reset}       Generate Dockerfile & docker-compose.yml`);
+        Logger.log(`  ${C.primary}build${C.reset}      Build Docker image`);
+        Logger.log(`  ${C.primary}run${C.reset}        Run development container`);
+        Logger.log(`  ${C.primary}up${C.reset}         Start with docker-compose`);
+        Logger.log(`  ${C.primary}down${C.reset}       Stop containers`);
+        Logger.log(`  ${C.primary}status${C.reset}     Show container status`);
         Logger.newline();
-        Logger.log(`${Logger.C.bold}Options:${Logger.C.reset}`);
+        Logger.log(`${C.bold}Options:${C.reset}`);
         Logger.log(`  --name <n>        Image name`);
         Logger.log(`  --tag <t>         Image tag`);
         Logger.log(`  --port <p>        Port mapping`);
         Logger.log(`  -d, --detached    Run in background`);
         Logger.newline();
-        Logger.log(`${Logger.C.bold}Examples:${Logger.C.reset}`);
+        Logger.log(`${C.bold}Examples:${C.reset}`);
         Logger.log(`  xavva docker init`);
         Logger.log(`  xavva docker build --tag myapp:1.0`);
         Logger.log(`  xavva docker up -d`);
@@ -140,9 +140,9 @@ export class DockerCommand implements Command {
 
         Logger.divider();
         Logger.info("Next steps", "");
-        Logger.log(`  ${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.primary}xavva docker build${Logger.C.reset}  ${Logger.C.gray}- Build image${Logger.C.reset}`);
-        Logger.log(`  ${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.primary}xavva docker up${Logger.C.reset}      ${Logger.C.gray}- Start containers${Logger.C.reset}`);
-        Logger.log(`  ${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.primary}xavva docker run${Logger.C.reset}     ${Logger.C.gray}- Run dev mode${Logger.C.reset}`);
+        Logger.log(`  ${C.gray}│${C.reset}  ${C.primary}xavva docker build${C.reset}  ${C.gray}- Build image${C.reset}`);
+        Logger.log(`  ${C.gray}│${C.reset}  ${C.primary}xavva docker up${C.reset}      ${C.gray}- Start containers${C.reset}`);
+        Logger.log(`  ${C.gray}│${C.reset}  ${C.primary}xavva docker run${C.reset}     ${C.gray}- Run dev mode${C.reset}`);
         Logger.endSection();
     }
 

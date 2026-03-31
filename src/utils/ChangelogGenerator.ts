@@ -20,17 +20,17 @@ interface Version {
 
 export class ChangelogGenerator {
     private static readonly TYPES: Record<string, { title: string; emoji: string }> = {
-        feat: { title: "Features", emoji: "✨" },
-        fix: { title: "Bug Fixes", emoji: "🐛" },
-        docs: { title: "Documentation", emoji: "📚" },
-        style: { title: "Styles", emoji: "💎" },
-        refactor: { title: "Code Refactoring", emoji: "♻️" },
-        perf: { title: "Performance", emoji: "⚡" },
-        test: { title: "Tests", emoji: "🧪" },
-        build: { title: "Build System", emoji: "🏗️" },
-        ci: { title: "CI/CD", emoji: "🔄" },
-        chore: { title: "Chores", emoji: "🔧" },
-        revert: { title: "Reverts", emoji: "⏪" },
+        feat: { title: "Features", emoji: "+" },
+        fix: { title: "Bug Fixes", emoji: "!" },
+        docs: { title: "Documentation", emoji: "D" },
+        style: { title: "Styles", emoji: "S" },
+        refactor: { title: "Code Refactoring", emoji: "R" },
+        perf: { title: "Performance", emoji: "P" },
+        test: { title: "Tests", emoji: "T" },
+        build: { title: "Build System", emoji: "B" },
+        ci: { title: "CI/CD", emoji: "C" },
+        chore: { title: "Chores", emoji: "*" },
+        revert: { title: "Reverts", emoji: "-" },
     };
 
     static generate(): string {

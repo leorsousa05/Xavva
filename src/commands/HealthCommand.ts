@@ -4,7 +4,7 @@ import { platform, totalmem, freemem, arch } from "os";
 import { existsSync } from "fs";
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
-import { Logger } from "../utils/ui";
+import { Logger, C } from "../utils/ui";
 
 const execAsync = promisify(exec);
 
@@ -50,16 +50,16 @@ export class HealthCommand implements Command {
 
         for (const check of checks) {
             const icon = check.status === "ok" 
-                ? `${Logger.C.success}✓${Logger.C.reset}`
+                ? `${C.success}✓${C.reset}`
                 : check.status === "warning"
-                ? `${Logger.C.warning}⚠${Logger.C.reset}`
-                : `${Logger.C.error}✗${Logger.C.reset}`;
+                ? `${C.warning}⚠${C.reset}`
+                : `${C.error}✗${C.reset}`;
 
-            Logger.log(`${Logger.C.gray}│${Logger.C.reset}  ${icon} ${Logger.C.bold}${check.name}${Logger.C.reset}`);
-            Logger.log(`${Logger.C.gray}│${Logger.C.reset}     ${check.message}`);
+            Logger.log(`${C.gray}│${C.reset}  ${icon} ${C.bold}${check.name}${C.reset}`);
+            Logger.log(`${C.gray}│${C.reset}     ${check.message}`);
             
             if (check.details) {
-                Logger.log(`${Logger.C.gray}│${Logger.C.reset}     ${Logger.C.dim}${check.details}${Logger.C.reset}`);
+                Logger.log(`${C.gray}│${C.reset}     ${C.dim}${check.details}${C.reset}`);
             }
 
             if (check.status === "error") errors++;

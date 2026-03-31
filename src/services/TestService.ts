@@ -3,7 +3,7 @@
  * Suporta Maven e Gradle com modo watch
  */
 
-import { Logger } from "../utils/ui";
+import { Logger, C } from "../utils/ui";
 import { spawn } from "child_process";
 import { watch, type FSWatcher } from "fs";
 import path from "path";
@@ -287,8 +287,8 @@ export class TestService {
         }
 
         Logger.info("Total", result.totalTests);
-        Logger.info("Passed", `${Logger.C.success}${result.passed}${Logger.C.reset}`);
-        Logger.info("Failed", result.failed > 0 ? `${Logger.C.error}${result.failed}${Logger.C.reset}` : "0");
+        Logger.info("Passed", `${C.success}${result.passed}${C.reset}`);
+        Logger.info("Failed", result.failed > 0 ? `${C.error}${result.failed}${C.reset}` : "0");
         Logger.info("Skipped", result.skipped);
         Logger.info("Duration", `${(result.duration / 1000).toFixed(2)}s`);
 

@@ -1,4 +1,10 @@
-import { Logger } from "./ui";
+/**
+ * ProgressBar - Adaptador para o novo sistema de logging
+ * 
+ * @deprecated Use ProgressLogger de src/logging/
+ */
+
+import { Logger, ProgressLogger, Colors } from "../logging";
 
 export interface ProgressBarOptions {
     title: string;
@@ -6,13 +12,18 @@ export interface ProgressBarOptions {
     width?: number;
     showPercentage?: boolean;
     showEta?: boolean;
+    showSpeed?: boolean;
 }
 
+/**
+ * @deprecated Use ProgressLogger de src/logging/
+ */
 export class ProgressBar {
     private current = 0;
     private startTime: number;
     private options: Required<ProgressBarOptions>;
     private isComplete = false;
+    private logger: ProgressLogger;
 
     constructor(options: ProgressBarOptions) {
         this.options = {
@@ -22,12 +33,55 @@ export class ProgressBar {
             ...options
         };
         this.startTime = Date.now();
+        
+        // Cria um ProgressLogger interno
+        this.logger = new ProgressLogger(options.title, {
+            total: options.total,
+            width: this.options.width,
+            showPercentage: this.options.showPercentage,
+            showEta: this.options.showEta,
+        });
     }
 
-    update(current: number): void {
+    update(current: number, speed?: number, eta?: number): void {
         if (this.isComplete) return;
         this.current = Math.min(current, this.options.total);
-        this.render();
+        
+        // Atualiza o ProgressLogger interno com extras se disponíveis
+        if (speed !== undefined && eta !== undefined) {
+            // Cria string de extras
+            const extras: string[] = [];
+            if (this.options.showSpeed && speed > 0) {
+                extras.push(`${speed.toFixed(1)} MB/s`);
+            }
+            if (this.options.showEta && eta > 0) {
+                const etaSec = Math.ceil(eta);
+                if (etaSec < 60) {
+                    extras.push(`${etaSec}s restantes`);
+                } else {
+                    extras.push(`${Math.ceil(etaSec / 60)}min restantes`);
+                }
+            }
+            
+            // Renderiza com extras
+            this.renderWithExtras(extras);
+        } else {
+            this.logger.update(this.current);
+        }
+    }
+
+    private renderWithExtras(extras: string[]): void {
+        // Acessa o método privado via cast para atualizar com extras
+        const percentage = Math.floor((this.current / this.options.total) * 100);
+        const filled = Math.floor((this.current / this.options.total) * this.options.width);
+        const empty = this.options.width - filled;
+        
+        const bar = "█".repeat(filled) + "░".repeat(empty);
+        const extraStr = extras.length > 0 ? ` | ${extras.join(" | ")}` : "";
+        
+        process.stdout.clearLine?.(0);
+        process.stdout.cursorTo?.(0);
+        process.stdout.write(`  ${this.options.title}: [${bar}] ${percentage}%${extraStr}`);
     }
 
     increment(amount = 1): void {
@@ -38,54 +92,39 @@ export class ProgressBar {
         if (this.isComplete) return;
         this.current = this.options.total;
         this.isComplete = true;
-        this.render();
-        process.stdout.write("\n");
+        
+        // Limpa linha e mostra completo
+        process.stdout.clearLine?.(0);
+        process.stdout.cursorTo?.(0);
+        
+        this.logger.complete();
     }
 
     private render(): void {
-        const { title, total, width, showPercentage, showEta } = this.options;
-        const ratio = this.current / total;
-        const filled = Math.floor(ratio * width);
-        const empty = width - filled;
-
-        const bar = "█".repeat(filled) + "░".repeat(empty);
-        const percentage = Math.floor(ratio * 100);
-
-        let line = `${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.primary}▸${Logger.C.reset} ${Logger.C.dim}${title}${Logger.C.reset} `;
-        line += `${Logger.C.primary}[${bar}]${Logger.C.reset}`;
-
-        if (showPercentage) {
-            line += ` ${Logger.C.white}${percentage}%${Logger.C.reset}`;
-        }
-
-        if (showEta && this.current > 0) {
-            const elapsed = Date.now() - this.startTime;
-            const eta = Math.ceil((elapsed / this.current) * (total - this.current) / 1000);
-            line += ` ${Logger.C.gray}(ETA: ${eta}s)${Logger.C.reset}`;
-        }
-
-        // Clear line and write new content
-        process.stdout.write(`\r${line}`);
+        // Delegado para o ProgressLogger
+        this.logger.update(this.current);
     }
 }
 
-// Spinner especializado para diferentes operações
+/**
+ * @deprecated Use ProgressLogger de src/logging/
+ */
 export class ThemedSpinner {
     private static frames = {
-        default: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
-        dots: ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"],
+        default: ["|", "/", "-", "\\"],
+        dots: [".", "..", "...", "....", ".....", "....", "...", ".."],
         line: ["-", "\\", "|", "/"],
-        arrow: ["←", "↖", "↑", "↗", "→", "↘", "↓", "↙"],
-        pulse: ["█", "▉", "▊", "▋", "▌", "▍", "▎", "▏"],
-        moon: ["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"]
+        arrow: [">", "->", "-->", "--->", "---->", "--->", "-->", "->"],
+        pulse: ["#", "##", "###", "####", "#####", "####", "###", "##"],
+        moon: ["(", "(-", "(-(", "(-(-", "(-(-(", "(-(-", "(-(", "(-"]
     };
 
     private static colors = {
-        default: Logger.C.primary,
-        build: Logger.C.warning,
-        download: Logger.C.info,
-        deploy: Logger.C.success,
-        watch: Logger.C.secondary
+        default: Colors.primary,
+        build: Colors.warning,
+        download: Colors.info,
+        deploy: Colors.success,
+        watch: Colors.secondary
     };
 
     private timer?: Timer;
@@ -99,12 +138,12 @@ export class ThemedSpinner {
         const frames = ThemedSpinner.frames[theme];
         const colorCode = ThemedSpinner.colors[color];
 
-        process.stdout.write(`${Logger.C.gray}│${Logger.C.reset}  `);
+        process.stdout.write(`${Colors.gray}│${Colors.reset}  `);
         process.stdout.write("\x1B[?25l");
 
         this.timer = setInterval(() => {
             const frame = frames[this.frameIndex];
-            process.stdout.write(`\r${Logger.C.gray}│${Logger.C.reset}  ${colorCode}${frame}${Logger.C.reset} ${Logger.C.dim}${message}${Logger.C.reset}`);
+            process.stdout.write(`\r${Colors.gray}│${Colors.reset}  ${colorCode}${frame}${Colors.reset} ${Colors.dim}${message}${Colors.reset}`);
             this.frameIndex = (this.frameIndex + 1) % frames.length;
         }, 80);
 
@@ -114,14 +153,16 @@ export class ThemedSpinner {
                     clearInterval(this.timer);
                 }
                 process.stdout.write("\x1B[?25h");
-                const icon = success ? `${Logger.C.success}✓${Logger.C.reset}` : `${Logger.C.error}✗${Logger.C.reset}`;
-                console.log(`\r${Logger.C.gray}│${Logger.C.reset}  ${icon} ${message}`);
+                const icon = success ? `${Colors.success}✓${Colors.reset}` : `${Colors.error}✗${Colors.reset}`;
+                console.log(`\r${Colors.gray}│${Colors.reset}  ${icon} ${message}`);
             }
         };
     }
 }
 
-// Função auxiliar para downloads com progresso
+/**
+ * @deprecated Use ProgressLogger de src/logging/
+ */
 export async function downloadWithProgress(
     url: string, 
     destination: string, 
@@ -129,7 +170,7 @@ export async function downloadWithProgress(
 ): Promise<void> {
     const response = await fetch(url);
     if (!response.ok) {
-        throw new Error(`Failed to download: ${response.statusText}`);
+        throw new Error(`Falha ao baixar: ${response.statusText}`);
     }
 
     const totalSize = parseInt(response.headers.get("content-length") || "0");
@@ -153,7 +194,7 @@ export async function downloadWithProgress(
 
     const reader = response.body?.getReader();
     if (!reader) {
-        throw new Error("No response body");
+        throw new Error("Sem response body");
     }
 
     const chunks: Uint8Array[] = [];

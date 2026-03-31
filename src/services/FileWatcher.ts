@@ -5,7 +5,7 @@
  */
 
 import { watch, type FSWatcher } from "fs";
-import { Logger } from "../utils/ui";
+import { Logger } from "../logging";
 
 export interface FileWatcherOptions {
     recursive?: boolean;
@@ -29,6 +29,7 @@ export class FileWatcher {
     private debounceTimers: Map<string, Timer> = new Map();
     private coolingFiles: Set<string> = new Set();
     private isWatching = false;
+    private logger = Logger.getInstance();
 
     private static readonly DEFAULT_OPTIONS: Required<FileWatcherOptions> = {
         recursive: true,
@@ -74,7 +75,7 @@ export class FileWatcher {
      */
     start(rootPath: string = process.cwd()): void {
         if (this.isWatching) {
-            Logger.debug("FileWatcher já está rodando");
+            // Silently ignore
             return;
         }
 
@@ -85,7 +86,7 @@ export class FileWatcher {
         );
 
         this.isWatching = true;
-        Logger.debug(`FileWatcher iniciado em ${rootPath}`);
+        // Started silently
     }
 
     /**
@@ -102,7 +103,7 @@ export class FileWatcher {
         this.debounceTimers.clear();
         
         this.isWatching = false;
-        Logger.debug("FileWatcher parado");
+        // Stopped silently
     }
 
     /**
@@ -190,11 +191,11 @@ export class FileWatcher {
                     const result = handler(event);
                     if (result instanceof Promise) {
                         result.catch(err => {
-                            Logger.debug(`Erro em handler de watch: ${err.message}`);
+                            this.logger.debug(`Erro em handler de watch: ${err.message}`);
                         });
                     }
                 } catch (err) {
-                    Logger.debug(`Erro em handler de watch: ${(err as Error).message}`);
+                    this.logger.debug(`Erro em handler de watch: ${(err as Error).message}`);
                 }
             }
         }
@@ -208,7 +209,14 @@ export class FileWatcher {
         if (pattern === "*") return true;
         
         try {
-            const regex = new RegExp(pattern);
+            // Quando um RegExp é convertido para string (ex: usado como chave de Map),
+            // ele vira algo como "/\\.java$/". Precisamos extrair o padrão real.
+            let patternStr = pattern;
+            if (pattern.length > 2 && pattern.startsWith("/") && pattern.lastIndexOf("/") > 0) {
+                const lastSlash = pattern.lastIndexOf("/");
+                patternStr = pattern.slice(1, lastSlash);
+            }
+            const regex = new RegExp(patternStr);
             return regex.test(filename);
         } catch {
             // Se não for regex válido, trata como string simples

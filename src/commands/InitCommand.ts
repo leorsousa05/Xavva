@@ -4,14 +4,15 @@ import { join } from "path";
 import { constants, existsSync } from "fs";
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
-import { Logger } from "../utils/ui";
+import { Logger } from "../logging";
 
 export class InitCommand implements Command {
+    private logger = Logger.getInstance();
+
     async execute(_config: AppConfig, _args?: CLIArguments): Promise<void> {
-        Logger.banner("init");
-        Logger.section("Project Setup Wizard");
-        Logger.info("Let's configure your Xavva project");
-        Logger.newline();
+        this.logger.section("Project Setup Wizard");
+        this.logger.info("Vamos configurar seu projeto Xavva");
+        this.logger.newline();
 
         // Detect build tool and available profiles
         const buildTool = await this.detectBuildTool();
@@ -25,9 +26,9 @@ export class InitCommand implements Command {
         });
 
         // Profile selection with explanation
-        Logger.newline();
-        Logger.dim("The profile is used to activate Maven/Gradle build configurations");
-        Logger.dim("(e.g., 'dev' for development, 'prod' for production)");
+        this.logger.newline();
+        console.log("The profile is used to activate Maven/Gradle build configurations");
+        console.log("(e.g., 'dev' for development, 'prod' for production)");
         
         let profile: string;
         
@@ -76,8 +77,8 @@ export class InitCommand implements Command {
         }) || 8080;
 
         // Optional settings
-        Logger.newline();
-        Logger.dim("Advanced settings:");
+        this.logger.newline();
+        console.log("Advanced settings:");
         
         const useEmbedded = await confirm({
             message: "Use embedded Tomcat (auto-download)?",
@@ -150,8 +151,8 @@ export class InitCommand implements Command {
 
         // Add environments if enabled
         if (enableMultiEnv) {
-            Logger.newline();
-            Logger.dim("Environment Configuration:");
+            this.logger.newline();
+            console.log("Environment Configuration:");
             
             const environments: Record<string, unknown> = {};
             
@@ -213,20 +214,20 @@ export class InitCommand implements Command {
         }
 
         // Save file
-        Logger.newline();
-        Logger.step("Saving configuration...");
+        this.logger.newline();
+        this.logger.step("Saving configuration...");
 
         const configPath = join(process.cwd(), "xavva.json");
         await writeFile(configPath, JSON.stringify(config, null, 2));
 
-        Logger.success(`Configuration saved to ${configPath}`);
-        Logger.newline();
-        Logger.ready("Project configured!");
-        Logger.info("Next steps:");
-        Logger.log(`  ${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.primary}xavva build${Logger.C.reset}  ${Logger.C.gray}- Compile project${Logger.C.reset}`);
-        Logger.log(`  ${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.primary}xavva deploy${Logger.C.reset} ${Logger.C.gray}- Build + deploy${Logger.C.reset}`);
-        Logger.log(`  ${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.primary}xavva health${Logger.C.reset} ${Logger.C.gray}- Check environment${Logger.C.reset}`);
-        Logger.done();
+        this.logger.success(`Configuration saved to ${configPath}`);
+        this.logger.newline();
+        this.logger.ready("Project configured!");
+        this.logger.info("Next steps:");
+        console.log(`  │   xavva build   - Compile project`);
+        console.log(`  │   xavva deploy  - Build + deploy`);
+        console.log(`  │   xavva health  - Check environment`);
+        this.logger.newline();
     }
 
     private async detectBuildTool(): Promise<"maven" | "gradle"> {
@@ -235,17 +236,17 @@ export class InitCommand implements Command {
                           existsSync(join(process.cwd(), "build.gradle.kts"));
 
         if (hasPom && !hasGradle) {
-            Logger.info("Detected: Maven project");
+            this.logger.info("Detected: Maven project");
             return "maven";
         }
         
         if (hasGradle && !hasPom) {
-            Logger.info("Detected: Gradle project");
+            this.logger.info("Detected: Gradle project");
             return "gradle";
         }
 
         if (hasPom && hasGradle) {
-            Logger.warn("Both pom.xml and build.gradle found");
+            this.logger.warn("Both pom.xml and build.gradle found");
             const choice = await select({
                 message: "Select build tool:",
                 choices: [

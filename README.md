@@ -2,15 +2,16 @@
 
 > Ultra-fast development toolkit for Java Enterprise (Tomcat) on Windows, Linux & macOS
 
-[![Version](https://img.shields.io/badge/version-3.1.3-blue.svg)](https://github.com/leorsousa05/Xavva)
+[![Version](https://img.shields.io/badge/version-3.2.0-blue.svg)](https://github.com/leorsousa05/Xavva)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Xavva is a high-performance CLI built with **Bun** that transforms the Java/Tomcat development experience. It brings modern development workflows (like Node.js/Vite) to the Java Enterprise ecosystem with hot-reload, smart logging, and automated deployment.
+Xavva is a high-performance CLI built with **Bun** that transforms the Java/Tomcat development experience. It brings modern development workflows (like Node.js/Vite) to the Java Enterprise ecosystem with hot-reload, smart logging, automated deployment, and a powerful plugin system.
 
 ---
 
 ## ✨ Features
 
+### Core
 - ⚡ **Hot Reload** — Incremental compilation and class injection without server restart
 - 📊 **Interactive Dashboard** — Real-time TUI with system metrics and shortcuts
 - 🧠 **Smart Log Analyzer** — Stack trace folding and root cause highlighting
@@ -18,19 +19,29 @@ Xavva is a high-performance CLI built with **Bun** that transforms the Java/Tomc
 - 📦 **Dependency Analysis** — Detect conflicts and outdated dependencies
 - 🎯 **Maven & Gradle** — Native support for both build tools
 - 🔧 **Auto-Healing** — Automatic diagnosis and repair of common issues
-- 🐱 **Embedded Tomcat** — Auto-install Tomcat, no manual setup needed
+- 🐱 **Embedded Tomcat** — Auto-install with mirror selection, checksum verification, download resume, and backup/rollback
 - 📦 **WAR Generation** — Build as .war file or exploded directory
+
+### Developer Experience
 - 🔤 **Encoding Converter** — Convert file encodings (UTF-8, Windows-1252, ISO-8859-1) and fix mojibake
 - 🧙 **Interactive Wizard** — `xavva init` for easy project setup
 - 🔔 **Desktop Notifications** — Get notified when builds/deploys complete
 - 📜 **Command History** — Track and replay commands with `xavva history` and `xavva redo`
 - 🏥 **Health Check** — Verify environment (Java, ports, memory, disk) with `xavva health`
+- 🔧 **Auto-Fix** — Automatically fix common issues with `xavva doctor --fix`
+- 🧹 **Clean Command** — Clean cache, build, and logs with `xavva clean`
 - 🔮 **Shell Completions** — Auto-complete for bash, zsh, and fish
+
+### Advanced
 - 🧪 **Test Runner** — Run JUnit/TestNG tests with watch mode and coverage
 - 🗄️ **Database Migrations** — Flyway/Liquibase integration
 - 🌐 **HTTP Client** — Test APIs without leaving the terminal
 - 🐳 **Docker Integration** — Generate configs, build and run containers
 - 🌍 **Multi-Environment** — Dev, test, staging configurations
+- 🔌 **Plugin System** — Extend functionality with custom plugins
+- 💻 **IDE Integration** — Generate configs for VS Code, IntelliJ, Eclipse
+- 📊 **Performance Profiler** — Detailed timing with `--profile`
+- 🛡️ **Security** — Input sanitization, path validation, checksum verification
 
 ---
 
@@ -61,6 +72,9 @@ xavva deploy
 # Build and deploy as .war file
 xavva deploy --war
 
+# Clean everything (cache, build, logs)
+xavva clean
+
 # Analyze dependencies for issues
 xavva deps
 
@@ -69,6 +83,9 @@ xavva deps --update-safe
 
 # Check for security vulnerabilities
 xavva audit
+
+# Diagnose and auto-fix environment issues
+xavva doctor --fix
 
 # Convert file encoding (UTF-8 → Windows-1252)
 xavva encoding convert --to cp1252 --backup src/main/java/
@@ -104,9 +121,20 @@ xavva docker init
 xavva docker build
 xavva docker up
 
+# Generate IDE configuration
+xavva ide --ide vscode
+xavva ide --ide idea
+xavva ide --ide eclipse
+
 # Multi-environment
 xavva deploy --env staging
 xavva dev --env dev
+
+# Profile performance
+xavva build --profile
+
+# Dry-run (simulate without executing)
+xavva deploy --dry-run
 
 # Enable shell completions (bash example)
 eval "$(xavva completion bash)"
@@ -124,6 +152,7 @@ eval "$(xavva completion bash)"
 | `xavva deploy` | Build and deploy application to Tomcat                 |
 | `xavva build`  | Compile project only                                   |
 | `xavva start`  | Start Tomcat server only                               |
+| `xavva clean`  | Clean cache, build directories, and logs               |
 
 ### Code Execution
 
@@ -191,6 +220,14 @@ eval "$(xavva completion bash)"
 | `xavva docker run` | Run development container |
 | `xavva docker status` | Show container status |
 
+### IDE Integration
+
+| Command | Description |
+|---------|-------------|
+| `xavva ide --ide vscode` | Generate VS Code configuration (.vscode/) |
+| `xavva ide --ide idea` | Generate IntelliJ IDEA configuration (.idea/) |
+| `xavva ide --ide eclipse` | Generate Eclipse configuration (.project) |
+
 ### Multi-Environment
 
 | Command | Description |
@@ -210,9 +247,34 @@ Configure environments in `xavva.json`:
 
 ---
 
+## 🧹 Clean Command
+
+The `xavva clean` command helps you clean up your project:
+
+```bash
+# Clean everything (cache, build, logs, tomcat work)
+xavva clean
+
+# Clean only cache
+xavva clean --cache
+
+# Clean only build directories (target/ build/)
+xavva clean --build
+
+# Clean only logs
+xavva clean --logs
+
+# Clean only Tomcat work directory
+xavva clean --tomcat
+```
+
+---
+
 ## 🐱 Embedded Tomcat
 
-Xavva can automatically download and manage a Tomcat installation for you:
+Xavva can automatically download and manage a Tomcat installation for you with advanced features like automatic mirror selection, checksum verification, download resuming, and backup/rollback:
+
+### Basic Usage
 
 ```bash
 # First time usage - auto-install Tomcat
@@ -239,6 +301,83 @@ xavva tomcat uninstall 9.0.115
 # Or use with flags
 xavva dev --tomcat-version 9.0.115
 ```
+
+### Advanced Installation Features
+
+```bash
+# Install with automatic mirror selection (fastest mirror)
+xavva tomcat install 10.1.52 --mirror auto
+
+# Install with specific mirror
+xavva tomcat install 10.1.52 --mirror "Apache (UK)"
+
+# Install multiple versions in parallel
+xavva tomcat install 9.0.115 10.1.52 11.0.6 --parallel
+
+# Install without cache (force re-download)
+xavva tomcat install 10.1.52 --no-cache
+
+# Install without checksum verification
+xavva tomcat install 10.1.52 --no-checksum
+
+# Silent mode for CI/CD
+xavva tomcat install 10.1.52 --silent
+
+# Force reinstallation
+xavva tomcat install 10.1.52 --force
+
+# Configure timeout and retries
+xavva tomcat install 10.1.52 --timeout 600 --retries 5
+```
+
+### Mirror Management
+
+```bash
+# List all available mirrors
+xavva tomcat mirrors list
+
+# Test mirror speeds
+xavva tomcat mirrors test
+```
+
+### Backup and Restore
+
+```bash
+# List available backups
+xavva tomcat backup list
+
+# List backups for specific version
+xavva tomcat backup list 10.1.52
+
+# Restore from backup
+xavva tomcat backup restore 10.1.52
+```
+
+### Download Cache
+
+```bash
+# View cache statistics
+xavva tomcat cache stats
+
+# Clear download cache
+xavva tomcat cache clear
+```
+
+### Installation Features
+
+| Feature | Description |
+|---------|-------------|
+| **Mirror Selection** | Automatic selection of fastest mirror (US, BR, UK, CN, etc.) |
+| **Checksum Verification** | SHA512 verification for download integrity |
+| **Download Resume** | Resume interrupted downloads from where they stopped |
+| **Retry with Backoff** | Automatic retry with exponential backoff (1s, 2s, 4s) |
+| **Progress Display** | Real-time progress with MB/s, ETA, and percentage |
+| **Download Cache** | Persistent cache shared between projects |
+| **Backup on Update** | Automatic backup before updating existing installation |
+| **Rollback** | Automatic rollback if installation fails |
+| **Compatibility Check** | Validates Tomcat version against project requirements |
+| **Parallel Install** | Install multiple versions simultaneously |
+| **Silent Mode** | CI/CD friendly mode with no interactive output |
 
 ---
 
@@ -359,11 +498,19 @@ Create `xavva.json` in your project root:
     "appName": "my-application",
     "buildTool": "maven",
     "profile": "dev",
-    "tui": false
+    "tui": false,
+    "encoding": "utf-8",
+    "plugins": [
+      "@xavva/plugin-sass"
+    ]
   },
   "tomcat": {
     "path": "/home/user/apache-tomcat",
     "port": 8080
+  },
+  "environments": {
+    "dev": { "port": 8080, "profile": "dev" },
+    "staging": { "port": 8081, "profile": "staging" }
   }
 }
 ```
@@ -390,6 +537,8 @@ Create `xavva.json` in your project root:
 | `-y, --yes`            | Auto-install Tomcat (no prompt) |
 | `-V, --verbose`        | Detailed output                 |
 | `-i, --interactive`    | Interactive mode (for config)   |
+| `--profile`            | Show performance profile        |
+| `--dry-run`            | Simulate without executing      |
 
 ---
 
@@ -411,7 +560,7 @@ The wizard will guide you through:
 
 ---
 
-## 🏥 Health Check
+## 🏥 Health Check & Doctor
 
 Verify your development environment:
 
@@ -419,13 +568,21 @@ Verify your development environment:
 # Check all components
 xavva health
 
-# Checks include:
-# - Java version (JDK 11+ recommended)
-# - Maven/Gradle availability
-# - Tomcat configuration
-# - Port availability
-# - Memory and disk space
+# Diagnose and show issues
+xavva doctor
+
+# Auto-fix common issues
+xavva doctor --fix
 ```
+
+Checks include:
+- Java version (JDK 11+ recommended)
+- Maven/Gradle availability
+- Tomcat configuration
+- Port availability
+- Memory and disk space
+- JAR file integrity
+- File encoding (BOM detection)
 
 ---
 
@@ -487,6 +644,54 @@ Xavva works on all major platforms:
 
 ---
 
+## 🔌 Plugin System
+
+Extend Xavva with custom plugins:
+
+```bash
+# Install a plugin
+xavva plugin install @xavva/plugin-sass
+
+# List installed plugins
+xavva plugin list
+```
+
+Create a plugin (example: `my-plugin.ts`):
+
+```typescript
+import type { XavvaPlugin } from "@archznn/xavva/plugins";
+
+export default {
+  name: "my-plugin",
+  version: "1.0.0",
+  description: "My custom plugin",
+  
+  hooks: {
+    beforeBuild: async (context) => {
+      console.log("Building...", context.config.project.appName);
+    },
+    afterBuild: async (context, success) => {
+      console.log("Build finished:", success ? "success" : "failed");
+    }
+  }
+} as XavvaPlugin;
+```
+
+Configure in `xavva.json`:
+
+```json
+{
+  "project": {
+    "plugins": [
+      "@xavva/plugin-sass",
+      "./scripts/my-plugin.ts"
+    ]
+  }
+}
+```
+
+---
+
 ## 🏗️ Architecture
 
 Xavva uses a modular service-oriented architecture:
@@ -494,9 +699,13 @@ Xavva uses a modular service-oriented architecture:
 - **DashboardService** — TUI management and interactivity
 - **LogAnalyzer** — Intelligent log processing
 - **DependencyAnalyzerService** — Dependency conflict detection
+- **DependencyCacheService** — Cache parsed dependencies
 - **ProjectService** — Project structure discovery
 - **BuildService** — Maven/Gradle integration
 - **TomcatService** — Server lifecycle management
+- **PluginManager** — Plugin loading and hook execution
+- **PerformanceProfiler** — Performance measurement
+- **ErrorHandler** — Contextual error messages
 
 ---
 

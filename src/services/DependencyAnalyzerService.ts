@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { ProjectConfig } from "../types/config";
-import { Logger } from "../utils/ui";
+import { Logger, C } from "../utils/ui";
 
 export interface Dependency {
 	groupId: string;
@@ -606,24 +606,24 @@ export class DependencyAnalyzerService {
 	generateReport(result: DependencyAnalysisResult): string {
 		const lines: string[] = [];
 		lines.push("");
-		lines.push(`${Logger.C.primary}══════════════════════════════════════════════════════════${Logger.C.reset}`);
-		lines.push(`${Logger.C.bold}📊 ANÁLISE DE DEPENDÊNCIAS${Logger.C.reset}`);
-		lines.push(`${Logger.C.primary}══════════════════════════════════════════════════════════${Logger.C.reset}`);
+		lines.push(`${C.primary}══════════════════════════════════════════════════════════${C.reset}`);
+		lines.push(`${C.bold}📊 ANÁLISE DE DEPENDÊNCIAS${C.reset}`);
+		lines.push(`${C.primary}══════════════════════════════════════════════════════════${C.reset}`);
 		lines.push("");
 		
 		// Estatísticas
-		lines.push(`${Logger.C.dim}Estatísticas:${Logger.C.reset}`);
+		lines.push(`${C.dim}Estatísticas:${C.reset}`);
 		lines.push(`  Total: ${result.stats.total} dependências`);
 		lines.push(`  Diretas: ${result.stats.direct} | Transitivas: ${result.stats.transitive}`);
 		lines.push("");
 
 		// Conflitos
 		if (result.conflicts.length > 0) {
-			lines.push(`${Logger.C.warning}⚠️  CONFLITOS DE VERSÃO (${result.conflicts.length})${Logger.C.reset}`);
+			lines.push(`${C.warning}⚠️  CONFLITOS DE VERSÃO (${result.conflicts.length})${C.reset}`);
 			for (const conflict of result.conflicts) {
 				const icon = conflict.severity === "error" ? "✖" : "▲";
-				const color = conflict.severity === "error" ? Logger.C.error : Logger.C.warning;
-				lines.push(`  ${color}${icon}${Logger.C.reset} ${conflict.groupId}:${conflict.artifactId}`);
+				const color = conflict.severity === "error" ? C.error : C.warning;
+				lines.push(`  ${color}${icon}${C.reset} ${conflict.groupId}:${conflict.artifactId}`);
 				lines.push(`     Versões: ${conflict.versions.join(", ")}`);
 			}
 			lines.push("");
@@ -635,23 +635,23 @@ export class DependencyAnalyzerService {
 			const minorUpdates = result.updates.filter(u => !u.isMajor);
 
 			if (minorUpdates.length > 0) {
-				lines.push(`${Logger.C.success}⬆️  ATUALIZAÇÕES DISPONÍVEIS (${minorUpdates.length})${Logger.C.reset}`);
+				lines.push(`${C.success}⬆️  ATUALIZAÇÕES DISPONÍVEIS (${minorUpdates.length})${C.reset}`);
 				for (const update of minorUpdates.slice(0, 5)) {
-					lines.push(`  ${Logger.C.success}↑${Logger.C.reset} ${update.groupId}:${update.artifactId}`);
-					lines.push(`     ${update.currentVersion} → ${Logger.C.success}${update.latestVersion}${Logger.C.reset}`);
+					lines.push(`  ${C.success}↑${C.reset} ${update.groupId}:${update.artifactId}`);
+					lines.push(`     ${update.currentVersion} → ${C.success}${update.latestVersion}${C.reset}`);
 				}
 				if (minorUpdates.length > 5) {
-					lines.push(`  ${Logger.C.dim}... e mais ${minorUpdates.length - 5}${Logger.C.reset}`);
+					lines.push(`  ${C.dim}... e mais ${minorUpdates.length - 5}${C.reset}`);
 				}
 				lines.push("");
 			}
 
 			if (majorUpdates.length > 0) {
-				lines.push(`${Logger.C.warning}⚠️  ATUALIZAÇÕES MAJOR (${majorUpdates.length})${Logger.C.reset}`);
-				lines.push(`  ${Logger.C.dim}Podem conter breaking changes${Logger.C.reset}`);
+				lines.push(`${C.warning}⚠️  ATUALIZAÇÕES MAJOR (${majorUpdates.length})${C.reset}`);
+				lines.push(`  ${C.dim}Podem conter breaking changes${C.reset}`);
 				for (const update of majorUpdates.slice(0, 3)) {
-					lines.push(`  ${Logger.C.warning}!${Logger.C.reset} ${update.groupId}:${update.artifactId}`);
-					lines.push(`     ${update.currentVersion} → ${Logger.C.warning}${update.latestVersion}${Logger.C.reset}`);
+					lines.push(`  ${C.warning}!${C.reset} ${update.groupId}:${update.artifactId}`);
+					lines.push(`     ${update.currentVersion} → ${C.warning}${update.latestVersion}${C.reset}`);
 				}
 				lines.push("");
 			}
@@ -659,11 +659,11 @@ export class DependencyAnalyzerService {
 
 		// Resumo
 		if (result.conflicts.length === 0 && result.updates.length === 0) {
-			lines.push(`${Logger.C.success}✔ Todas as dependências estão atualizadas!${Logger.C.reset}`);
+			lines.push(`${C.success}✔ Todas as dependências estão atualizadas!${C.reset}`);
 		}
 
 		lines.push("");
-		lines.push(`${Logger.C.dim}Dica: Execute 'xavva audit' para verificar vulnerabilidades${Logger.C.reset}`);
+		lines.push(`${C.dim}Dica: Execute 'xavva audit' para verificar vulnerabilidades${C.reset}`);
 		
 		return lines.join("\n");
 	}

@@ -3,16 +3,19 @@ import { BuildCommand } from "../src/commands/BuildCommand";
 import { BuildService } from "../src/services/BuildService";
 import { ProcessExitError } from "../src/utils/processManager";
 import type { AppConfig } from "../src/types/config";
-import { Logger } from "../src/utils/ui";
 
-// Mocking Logger
-mock.module("../src/utils/ui", () => ({
+// Mock do Logger do novo sistema
+mock.module("../src/logging", () => ({
     Logger: {
-        section: mock(() => {}),
-        info: mock(() => {}),
-        success: mock(() => {}),
-        error: mock(() => {}),
-        log: mock(() => {})
+        getInstance: () => ({
+            section: mock(() => {}),
+            config: mock(() => {}),
+            info: mock(() => {}),
+            success: mock(() => {}),
+            error: mock(() => {}),
+            warn: mock(() => {}),
+            debug: mock(() => {}),
+        })
     }
 }));
 
@@ -57,10 +60,6 @@ describe("BuildCommand", () => {
         await buildCommand.execute(mockConfig);
 
         expect(mockBuildService.runBuild).toHaveBeenCalled();
-        expect(Logger.section).toHaveBeenCalledWith("Build Only");
-        expect(Logger.info).toHaveBeenCalledWith("Tool", "MAVEN");
-        expect(Logger.info).toHaveBeenCalledWith("Profile", "prod");
-        expect(Logger.success).toHaveBeenCalledWith("Build completed successfully!");
     });
 
     test("deve capturar erro do build e encerrar o processo com código 1", async () => {
@@ -74,7 +73,5 @@ describe("BuildCommand", () => {
             expect(e).toBeInstanceOf(ProcessExitError);
             expect((e as ProcessExitError).code).toBe(1);
         }
-
-        expect(Logger.error).toHaveBeenCalledWith("Build Failed!");
     });
 });

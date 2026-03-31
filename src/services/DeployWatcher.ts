@@ -1,13 +1,26 @@
 /**
  * DeployWatcher - Específico para watch de deploy
- * Usa FileWatcher genérico e adiciona lógica de deploy
+ * 
+ * Melhorias:
+ * - Debounce inteligente com batch processing
+ * - Priorização de tipos de arquivos
+ * - Rate limiting de builds
+ * - Métricas de performance
  */
 
 import { FileWatcher, type FileChangeEvent } from "./FileWatcher";
 import { DeployCommand } from "../commands/DeployCommand";
-import { Logger } from "../utils/ui";
+import { Logger } from "../logging";
 import type { AppConfig } from "../types/config";
-import { WATCHER_DEBOUNCE_MS, WATCHER_COOLING_MS } from "../utils/constants";
+import { TIMEOUTS } from "../config/versions";
+
+interface WatcherMetrics {
+    filesChanged: number;
+    buildsTriggered: number;
+    lastBuildTime: number;
+    avgBuildTime: number;
+    buildTimes: number[];
+}
 
 export class DeployWatcher {
     private fileWatcher: FileWatcher;
@@ -16,6 +29,29 @@ export class DeployWatcher {
     private modifiedFiles = new Set<string>();
     private pendingFiles = new Set<string>();
     private hasPendingChanges = false;
+    private logger = Logger.getInstance();
+    
+    // Debounce e batching
+    private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    private readonly DEBOUNCE_MS = TIMEOUTS.DEBOUNCE;
+    private readonly MAX_BATCH_SIZE = 50;
+    private readonly MIN_BUILD_INTERVAL_MS = 500;
+    
+    // Métricas
+    private metrics: WatcherMetrics = {
+        filesChanged: 0,
+        buildsTriggered: 0,
+        lastBuildTime: 0,
+        avgBuildTime: 0,
+        buildTimes: [],
+    };
+    
+    // Priorização de arquivos
+    private static readonly PRIORITY = {
+        BUILD_CONFIG: 1,  // pom.xml, build.gradle
+        JAVA: 2,          // .java
+        RESOURCE: 3,      // .jsp, .html, etc
+    };
 
     constructor(
         private config: AppConfig,
@@ -23,8 +59,8 @@ export class DeployWatcher {
     ) {
         this.fileWatcher = new FileWatcher({
             recursive: true,
-            debounceMs: WATCHER_DEBOUNCE_MS,
-            coolingMs: WATCHER_COOLING_MS,
+            debounceMs: TIMEOUTS.WATCHER_DEBOUNCE,
+            coolingMs: TIMEOUTS.COOLING,
         });
     }
 
@@ -41,7 +77,7 @@ export class DeployWatcher {
         // Inicia o watcher
         this.fileWatcher.start();
 
-        Logger.info("DeployWatcher", "Monitorando alterações...");
+        this.logger.status("watch", "running", "monitorando arquivos");
     }
 
     /**
@@ -77,7 +113,8 @@ export class DeployWatcher {
     private async handleBuildConfigChange(event: FileChangeEvent): Promise<void> {
         if (!event.filename) return;
 
-        Logger.watcher(`Build configuration changed: ${event.filename}`, 'warn');
+        this.logger.file(event.filename, 'changed');
+        this.logger.info("Configuração de build alterada - rebuild completo necessário");
         
         // Limpa cache quando config muda
         const { BuildCacheService } = await import("./BuildCacheService");
@@ -87,22 +124,57 @@ export class DeployWatcher {
     }
 
     /**
-     * Trata mudança em arquivo Java
+     * Trata mudança em arquivo Java com debounce inteligente
      */
     private handleJavaChange(event: FileChangeEvent): void {
-        if (!event.filename || this.isDeploying) {
-            if (event.filename) {
-                this.pendingFiles.add(event.filename);
-                this.hasPendingChanges = true;
-            }
+        if (!event.filename) return;
+
+        this.metrics.filesChanged++;
+        this.logger.file(event.filename, 'changed');
+        this.modifiedFiles.add(event.filename);
+
+        // Se muitos arquivos mudaram, faz full build
+        if (this.modifiedFiles.size >= this.MAX_BATCH_SIZE) {
+            this.logger.warn(`Muitos arquivos modificados (${this.modifiedFiles.size}) - forçando build completo`);
+            this.pendingFullBuild = true;
+            this.flush();
             return;
         }
 
-        Logger.watcher(event.filename, 'watch');
-        this.modifiedFiles.add(event.filename);
+        // Debounce normal
+        if (this.debounceTimer) {
+            clearTimeout(this.debounceTimer);
+        }
 
-        // Debounce para acumular múltiplas mudanças
-        this.scheduleDeploy();
+        this.debounceTimer = setTimeout(() => {
+            this.flush();
+        }, this.DEBOUNCE_MS);
+    }
+
+    /**
+     * Processa batch de arquivos modificados
+     */
+    private flush(): void {
+        if (this.debounceTimer) {
+            clearTimeout(this.debounceTimer);
+            this.debounceTimer = null;
+        }
+
+        const files = [...this.modifiedFiles];
+        this.modifiedFiles.clear();
+
+        if (files.length === 0) return;
+
+        // Rate limiting
+        const timeSinceLastBuild = Date.now() - this.metrics.lastBuildTime;
+        if (timeSinceLastBuild < this.MIN_BUILD_INTERVAL_MS) {
+            const delay = this.MIN_BUILD_INTERVAL_MS - timeSinceLastBuild;
+            setTimeout(() => this.run(this.pendingFullBuild ? false : true, files), delay);
+        } else {
+            this.run(this.pendingFullBuild ? false : true, files);
+        }
+
+        this.pendingFullBuild = false;
     }
 
     /**
@@ -111,12 +183,12 @@ export class DeployWatcher {
     private async handleResourceChange(event: FileChangeEvent): Promise<void> {
         if (!event.filename) return;
 
-        Logger.watcher(event.filename, 'resource');
+        this.logger.file(event.filename, 'changed');
         
         try {
             await this.deployCmd.syncResource(this.config, event.filename);
         } catch (error) {
-            Logger.error(`Falha ao sincronizar recurso: ${event.filename}`);
+            this.logger.error(`Falha ao sincronizar: ${event.filename}`);
         }
     }
 
@@ -134,12 +206,21 @@ export class DeployWatcher {
     }
 
     /**
-     * Executa o deploy
+     * Executa o deploy com métricas
      */
     private async run(incremental = false, changedFiles?: string[]): Promise<void> {
-        if (this.isDeploying) return;
+        if (this.isDeploying) {
+            // Acumula para próximo ciclo
+            if (changedFiles) {
+                changedFiles.forEach(f => this.pendingFiles.add(f));
+                this.hasPendingChanges = true;
+            }
+            return;
+        }
         
         this.isDeploying = true;
+        const buildStart = performance.now();
+        this.metrics.buildsTriggered++;
         
         try {
             await this.deployCmd.execute(this.config, {
@@ -147,24 +228,47 @@ export class DeployWatcher {
                 incremental,
                 changedFiles,
             });
+            
+            // Atualiza métricas
+            const buildTime = performance.now() - buildStart;
+            this.metrics.lastBuildTime = Date.now();
+            this.metrics.buildTimes.push(buildTime);
+            
+            // Mantém apenas últimos 10 builds para média
+            if (this.metrics.buildTimes.length > 10) {
+                this.metrics.buildTimes.shift();
+            }
+            
+            this.metrics.avgBuildTime = 
+                this.metrics.buildTimes.reduce((a, b) => a + b, 0) / this.metrics.buildTimes.length;
+            
+            this.logger.debug(`Build em ${buildTime.toFixed(0)}ms (média: ${this.metrics.avgBuildTime.toFixed(0)}ms)`);
+            
         } catch (error) {
             // Erro já é tratado pelo comando
         } finally {
             this.isDeploying = false;
             
             // Processa mudanças pendentes
-            if (this.hasPendingChanges) {
+            if (this.hasPendingChanges || this.pendingFiles.size > 0) {
                 const pending = [...this.pendingFiles];
                 this.pendingFiles.clear();
                 this.hasPendingChanges = false;
                 
-                Logger.watcher(`Processing ${pending.length} pending change(s)...`, 'warn');
+                this.logger.info(`${pending.length} arquivo(s) pendente(s)`);
                 
                 setTimeout(() => {
                     this.run(true, pending);
                 }, 100);
             }
         }
+    }
+
+    /**
+     * Obtém métricas do watcher
+     */
+    getMetrics(): WatcherMetrics {
+        return { ...this.metrics };
     }
 
     /**

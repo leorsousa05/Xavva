@@ -1,7 +1,7 @@
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
 import { EncodingService } from "../services/EncodingService";
-import { Logger } from "../utils/ui";
+import { Logger, C } from "../utils/ui";
 import path from "path";
 import { existsSync } from "fs";
 import { ProcessManager } from "../utils/processManager";
@@ -54,19 +54,19 @@ export class EncodingCommand implements Command {
         Logger.log("Gerencia conversão de encoding de arquivos de texto");
         Logger.newline();
         
-        Logger.log(`${Logger.C.primary}Uso:${Logger.C.reset}`);
+        Logger.log(`${C.primary}Uso:${C.reset}`);
         Logger.log("  xavva encoding <subcomando> [arquivo] [opções]");
         Logger.newline();
         
-        Logger.log(`${Logger.C.primary}Subcomandos:${Logger.C.reset}`);
-        Logger.log(`  ${Logger.C.secondary}detect${Logger.C.reset} [arquivo]          Detecta encoding de um arquivo ou diretório`);
-        Logger.log(`  ${Logger.C.secondary}convert${Logger.C.reset} [arquivo]          Converte arquivo(s) para outro encoding`);
-        Logger.log(`  ${Logger.C.secondary}fix${Logger.C.reset} [arquivo]              Tenta corrigir mojibake automaticamente`);
-        Logger.log(`  ${Logger.C.secondary}list${Logger.C.reset}                     Lista encodings de todos os arquivos do projeto`);
-        Logger.log(`  ${Logger.C.secondary}help${Logger.C.reset}                     Mostra esta ajuda`);
+        Logger.log(`${C.primary}Subcomandos:${C.reset}`);
+        Logger.log(`  ${C.secondary}detect${C.reset} [arquivo]          Detecta encoding de um arquivo ou diretório`);
+        Logger.log(`  ${C.secondary}convert${C.reset} [arquivo]          Converte arquivo(s) para outro encoding`);
+        Logger.log(`  ${C.secondary}fix${C.reset} [arquivo]              Tenta corrigir mojibake automaticamente`);
+        Logger.log(`  ${C.secondary}list${C.reset}                     Lista encodings de todos os arquivos do projeto`);
+        Logger.log(`  ${C.secondary}help${C.reset}                     Mostra esta ajuda`);
         Logger.newline();
         
-        Logger.log(`${Logger.C.primary}Opções:${Logger.C.reset}`);
+        Logger.log(`${C.primary}Opções:${C.reset}`);
         Logger.log(`  --from <encoding>      Encoding de origem (padrão: auto-detect)`);
         Logger.log(`  --to <encoding>        Encoding de destino (padrão: do xavva.json ou UTF-8)`);
         Logger.log(`  --backup               Cria backup antes de converter`);
@@ -75,13 +75,13 @@ export class EncodingCommand implements Command {
         Logger.log(`  --src <path>           Diretório fonte (padrão: src/)`);
         Logger.newline();
         
-        Logger.log(`${Logger.C.primary}Encodings suportados:${Logger.C.reset}`);
+        Logger.log(`${C.primary}Encodings suportados:${C.reset}`);
         Logger.log(`  utf-8, utf8            UTF-8 (padrão)`);
         Logger.log(`  windows-1252, cp1252   Windows CP1252 (ANSI)`);
         Logger.log(`  iso-8859-1, latin1     ISO-8859-1 (Latin-1)`);
         Logger.newline();
         
-        Logger.log(`${Logger.C.primary}Exemplos:${Logger.C.reset}`);
+        Logger.log(`${C.primary}Exemplos:${C.reset}`);
         Logger.log(`  xavva encoding detect src/main/java/MinhaClasse.java`);
         Logger.log(`  xavva encoding convert --from utf-8 --to cp1252 src/main/java/`);
         Logger.log(`  xavva encoding convert --to cp1252 --backup src/main/java/MinhaClasse.java`);
@@ -135,13 +135,13 @@ export class EncodingCommand implements Command {
             Logger.info("Arquivos analisados", String(detections.size));
             Logger.newline();
 
-            Logger.log(`${Logger.C.primary}Distribuição por encoding:${Logger.C.reset}`);
+            Logger.log(`${C.primary}Distribuição por encoding:${C.reset}`);
             for (const [encoding, count] of byEncoding) {
                 Logger.config(encoding, `${count} arquivo(s)`);
             }
 
             Logger.newline();
-            Logger.log(`${Logger.C.primary}Arquivos com baixa confiança:${Logger.C.reset}`);
+            Logger.log(`${C.primary}Arquivos com baixa confiança:${C.reset}`);
             let lowConfidenceFound = false;
             for (const [file, detection] of detections) {
                 if (detection.confidence < 0.8) {
@@ -339,18 +339,18 @@ export class EncodingCommand implements Command {
         // Ordena arquivos
         const sortedFiles = Array.from(detections.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 
-        Logger.log(`${Logger.C.primary}Arquivos:${Logger.C.reset}`);
+        Logger.log(`${C.primary}Arquivos:${C.reset}`);
         for (const [file, detection] of sortedFiles) {
             const relativePath = path.relative(srcDir, file);
             const confidenceStr = detection.confidence >= 0.9 ? "" : 
-                ` ${Logger.C.gray}(${Math.round(detection.confidence * 100)}%)${Logger.C.reset}`;
-            const bomStr = detection.hasBOM ? ` ${Logger.C.warning}[BOM]${Logger.C.reset}` : "";
+                ` ${C.gray}(${Math.round(detection.confidence * 100)}%)${C.reset}`;
+            const bomStr = detection.hasBOM ? ` ${C.warning}[BOM]${C.reset}` : "";
             
             const encodingColor = detection.encoding === (config.project.encoding || "utf-8") 
-                ? Logger.C.success 
-                : Logger.C.warning;
+                ? C.success 
+                : C.warning;
             
-            Logger.log(`  ${encodingColor}${detection.encoding.padEnd(12)}${Logger.C.reset} ${relativePath}${confidenceStr}${bomStr}`);
+            Logger.log(`  ${encodingColor}${detection.encoding.padEnd(12)}${C.reset} ${relativePath}${confidenceStr}${bomStr}`);
         }
 
         Logger.endSection();

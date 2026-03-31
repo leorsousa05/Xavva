@@ -1,115 +1,276 @@
+/**
+ * UI Utils - Adaptador para o novo sistema de logging
+ * 
+ * Mantém compatibilidade com código existente enquanto usa
+ * internamente o novo sistema de logging em src/logging/
+ * 
+ * @deprecated Use o novo sistema de logging em src/logging/
+ */
+
 import pkg from "../../package.json";
 import type { DashboardService } from "../services/DashboardService";
+import { Logger, Colors, Icons, colorize, stripAnsi, padText } from "../logging";
+import { LAYOUT, NOISE_PATTERNS, ESSENTIAL_PATTERNS, SPINNER_FRAMES, SPINNER_INTERVAL } from "../logging/constants";
 
-// Paleta de cores moderna e minimalista
-const C = {
-	reset: "\x1b[0m",
-	bold: "\x1b[1m",
-	dim: "\x1b[2m",
-	italic: "\x1b[3m",
-	
-	// Cores principais
-	primary: "\x1b[36m",      // Cyan
-	primaryBright: "\x1b[96m", // Bright Cyan
-	secondary: "\x1b[35m",     // Magenta
-	
-	// Estados
-	success: "\x1b[32m",       // Green
-	successBright: "\x1b[92m", // Bright Green
-	warning: "\x1b[33m",       // Yellow
-	warningBright: "\x1b[93m", // Bright Yellow
-	error: "\x1b[31m",         // Red
-	errorBright: "\x1b[91m",   // Bright Red
-	info: "\x1b[34m",          // Blue
-	
-	// Neutros
-	white: "\x1b[37m",
-	gray: "\x1b[90m",
-	lightGray: "\x1b[37m",
-	darkGray: "\x1b[38;5;240m",
-};
+// Re-exporta Cores para compatibilidade
+export const C = Colors;
 
-export class Logger {
-	public static readonly C = C;
+// Largura das colunas para alinhamento
+export const COL = LAYOUT.columns;
+
+/**
+ * @deprecated Use Logger de src/logging/ diretamente
+ * 
+ * Classe Logger legada - adaptador para o novo sistema
+ */
+export class LoggerLegacy {
 	private static dashboard: DashboardService | null = null;
 	private static activeSpinner: { stop: (success?: boolean) => void } | null = null;
-	private static lastDomain = "";
+	private static sectionOpen = false;
+	private static logger = Logger.getInstance();
 
 	static setDashboard(dashboard: DashboardService) {
 		this.dashboard = dashboard;
+		// Também configura no novo logger se necessário
 	}
 
-	// Banner completo com informações do ambiente
+	// Helper: remove ANSI codes para calcular tamanho
+	private static plain(s: string): string {
+		return stripAnsi(s);
+	}
+
+	// Helper: pad com consideração de ANSI codes
+	private static pad(s: string, len: number): string {
+		return padText(s, len);
+	}
+
+	/**
+	 * Banner clean e moderno
+	 */
 	static banner(command?: string, profile?: string, encoding?: string) {
 		console.clear();
-		const git = this.getGitContext();
 		const name = process.cwd().split(/[/\\]/).pop() || "project";
 		const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-		const W = 52; // Largura interna do box (espaço entre os ║)
+		const git = this.getGitContext();
 		
-		// Remove ANSI codes para calcular tamanho
-		const plain = (s: string) => s.replace(/\x1b\[\d+m/g, '');
+		// Header linha única
+		const left = `${C.primary}${C.bold}xavva${C.reset} v${pkg.version}`;
+		const center = `${C.white}${C.bold}${name}${C.reset}`;
+		const right = `${C.dim}${now}${C.reset}`;
 		
-		// Cria uma linha com conteúdo alinhado à esquerda
-		const row = (content: string) => {
-			const pad = W - plain(content).length;
-			return `${C.gray}║${C.reset} ${content}${' '.repeat(Math.max(0, pad))}${C.gray}║${C.reset}`;
-		};
-		
-		// Linha superior
-		console.log(`${C.gray}╔══════════════════════════════════════════════════════╗${C.reset}`);
-		
-		// Linha 1: XAVVA v2.2.0 + hora alinhada à direita
-		const verPlain = `XAVVA v${pkg.version}`; // "XAVVA v2.2.0" = 12 chars
-		const timePlain = now; // 5 chars
-		const gap1 = W - verPlain.length - timePlain.length - 1; // -1 para deixar 1 espaço antes do ║
-		const line1Content = `${C.primary}${C.bold}XAVVA${C.reset}${C.gray} v${pkg.version}${C.reset}${' '.repeat(Math.max(1, gap1))}${C.dim}${now}${C.reset}`;
-		console.log(row(line1Content));
-		
-		// Linha 2: Nome do projeto
-		console.log(row(`${C.white}${C.bold}${name}${C.reset}`));
-		
-		// Linha 3: Git info
-		if (git.branch) {
-			const gitStatus = this.getGitStatus();
-			const dirty = gitStatus.dirty ? '*' : '';
-			const author = git.author ? git.author.split(' ')[0].slice(0, 10) : '';
-			const hash = git.hash ? git.hash.slice(0, 7) : '';
-			const branchDisplay = git.branch.slice(0, 20); // Limita branch
-			const gitLine = `${C.gray}git:${C.reset}${C.secondary}${branchDisplay}${dirty}${C.reset} ${C.dim}${hash}${C.reset} ${C.gray}by${C.reset} ${C.dim}${author}${C.reset}`;
-			console.log(row(gitLine));
-		}
-		
-		// Divisor
-		console.log(`${C.gray}╠══════════════════════════════════════════════════════╣${C.reset}`);
-		
-		// Config: mode, profile, java, encoding
-		const cfg: string[] = [];
-		if (command) cfg.push(`${C.primary}${command}${C.reset}`);
-		if (profile) cfg.push(`${C.warning}${profile}${C.reset}`);
-		const jv = this.getJavaVersion();
-		if (jv) cfg.push(`${C.info}java:${jv}${C.reset}`);
-		if (encoding) cfg.push(`${C.gray}${encoding}${C.reset}`);
-		
-		if (cfg.length) {
-			const sep = `${C.gray} │ ${C.reset}`;
-			const cfgLine = `${C.dim}mode${C.reset} : ${cfg.join(sep)}`;
-			console.log(row(cfgLine));
-		}
-		
-		// Memory
-		const mem = process.memoryUsage();
-		const mb = Math.round((mem.heapUsed || mem.rss || 0) / 1024 / 1024);
-		console.log(row(`${C.dim}mem${C.reset}  : ${mb}MB ${C.gray}heap${C.reset}`));
-		
-		// OS
-		const plat = process.platform === 'win32' ? 'windows' : process.platform;
-		console.log(row(`${C.dim}os${C.reset}   : ${plat} ${C.gray}|${C.reset} ${process.arch}`));
-		
-		// Rodapé
-		console.log(`${C.gray}╚══════════════════════════════════════════════════════╝${C.reset}`);
 		console.log();
+		console.log(`  ${left}  ${center}  ${right}`);
+		
+		// Linha divisória simples
+		console.log(`  ${C.darkGray}${'─'.repeat(60)}${C.reset}`);
+		
+		// Contexto em uma linha
+		const ctx: string[] = [];
+		if (command) ctx.push(`${C.primary}${command}${C.reset}`);
+		if (profile) ctx.push(`${C.warning}${profile}${C.reset}`);
+		const java = this.getJavaVersion();
+		if (java) ctx.push(`java:${C.dim}${java}${C.reset}`);
+		if (git.branch) ctx.push(`${C.gray}git:${git.branch}${git.dirty ? '*' : ''}${C.reset}`);
+		
+		if (ctx.length > 0) {
+			console.log(`  ${ctx.join('  ')}`);
+		}
+		
+		console.log();
+		
+		// Cabeçalho da tabela
+		console.log(`  ${C.bold}${this.pad('NOME', COL.name)}${this.pad('STATUS', COL.status)}INFO${C.reset}`);
+		console.log(`  ${C.darkGray}${'─'.repeat(60)}${C.reset}`);
+		
+		this.sectionOpen = true;
 	}
+
+	/**
+	 * Status lateral estilo docker-compose
+	 */
+	static status(name: string, status: 'pending' | 'running' | 'done' | 'error' | 'warning', info?: string) {
+		this.logger.status(name, status, info);
+	}
+
+	/**
+	 * Seção de arquivos (para watch mode)
+	 */
+	static filesSection(title: string = "Changes") {
+		this.logger.section(title);
+	}
+
+	/**
+	 * Arquivo individual na seção
+	 */
+	static file(name: string, action: 'changed' | 'compiled' | 'synced' | 'error', path?: string) {
+		this.logger.file(name, action, path);
+	}
+
+	/**
+	 * Resultado/sumário
+	 */
+	static summary(text: string) {
+		this.logger.step(text);
+	}
+
+	/**
+	 * URL formatada
+	 */
+	static url(label: string, url: string) {
+		this.logger.url(label, url);
+	}
+
+	/**
+	 * Divisor simples
+	 */
+	static divider() {
+		this.logger.divider();
+	}
+
+	/**
+	 * Finalização
+	 */
+	static done() {
+		this.logger.newline();
+	}
+
+	// ========== Métodos legados - mantidos para compatibilidade ==========
+
+	static section(title: string) {
+		this.logger.section(title);
+	}
+
+	static endSection() {
+		this.logger.newline();
+	}
+
+	static config(label: string, value: string | number | boolean) {
+		this.logger.config(label, value);
+	}
+
+	static ready(msg: string) {
+		this.logger.ready(msg);
+	}
+
+	static info(label: string, value?: string) {
+		if (value) {
+			this.logger.info(`${label}: ${value}`);
+		} else {
+			this.logger.info(label);
+		}
+	}
+
+	static success(msg: string) {
+		this.logger.success(msg);
+	}
+
+	static error(msg: string) {
+		this.logger.error(msg);
+	}
+
+	static warn(msg: string) {
+		this.logger.warn(msg);
+	}
+
+	static debug(msg: string) {
+		this.logger.debug(msg);
+	}
+
+	static step(msg: string) {
+		this.logger.step(msg);
+	}
+
+	static log(msg: string) {
+		console.log(msg);
+	}
+
+	static newline() {
+		this.logger.newline();
+	}
+
+	// Watch mode - arquivo modificado (legado)
+	static fileChanged(filepath: string) {
+		const filename = filepath.split(/[/\\]/).pop() || filepath;
+		this.file(filename, 'changed');
+	}
+
+	// Watch mode - arquivo compilado/sincronizado (legado)
+	static fileSynced(filename: string, action: 'compiled' | 'synced' | 'reloaded' = 'synced') {
+		const map = { compiled: 'compiled', synced: 'synced', reloaded: 'reloaded' };
+		this.file(filename, action === 'reloaded' ? 'synced' : action, `[${map[action]}]`);
+	}
+
+	// Watch mode - batch de arquivos (legado)
+	static filesBatch(count: number, action: string) {
+		this.logger.summary(`${count} arquivo(s) ${action}`);
+	}
+
+	static watcher(msg: string, _type?: string) {
+		this.logger.debug(`watch: ${msg}`);
+	}
+
+	static watch(msg: string) {
+		this.logger.debug(`watch: ${msg}`);
+	}
+
+	static process(msg: string) {
+		this.logger.status('process', 'running', msg);
+	}
+
+	static build(msg: string) {
+		if (msg.includes('completed') || msg.includes('done') || msg.includes('concluído')) {
+			this.logger.status('build', 'done', msg);
+		} else if (msg.includes('compil')) {
+			this.logger.status('build', 'running', msg);
+		} else {
+			this.logger.status('build', 'pending', msg);
+		}
+	}
+
+	static server(msg: string) {
+		if (msg.includes('ready') || msg.includes('done') || msg.includes('pronto')) {
+			this.logger.status('server', 'done', msg);
+		} else {
+			this.logger.status('server', 'running', msg);
+		}
+	}
+
+	static hotswap(msg: string) {
+		this.logger.debug(`hotswap: ${msg}`);
+	}
+
+	/**
+	 * Spinner moderno
+	 */
+	static spinner(msg: string) {
+		if (this.dashboard?.isTuiActive()) {
+			return this.dashboard.spinner(msg);
+		}
+
+		// Usa spinner ASCII simples para melhor compatibilidade com Windows
+		const frames = ['|', '/', '-', '\\'];
+		let i = 0;
+		
+		process.stdout.write("  ");
+		process.stdout.write("\x1B[?25l");
+		
+		const timer = setInterval(() => {
+			process.stdout.write(`\r  ${C.primary}${frames[i]}${C.reset} ${C.dim}${msg}${C.reset}`);
+			i = (i + 1) % frames.length;
+		}, SPINNER_INTERVAL);
+
+		return (success = true) => {
+			clearInterval(timer);
+			process.stdout.write("\x1B[?25h");
+			if (success) {
+				console.log(`\r  ${C.success}✓${C.reset} ${msg}`);
+			} else {
+				console.log(`\r  ${C.error}✗${C.reset} ${C.error}${msg}${C.reset}`);
+			}
+		};
+	}
+
+	// ========== Helpers privados ==========
 
 	private static getGitStatus(): { dirty: boolean; modified: number } {
 		try {
@@ -118,6 +279,16 @@ export class Logger {
 			return { dirty: lines.length > 0, modified: lines.length };
 		} catch {
 			return { dirty: false, modified: 0 };
+		}
+	}
+
+	private static getGitContext(): { branch: string; dirty: boolean } {
+		try {
+			const branch = Bun.spawnSync(["git", "rev-parse", "--abbrev-ref", "HEAD"]).stdout.toString().trim();
+			const status = this.getGitStatus();
+			return { branch, dirty: status.dirty };
+		} catch {
+			return { branch: "", dirty: false };
 		}
 	}
 
@@ -131,7 +302,6 @@ export class Logger {
 			const match = output.match(/version "?(\d+(?:\.\d+)?)/);
 			if (match) {
 				const v = match[1];
-				// Check for DCEVM
 				if (output.toLowerCase().includes('dcevm') || output.toLowerCase().includes('jbr')) {
 					return `${v}+dcevm`;
 				}
@@ -143,265 +313,57 @@ export class Logger {
 		}
 	}
 
-	// Seções com divisórias clean
-	static section(title: string) {
-		console.log(`${C.gray}┌─ ${C.white}${C.bold}${title}${C.reset}`);
-	}
-
-	static endSection() {
-		console.log(`${C.gray}└${C.reset}`);
-	}
-
-	// Configurações em formato chave: valor alinhado
-	static config(label: string, value: string | number | boolean) {
-		const valueStr = String(value);
-		const isBool = typeof value === 'boolean';
-		const displayValue = isBool 
-			? (value ? `${C.successBright}✓${C.reset} ${C.success}enabled${C.reset}` : `${C.gray}○${C.reset} ${C.gray}disabled${C.reset}`)
-			: `${C.white}${valueStr}${C.reset}`;
-		
-		console.log(`${C.gray}│${C.reset}  ${C.dim}${label.padEnd(12)}${C.reset} ${C.gray}:${C.reset} ${displayValue}`);
-	}
-
-	// Status com ícones minimalistas
-	static ready(msg: string) {
-		console.log(`${C.gray}│${C.reset}  ${C.success}●${C.reset} ${msg}`);
-	}
-
-	static info(label: string, value?: string) {
-		if (value) {
-			console.log(`${C.gray}│${C.reset}  ${C.dim}${label}${C.reset} ${C.gray}:${C.reset} ${C.white}${value}${C.reset}`);
-		} else {
-			console.log(`${C.gray}│${C.reset}  ${C.info}ℹ${C.reset} ${label}`);
-		}
-	}
-
-	static success(msg: string) {
-		console.log(`${C.gray}│${C.reset}  ${C.success}✓${C.reset} ${msg}`);
-	}
-
-	static error(msg: string) {
-		console.log(`${C.gray}│${C.reset}  ${C.error}✗${C.reset} ${C.error}${msg}${C.reset}`);
-	}
-
-	static warn(msg: string) {
-		console.log(`${C.gray}│${C.reset}  ${C.warning}⚠${C.reset} ${msg}`);
-	}
-
-	static debug(msg: string) {
-		console.log(`${C.gray}│${C.reset}  ${C.gray}🐛 ${msg}${C.reset}`);
-	}
-
-	static step(msg: string) {
-		console.log(`${C.gray}│${C.reset}  ${C.gray}▸ ${msg}${C.reset}`);
-	}
-
-	static log(msg: string) {
-		console.log(msg);
-	}
-
-	static dim(msg: string) {
-		console.log(`${C.dim}${msg}${C.reset}`);
-	}
-
-	static newline() {
-		console.log();
-	}
-
-	static watcher(msg: string, _type?: string) {
-		console.log(`${C.gray}│${C.reset}  ${C.secondary}◉${C.reset} ${C.dim}watch${C.reset} ${C.gray}:${C.reset} ${msg}`);
-	}
-
-	static watch(msg: string) {
-		console.log(`${C.gray}│${C.reset}  ${C.secondary}◉${C.reset} ${C.dim}watch${C.reset} ${C.gray}:${C.reset} ${msg}`);
-	}
-
-	static process(msg: string) {
-		console.log(`${C.gray}│${C.reset}  ${C.primary}▸${C.reset} ${C.dim}process${C.reset} ${C.gray}:${C.reset} ${msg}`);
-	}
-
-	static build(msg: string) {
-		console.log(`${C.gray}│${C.reset}  ${C.primary}▸${C.reset} ${C.dim}build${C.reset} ${C.gray}:${C.reset} ${msg}`);
-	}
-
-	static server(msg: string) {
-		console.log(`${C.gray}│${C.reset}  ${C.primary}▸${C.reset} ${C.dim}server${C.reset} ${C.gray}:${C.reset} ${msg}`);
-	}
-
-	static hotswap(msg: string) {
-		console.log(`${C.gray}│${C.reset}  ${C.secondary}↻${C.reset} ${C.dim}hotswap${C.reset} ${C.gray}:${C.reset} ${msg}`);
-	}
-
-	// URL formatada de forma destacada
-	static url(label: string, url: string) {
-		console.log(`${C.gray}│${C.reset}  ${C.dim}${label}${C.reset} ${C.gray}:${C.reset} ${C.primaryBright}${C.bold}${url}${C.reset}`);
-	}
-
-	// Spinner moderno
-	static spinner(msg: string) {
-		if (this.dashboard?.isTuiActive()) {
-			return this.dashboard.spinner(msg);
-		}
-
-		const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-		let i = 0;
-		
-		process.stdout.write(`${C.gray}│${C.reset}  `);
-		process.stdout.write("\x1B[?25l");
-		
-		const timer = setInterval(() => {
-			process.stdout.write(`\r${C.gray}│${C.reset}  ${C.primary}${frames[i]}${C.reset} ${C.dim}${msg}${C.reset}`);
-			i = (i + 1) % frames.length;
-		}, 80);
-
-		return (success = true) => {
-			clearInterval(timer);
-			process.stdout.write("\x1B[?25h");
-			if (success) {
-				console.log(`\r${C.gray}│${C.reset}  ${C.success}✓${C.reset} ${msg}`);
-			} else {
-				console.log(`\r${C.gray}│${C.reset}  ${C.error}✗${C.reset} ${C.error}${msg}${C.reset}`);
-			}
-		};
-	}
-
-	// Divisória simples
-	static divider() {
-		console.log(`${C.gray}├────────────────────────────────────────────────────────┤${C.reset}`);
-	}
-
-	// Finalização
-	static done() {
-		console.log(`${C.gray}└────────────────────────────────────────────────────────┘${C.reset}`);
-		console.log();
-	}
-
-	// Helper para contexto git
-	static getGitContext(): { branch: string; author: string; hash: string } {
-		try {
-			const branch = Bun.spawnSync(["git", "rev-parse", "--abbrev-ref", "HEAD"]).stdout.toString().trim();
-			const author = Bun.spawnSync(["git", "log", "-1", "--format=%an"]).stdout.toString().trim();
-			const hash = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"]).stdout.toString().trim();
-			return { branch, author, hash };
-		} catch {
-			return { branch: "", author: "", hash: "" };
-		}
-	}
-
-	// Filtros de noise (mantidos)
-	// Controle de rate limiting para hotswap
-	private static lastHotswapTime = 0;
-	private static hotswapCount = 0;
-
+	// ========== Log Formatting (mantidos para compatibilidade) ==========
+	
 	static isSystemNoise(line: string): boolean {
-		const noise = [
-			"Using CATALINA_", "Using JRE_HOME", "Using CLASSPATH", 
-			"Scanning for projects...", "Building ", "--- ", "+++ ",
-			"Arquivos processados em", "milliseconds",
-			"SLF4J: ", "Discovered plugins:",
-			"enhanced with plugin initialization", "Hotswap ready",
-			"autoHotswap.delay", "watchResources=false",
-			// HotswapAgent noise
-			"TreeWatcherNIO", "HOTSWAP AGENT", "org.hotswap.agent",
-			// Jersey/JAX-RS noise
-			"org.glassfish.jersey", "The (sub)resource method",
-			// Tomcat noise
-			"org.apache.catalina", "org.apache.jasper",
-		];
-		return noise.some(n => line.includes(n));
+		return NOISE_PATTERNS.system.some(n => line.includes(n));
 	}
 
 	static isEssential(line: string): boolean {
-		return line.includes("SEVERE") || line.includes("ERROR") || line.includes("Exception") ||
-			   line.includes("Caused by") || line.includes("at ") || line.includes("... ") ||
-			   line.includes("Server startup in") || line.includes("HOTSWAP AGENT:");
+		return ESSENTIAL_PATTERNS.some(pattern => line.includes(pattern));
 	}
 
-	// Sumarização de logs do Tomcat (simplificada)
 	static summarize(line: string): string {
 		if (this.isSystemNoise(line)) return "";
 
-		// Server startup
 		const startupMatch = line.match(/Server startup in.*?([\d,]+)\s*ms/);
 		if (startupMatch) {
 			const time = startupMatch[1].replace(",", "");
 			const seconds = (parseInt(time) / 1000).toFixed(1);
-			return `${C.success}ready ${C.gray}in ${C.white}${seconds}s${C.reset}`;
+			return `${C.success}pronto ${C.gray}em ${C.white}${seconds}s${C.reset}`;
 		}
 
-		// Hotswap com rate limiting (evita spam)
 		if (line.includes("HOTSWAP AGENT") && line.includes("RELOAD")) {
-			const now = Date.now();
-			if (now - this.lastHotswapTime < 2000) {
-				this.hotswapCount++;
-				return ""; // Silencia se dentro de 2s
-			}
-			this.lastHotswapTime = now;
-			const count = this.hotswapCount > 0 ? ` ${C.gray}(${this.hotswapCount} more)${C.reset}` : "";
-			this.hotswapCount = 0;
-			return `${C.secondary}↻ hotswap${C.reset}${count}`;
+			return `${C.primary}↻ hotswap${C.reset}`;
 		}
 
-		// Erros de compilação
 		const compilationError = line.match(/\[ERROR\].*?(\w+\.java):\[(\d+).*?\]\s*(.+)/);
 		if (compilationError) {
 			const [, file, lineNum, msg] = compilationError;
-			return `${C.error}✗ ${C.white}${file}${C.gray}:${lineNum}${C.reset} ${C.gray}${msg.slice(0, 50)}${C.reset}`;
+			return `${C.error}✗ ${C.white}${file}${C.gray}:${lineNum}${C.reset} ${C.gray}${msg.slice(0, 80)}${C.reset}`;
 		}
 
-		// Erros SEVERE
 		if (line.includes("SEVERE") || line.includes("Exception")) {
-			return `${C.error}✗ ${C.gray}${line.slice(0, 80)}${C.reset}`;
+			return `${C.error}✗ ${C.gray}${line.slice(0, 200)}${C.reset}`;
 		}
 
-		// Warnings (filtra noise conhecido)
+		// WARNING/ADVERTÊNCIA: só mostra no modo verbose, não no modo normal
+		// (removido do summarize para não aparecer em modo não-verbose)
 		if (line.includes("WARNING") || line.includes("ADVERTÊNCIA")) {
-			if (this.isSystemNoise(line)) return "";
-			return `${C.warning}⚠ ${C.gray}${line.slice(0, 80)}${C.reset}`;
+			return ""; // Silenciado no modo normal - use --verbose para ver
 		}
 
 		return "";
 	}
 
-	// ========== Tomcat Log Formatting ==========
-	
-	private static tomcatNoisePatterns = [
-		/^Using CATALINA_/,
-		/^Using JRE_HOME/,
-		/^Using CLASSPATH/,
-		/^Using CATALINA_OPTS/,
-		/^NOTE: Picked up JDK_JAVA_OPTIONS/,
-		/^HOTSWAP AGENT:.*Plugin.*initialized in ClassLoader/,
-		/^HOTSWAP AGENT:.*Registering directory/,
-		/^HOTSWAP AGENT:.*WARNING.*TreeWatcherNIO.*Unable to watch/,
-		/^HOTSWAP AGENT:.*INFO.*TreeWatcherNIO/,
-		/^HOTSWAP AGENT:.*INFO.*PluginRegistry.*Discovered plugins/,
-		/^HOTSWAP AGENT:.*INFO.*HotswapAgent.*Loading Hotswap agent/,
-		/^HOTSWAP AGENT:.*INFO.*TomcatPlugin.*Tomcat plugin initialized/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*VersionLoggerListener/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*AprLifecycleListener/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*Command line argument/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*CATALINA_BASE/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*CATALINA_HOME/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*Server version/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*Server built/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*OS Name/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*OS Version/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*Architecture/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*Java Home/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*JVM Version/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*JVM Vendor/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*Loaded Apache Tomcat Native/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*APR capabilities/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*APR\/OpenSSL configuration/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*OpenSSL successfully initialized/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*Server initialization in/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*Starting service/,
-		/^\d{2}-[A-Za-z]+-\d{4}\s+\d{2}:\d{2}:\d{2}\.\d+\s+(INFORMAÇÕES|INFO)\s+\[main\].*Starting Servlet engine/,
-		/^ParallelWebappClassLoader/,
+	private static tomcatNoisePatterns = NOISE_PATTERNS.tomcat;
+
+	// Padrões que são noise em modo não-verbose, mas úteis no verbose
+	private static tomcatVerbosePatterns = [
+		/^HOTSWAP AGENT:/,
 		/^context:/,
 		/^delegate:/,
-		/^-+> Parent Classloader/,
+		/^----------> Parent Classloader:/,
 		/^java\.net\.URLClassLoader/,
 	];
 
@@ -409,238 +371,147 @@ export class Logger {
 		return this.tomcatNoisePatterns.some(p => p.test(line));
 	}
 
+	// Logs que são noise em modo normal, mas úteis no verbose
+	static isTomcatVerboseLog(line: string): boolean {
+		return this.tomcatVerbosePatterns.some(p => p.test(line));
+	}
+
 	static formatTomcatLog(line: string): string {
 		const cleanLine = line.trim();
 		if (!cleanLine) return "";
-
-		// Silencia noise completamente
 		if (this.isTomcatNoise(cleanLine)) return "";
 
-		// HOTSWAP AGENT: Loading Hotswap agent X.X.X
-		if (cleanLine.includes("HOTSWAP AGENT") && cleanLine.includes("Loading Hotswap agent")) {
-			const versionMatch = cleanLine.match(/Loading Hotswap agent ([\d.]+)/);
-			if (versionMatch) {
-				return `${C.gray}│${C.reset}  ${C.secondary}↻${C.reset} ${C.dim}HotswapAgent v${versionMatch[1]}${C.reset}`;
+		// Server startup
+		if (cleanLine.includes("Server startup in")) {
+			const match = cleanLine.match(/Server startup in.*?([\d,]+)\s*ms/);
+			if (match) {
+				const seconds = (parseInt(match[1].replace(",", "")) / 1000).toFixed(1);
+				return `  ${C.success}✓ server${C.reset} ${C.dim}pronto em ${seconds}s${C.reset}`;
 			}
 		}
 
-		// HOTSWAP AGENT: Discovered plugins
-		if (cleanLine.includes("HOTSWAP AGENT") && cleanLine.includes("Discovered plugins")) {
-			return `${C.gray}│${C.reset}  ${C.secondary}↻${C.reset} ${C.dim}plugins loaded${C.reset}`;
-		}
-
-		// Server initialization
-		const initMatch = cleanLine.match(/Server initialization in \[(\d+)\] milliseconds/);
-		if (initMatch) {
-			return `${C.gray}│${C.reset}  ${C.success}●${C.reset} ${C.dim}initialized in ${initMatch[1]}ms${C.reset}`;
-		}
-
-		// Starting service [Catalina]
-		const serviceMatch = cleanLine.match(/Starting service \[(\w+)\]/);
-		if (serviceMatch) {
-			return `${C.gray}│${C.reset}  ${C.primary}▸${C.reset} ${C.dim}starting ${serviceMatch[1].toLowerCase()}${C.reset}`;
-		}
-
-		// Starting Servlet engine
-		if (cleanLine.includes("Starting Servlet engine")) {
-			const versionMatch = cleanLine.match(/Apache Tomcat\/([\d.]+)/);
-			if (versionMatch) {
-				return `${C.gray}│${C.reset}  ${C.primary}▸${C.reset} ${C.dim}Tomcat ${versionMatch[1]}${C.reset}`;
+		// Stack trace - linhas começando com "at "
+		if (cleanLine.startsWith("at ") && cleanLine.includes("(")) {
+			const match = cleanLine.match(/at\s+([\w.$]+)\.(\w+)\s*\(([^:]+):?(\d*)\)/);
+			if (match) {
+				const [, className, method, file, lineNum] = match;
+				const shortClass = className.split('.').pop() || className;
+				return `      ${C.dim}at ${C.gray}${shortClass}.${method}(${file}${lineNum ? ':' + lineNum : ''})${C.reset}`;
 			}
+			return `      ${C.dim}${cleanLine.slice(0, 100)}${C.reset}`;
 		}
 
-		// Deploy directory
-		const deployMatch = cleanLine.match(/deployDirectory.*webapps[\\/]([^'"\]]+)/);
-		if (deployMatch) {
-			return `${C.gray}│${C.reset}  ${C.primary}▸${C.reset} ${C.dim}deploying ${deployMatch[1]}${C.reset}`;
+		// Exception/Caused by
+		if (cleanLine.includes("Exception:") || cleanLine.includes("Caused by:")) {
+			const isCausedBy = cleanLine.includes("Caused by:");
+			const prefix = isCausedBy ? "Caused by: " : "";
+			const color = isCausedBy ? C.warning : C.error;
+			return `  ${color}${isCausedBy ? '↳' : '✗'} ${prefix}${cleanLine.slice(prefix.length, 120)}${C.reset}`;
 		}
 
-		// Server startup in ( já temos no summarize mas reforça aqui )
-		const startupMatch = cleanLine.match(/Server startup in.*?([\d,]+)\s*ms/);
-		if (startupMatch) {
-			const time = startupMatch[1].replace(",", "");
-			const seconds = (parseInt(time) / 1000).toFixed(1);
-			return `${C.gray}│${C.reset}  ${C.success}●${C.reset} ${C.dim}ready in ${C.white}${seconds}s${C.reset}`;
+		// HOTSWAP AGENT logs
+		if (cleanLine.startsWith("HOTSWAP AGENT:")) {
+			const match = cleanLine.match(/HOTSWAP AGENT:\s+([\d:.]+)\s+(\w+)\s+\(([^)]+)\)\s+-\s*(.+)/);
+			if (match) {
+				const [, time, level, source, message] = match;
+				const levelColor = level === "ERROR" ? C.error : level === "WARN" ? C.warning : C.primary;
+				return `  ${C.primary}↻${C.reset} ${C.dim}[${time}]${C.reset} ${levelColor}${level}${C.reset} ${C.gray}${message.slice(0, 80)}${C.reset}`;
+			}
+			return `  ${C.primary}↻${C.reset} ${C.gray}${cleanLine.slice(15, 120)}${C.reset}`;
 		}
 
-		// Tomcat versão info (sumarizado)
-		const tomcatVersionMatch = cleanLine.match(/Server version number:\s+([\d.]+)/);
-		if (tomcatVersionMatch) {
-			return `${C.gray}│${C.reset}  ${C.dim}Tomcat ${tomcatVersionMatch[1]}${C.reset}`;
+		// Context classloader logs
+		if (cleanLine.startsWith("context:") || cleanLine.startsWith("delegate:") || cleanLine.startsWith("'.") || cleanLine.startsWith("java.net.URLClassLoader")) {
+			return `  ${C.dim}◆ ${cleanLine.slice(0, 100)}${C.reset}`;
 		}
 
-		// JVM info sumarizada
-		const jvmMatch = cleanLine.match(/JVM Version:\s+([\d._]+)/);
-		if (jvmMatch) {
-			return `${C.gray}│${C.reset}  ${C.dim}JVM ${jvmMatch[1]}${C.reset}`;
+		if (cleanLine.includes("Parent Classloader:")) {
+			return `  ${C.dim}◆ ${cleanLine.slice(0, 100)}${C.reset}`;
 		}
 
-		// Protocol handler init
-		const protocolMatch = cleanLine.match(/Initializing ProtocolHandler \["(.+?)"\]/);
-		if (protocolMatch) {
-			return `${C.gray}│${C.reset}  ${C.primary}▸${C.reset} ${C.dim}${protocolMatch[1]}${C.reset}`;
-		}
-
-		// Erros e warnings que passaram pelo filtro
+		// SEVERE/ERROR
 		if (cleanLine.includes("SEVERE") || cleanLine.includes("ERROR")) {
-			return `${C.gray}│${C.reset}  ${C.error}✗${C.reset} ${C.gray}${cleanLine.slice(0, 80)}${C.reset}`;
+			return `  ${C.error}✗${C.reset} ${C.gray}${cleanLine.slice(0, 120)}${C.reset}`;
 		}
 
+		// WARNING/ADVERTÊNCIA
 		if (cleanLine.includes("WARNING") || cleanLine.includes("ADVERTÊNCIA")) {
-			return `${C.gray}│${C.reset}  ${C.warning}⚠${C.reset} ${C.gray}${cleanLine.slice(0, 80)}${C.reset}`;
+			return `  ${C.warning}!${C.reset} ${C.gray}${cleanLine.slice(0, 120)}${C.reset}`;
 		}
 
-		// Outros logs INFO - mostra resumido
-		const infoMatch = cleanLine.match(/(?:INFORMAÇÕES|INFO)\s+\[.*?\]\s+(.+)/);
-		if (infoMatch) {
-			const msg = infoMatch[1].trim();
-			if (msg.length > 0 && !this.isTomcatNoise(msg)) {
-				return `${C.gray}│${C.reset}  ${C.dim}${msg.slice(0, 70)}${C.reset}`;
-			}
+		// SLF4J logs
+		if (cleanLine.startsWith("SLF4J:")) {
+			return `  ${C.warning}⚠${C.reset} ${C.gray}${cleanLine.slice(6, 120)}${C.reset}`;
 		}
 
-		return "";
+		// No modo verbose, retorna a linha formatada simples para não perder logs
+		return `  ${C.gray}${cleanLine.slice(0, 120)}${C.reset}`;
 	}
 
-	// ========== Build Log Formatting (Maven/Gradle) ==========
-	
-	private static buildNoisePatterns = [
-		/^\[INFO\]\s+Scanning for projects/,
-		/^\[INFO\]\s+Using the MultiThreadedBuilder/,
-		/^\[INFO\]\s+---\s+.*\s+---$/,
-		/^\[INFO\]\s+T+E+\s*$/,
-		/^\[INFO\]\s+BUILD\s+SUCCESS/i,
-		/^\[INFO\]\s+BUILD\s+FAILURE/i,
-		/^\[INFO\]\s+Total time:/,
-		/^\[INFO\]\s+Finished at:/,
-		/^\[INFO\]\s+Final Memory:/,
-		/^\[INFO\]\s+http:\/\/cwiki\.apache\.org/,
-		/^\[INFO\]\s+-> \[Help 1\]/,
-		/^\[INFO\]\s+Re-run Maven using/,
-		/^\[INFO\]\s+To see the full stack trace/,
-		/^\[INFO\]\s+For more information about the errors/,
-		/^\[ERROR\]\s+To see the full stack trace/,
-		/^\[ERROR\]\s+Re-run Maven using/,
-		/^\[ERROR\]\s+For more information/,
-		/^\[ERROR\]\s+-> \[Help 1\]/,
-		/^\[WARNING\]\s+It is highly recommended/,
-		/^\[WARNING\]\s+For this reason, future Maven/,
-		/^\[WARNING\]\s+\[HELP, sysprop:version/,
-		/^\[WARNING\]\s+Some problems were encountered/,
-		/^\[WARNING\]\s+'dependencies\.dependency/,
-		/Building .*war/,
-		/from pom\.xml/,
-		/\[ war \]/,
-		/^\s*$/,
-	];
-
-	private static gradleNoisePatterns = [
-		/^> Task/,
-		/^Download/,
-		/^Expiring/,
-		/^BUILD/,
-		/^\d+ actionable task/,
-	];
+	private static buildNoisePatterns = NOISE_PATTERNS.build;
 
 	static isBuildNoise(line: string): boolean {
-		return this.buildNoisePatterns.some(p => p.test(line)) ||
-		       this.gradleNoisePatterns.some(p => p.test(line));
+		return this.buildNoisePatterns.some(p => p.test(line));
 	}
 
-	// Acumulador de erro de compilação (para pegar mensagens multi-linha)
-	private static pendingError: { file: string; line: string; msg: string } | null = null;
-	
-	static formatBuildLog(line: string, buildTool: 'maven' | 'gradle' = 'maven'): string {
+	static formatBuildLog(line: string, _buildTool: 'maven' | 'gradle' = 'maven'): string {
 		const cleanLine = line.trim();
 		if (!cleanLine) return "";
+		if (this.isBuildNoise(cleanLine)) return "";
 
-		// Maven: [ERROR] /path/file.java:[123,45] error message
-		const mavenErrorMatch = cleanLine.match(/^\[ERROR\]\s+(.+\.java):\[(\d+),\d+\]\s*(.+)/);
-		if (mavenErrorMatch) {
-			const [, file, lineNum, msg] = mavenErrorMatch;
+		// ERROR de compilação com arquivo e linha
+		const errorMatch = cleanLine.match(/^\[ERROR\]\s+(.+\.java):\[(\d+),\d+\]\s*(.+)/);
+		if (errorMatch) {
+			const [, file, lineNum, msg] = errorMatch;
 			const shortFile = file.split(/[/\\]/).pop() || file;
-			return `${C.gray}│${C.reset}  ${C.error}✗${C.reset} ${C.white}${shortFile}${C.gray}:${lineNum}${C.reset} ${C.error}${msg.slice(0, 60)}${C.reset}`;
+			return `  ${C.error}✗${C.reset} ${C.white}${shortFile}${C.gray}:${lineNum}${C.reset} ${C.error}${msg.slice(0, 80)}${C.reset}`;
 		}
 
-		// Maven: [ERROR] COMPILATION ERROR / BUILD FAILURE (título)
-		if (cleanLine.match(/^\[(ERROR|INFO)\]\s+(COMPILATION ERROR|BUILD FAILURE)/)) {
-			return `${C.gray}│${C.reset}  ${C.error}✗ COMPILATION FAILED${C.reset}`;
+		// ERROR genérico
+		if (cleanLine.startsWith("[ERROR]")) {
+			return `  ${C.error}✗${C.reset} ${C.gray}${cleanLine.slice(7, 120)}${C.reset}`;
 		}
 
-		// Maven: [WARNING] 'dependencies.dependency...' 
-		if (cleanLine.match(/^\[WARNING\]\s+'dependencies\.dependency/)) {
-			const match = cleanLine.match(/'dependencies\.dependency\.[\w:]+'\s+(.+)/);
-			if (match) {
-				return `${C.gray}│${C.reset}  ${C.warning}⚠${C.reset} ${C.gray}${match[1].slice(0, 60)}${C.reset}`;
-			}
+		// WARNING
+		if (cleanLine.startsWith("[WARNING]")) {
+			return `  ${C.warning}!${C.reset} ${C.gray}${cleanLine.slice(9, 120)}${C.reset}`;
 		}
 
-		// Maven: [WARNING] The POM for ... is invalid
-		const invalidPomMatch = cleanLine.match(/^\[WARNING\]\s+The POM for (.+?) is invalid/);
-		if (invalidPomMatch) {
-			return `${C.gray}│${C.reset}  ${C.warning}⚠${C.reset} ${C.gray}Invalid POM: ${invalidPomMatch[1].slice(0, 50)}${C.reset}`;
-		}
-
-		// Maven: [INFO] Compiling N source files
+		// Compiling
 		const compilingMatch = cleanLine.match(/^\[INFO\]\s+Compiling\s+(\d+)\s+source/);
 		if (compilingMatch) {
-			return `${C.gray}│${C.reset}  ${C.primary}▸${C.reset} ${C.dim}compiling ${C.white}${compilingMatch[1]}${C.reset} ${C.dim}files${C.reset}`;
+			return `  ${C.primary}●${C.reset} ${C.dim}compilando ${C.white}${compilingMatch[1]}${C.reset} ${C.dim}arquivos${C.reset}`;
 		}
 
-		// Maven: [INFO] /path/file.java: Some input files use or override a deprecated API
-		const deprecatedMatch = cleanLine.match(/^\[INFO\]\s+(.+\.java):\s+Some input files use (.+)/);
-		if (deprecatedMatch) {
-			const shortFile = deprecatedMatch[1].split(/[/\\]/).pop() || deprecatedMatch[1];
-			const type = deprecatedMatch[2].includes('removal') ? 'deprecated (removal)' : 'deprecated';
-			return `${C.gray}│${C.reset}  ${C.warning}⚠${C.reset} ${C.gray}${shortFile} uses ${type}${C.reset}`;
-		}
-
-		// Maven: [INFO] Changes detected - recompiling
-		if (cleanLine.match(/^\[INFO\]\s+Changes detected/)) {
-			return `${C.gray}│${C.reset}  ${C.primary}▸${C.reset} ${C.dim}changes detected, recompiling${C.reset}`;
-		}
-
-		// Maven: [INFO] Copying N resources
-		const resourcesMatch = cleanLine.match(/^\[INFO\]\s+Copying\s+(\d+)\s+resources?/);
-		if (resourcesMatch) {
-			return `${C.gray}│${C.reset}  ${C.dim}copying ${C.white}${resourcesMatch[1]}${C.reset} ${C.dim}resources${C.reset}`;
-		}
-
-		// Maven: [INFO] Deleting ...
-		const deletingMatch = cleanLine.match(/^\[INFO\]\s+Deleting\s+(.+)/);
-		if (deletingMatch) {
-			return `${C.gray}│${C.reset}  ${C.dim}cleaning target directory${C.reset}`;
-		}
-
-		// Maven: [INFO] skip non existing resourceDirectory
-		if (cleanLine.match(/^\[INFO\]\s+skip non existing/)) {
-			return ""; // Silencia
-		}
-
-		// Gradle: > Task :name
-		const gradleTaskMatch = cleanLine.match(/^> Task :(.+)/);
-		if (gradleTaskMatch) {
-			return `${C.gray}│${C.reset}  ${C.primary}▸${C.reset} ${C.dim}${gradleTaskMatch[1]}${C.reset}`;
-		}
-
-		// Gradle errors
-		const gradleErrorMatch = cleanLine.match(/^(.+\.java):(\d+):\s*(error|warning):\s*(.+)/);
-		if (gradleErrorMatch) {
-			const [, file, lineNum, level, msg] = gradleErrorMatch;
-			const shortFile = file.split(/[/\\]/).pop() || file;
-			const icon = level === 'error' ? C.error + '✗' + C.reset : C.warning + '⚠' + C.reset;
-			return `${C.gray}│${C.reset}  ${icon} ${C.white}${shortFile}${C.gray}:${lineNum}${C.reset} ${C.error}${msg.slice(0, 60)}${C.reset}`;
-		}
-
-		// Se não for nenhum padrão conhecido e não for noise, retorna formatado como info
-		if (!this.isBuildNoise(cleanLine)) {
-			// Remove prefixos [INFO], [WARNING], [ERROR] genéricos
-			const clean = cleanLine.replace(/^\[(INFO|WARNING|ERROR)\]\s*/, '');
-			if (clean.length > 0 && !this.isBuildNoise(clean)) {
-				return `${C.gray}│${C.reset}  ${C.dim}${clean.slice(0, 70)}${C.reset}`;
+		// Copying resources
+		if (cleanLine.includes("Copying") && cleanLine.includes("resource")) {
+			const match = cleanLine.match(/Copying\s+(\d+)\s+resource/);
+			if (match) {
+				return `  ${C.dim}→ copiando ${match[1]} recursos${C.reset}`;
 			}
+		}
+
+		// Building project info
+		if (cleanLine.includes("Building ") && cleanLine.includes("<")) {
+			const match = cleanLine.match(/Building\s+(.+)/);
+			if (match) {
+				return `  ${C.primary}●${C.reset} ${C.white}${match[1]}${C.reset}`;
+			}
+		}
+
+		// Recompile with -X
+		if (cleanLine.includes("Recompile with -Xlint")) {
+			return `  ${C.warning}⚠${C.reset} ${C.dim}recompile com -Xlint para detalhes${C.reset}`;
+		}
+
+		// Some input files use unchecked or unsafe operations
+		if (cleanLine.includes("Some input files use") || cleanLine.includes("unchecked or unsafe")) {
+			return `  ${C.warning}⚠${C.reset} ${C.gray}${cleanLine.slice(0, 100)}${C.reset}`;
 		}
 
 		return "";
 	}
 }
+
+// Exporta Logger como padrão para compatibilidade
+export { LoggerLegacy as Logger };

@@ -1,6 +1,10 @@
 /**
- * Container de Injeção de Dependência (DI) simplificado
- * Centraliza a criação e injeção de serviços
+ * Container de Injeção de Dependência (DI) com Lazy Loading
+ * 
+ * Características:
+ * - Serviços são criados apenas quando necessários
+ * - Cache de instâncias para reuso
+ * - Inicialização rápida (só cria o essencial)
  */
 
 import type { AppConfig } from "../types/config";
@@ -36,7 +40,8 @@ import { TestCommand } from "../commands/TestCommand";
 import { DbCommand } from "../commands/DbCommand";
 import { HttpCommand } from "../commands/HttpCommand";
 import { DockerCommand } from "../commands/DockerCommand";
-import { NotificationService } from "../services/NotificationService";
+import { CleanCommand } from "../commands/CleanCommand";
+import { IdeCommand } from "../commands/IdeCommand";
 import type { Command } from "../commands/Command";
 import { Logger } from "../utils/ui";
 
@@ -78,20 +83,150 @@ export interface Commands {
     db: DbCommand;
     http: HttpCommand;
     docker: DockerCommand;
+    clean: CleanCommand;
+    ide: IdeCommand;
 }
+
+// Tipo para factory functions
+type ServiceFactory<T> = () => T;
+type CommandFactory<T> = (services: Services) => T;
 
 export class DIContainer {
     private config: AppConfig;
-    private services: Partial<Services> = {};
-    private commands: Partial<Commands> = {};
+    
+    // Cache de instâncias criadas
+    private serviceCache: Partial<Services> = {};
+    private commandCache: Partial<Commands> = {};
+    
+    // Factories para lazy loading
+    private serviceFactories: Map<keyof Services, ServiceFactory<any>> = new Map();
+    private commandFactories: Map<keyof Commands, CommandFactory<any>> = new Map();
+    
     private isInitialized = false;
+    private initTime: number = 0;
 
     constructor(config: AppConfig) {
         this.config = config;
+        this.registerServiceFactories();
+        this.registerCommandFactories();
     }
 
     /**
-     * Inicializa todos os serviços e comandos
+     * Registra todas as factories de serviços
+     */
+    private registerServiceFactories(): void {
+        // Serviços base (sem dependências)
+        this.serviceFactories.set("projectService", () => 
+            new ProjectService(this.config.project)
+        );
+        
+        this.serviceFactories.set("buildCacheService", () => 
+            new BuildCacheService()
+        );
+        
+        this.serviceFactories.set("historyService", () => 
+            new HistoryService()
+        );
+        
+        // Serviços com dependências
+        this.serviceFactories.set("dashboardService", () => {
+            const service = new DashboardService(this.config);
+            // Configura Logger com dashboard
+            Logger.setDashboard(service);
+            return service;
+        });
+        
+        this.serviceFactories.set("logAnalyzer", () => 
+            new LogAnalyzer(this.config.project)
+        );
+        
+        this.serviceFactories.set("tomcatService", () => {
+            const service = new TomcatService(this.config.tomcat);
+            // Lazy injeção de projectService
+            const projectService = this.getService("projectService");
+            service.setProjectService(projectService);
+            return service;
+        });
+        
+        this.serviceFactories.set("buildService", () => {
+            const projectService = this.getService("projectService");
+            const buildCacheService = this.getService("buildCacheService");
+            return new BuildService(
+                this.config.project,
+                this.config.tomcat,
+                projectService,
+                buildCacheService
+            );
+        });
+        
+        this.serviceFactories.set("auditService", () => 
+            new AuditService(this.config.tomcat)
+        );
+    }
+
+    /**
+     * Registra todas as factories de comandos
+     */
+    private registerCommandFactories(): void {
+        this.commandFactories.set("deploy", (s) => 
+            new DeployCommand(s.tomcatService, s.buildService)
+        );
+        
+        this.commandFactories.set("dev", (s) => 
+            new DeployCommand(s.tomcatService, s.buildService)
+        );
+        
+        this.commandFactories.set("build", (s) => 
+            new BuildCommand(s.buildService)
+        );
+        
+        this.commandFactories.set("start", (s) => 
+            new StartCommand(s.tomcatService)
+        );
+        
+        this.commandFactories.set("logs", (s) => 
+            new LogsCommand(s.dashboardService, s.logAnalyzer)
+        );
+        
+        this.commandFactories.set("audit", (s) => 
+            new AuditCommand(s.auditService)
+        );
+        
+        this.commandFactories.set("profiles", (s) => 
+            new ProfilesCommand(s.projectService)
+        );
+        
+        this.commandFactories.set("run", (s) => 
+            new RunCommand(s.buildService)
+        );
+        
+        this.commandFactories.set("debug", (s) => 
+            new RunCommand(s.buildService)
+        );
+        
+        this.commandFactories.set("help", () => new HelpCommand());
+        this.commandFactories.set("doctor", () => new DoctorCommand());
+        this.commandFactories.set("deps", () => new DepsCommand());
+        this.commandFactories.set("tomcat", () => new TomcatCommand());
+        this.commandFactories.set("encoding", () => new EncodingCommand());
+        this.commandFactories.set("docs", () => new DocsCommand());
+        this.commandFactories.set("init", () => new InitCommand());
+        this.commandFactories.set("config", () => new ConfigCommand());
+        this.commandFactories.set("history", () => new HistoryCommand());
+        this.commandFactories.set("redo", () => new RedoCommand());
+        this.commandFactories.set("health", () => new HealthCommand());
+        this.commandFactories.set("completion", () => new CompletionCommand());
+        this.commandFactories.set("changelog", () => new ChangelogCommand());
+        this.commandFactories.set("test", () => new TestCommand());
+        this.commandFactories.set("db", () => new DbCommand());
+        this.commandFactories.set("http", () => new HttpCommand());
+        this.commandFactories.set("docker", () => new DockerCommand());
+        this.commandFactories.set("clean", () => new CleanCommand());
+        this.commandFactories.set("ide", () => new IdeCommand());
+    }
+
+    /**
+     * Inicialização rápida - só cria serviços essenciais
      */
     initialize(): void {
         if (this.isInitialized) {
@@ -99,148 +234,147 @@ export class DIContainer {
             return;
         }
 
-        this.initializeServices();
-        this.initializeCommands();
+        const startTime = performance.now();
+        
+        // Só inicializa serviços essenciais
+        this.initEssentialServices();
+        
+        this.initTime = performance.now() - startTime;
         this.isInitialized = true;
-    }
-
-    private initializeServices(): void {
-        // Serviços base (sem dependências ou com dependências simples)
-        const projectService = new ProjectService(this.config.project);
-        const buildCacheService = new BuildCacheService();
-        const dashboardService = new DashboardService(this.config);
-        const logAnalyzer = new LogAnalyzer(this.config.project);
-
-        // Configura Logger com dashboard
-        Logger.setDashboard(dashboardService);
-
-        // Serviços com dependências
-        const buildService = new BuildService(
-            this.config.project,
-            this.config.tomcat,
-            projectService,
-            buildCacheService
-        );
-
-        const tomcatService = new TomcatService(this.config.tomcat);
-        tomcatService.setProjectService(projectService);
-
-        const auditService = new AuditService(this.config.tomcat);
-        const historyService = new HistoryService();
-
-        this.services = {
-            projectService,
-            buildCacheService,
-            buildService,
-            tomcatService,
-            auditService,
-            dashboardService,
-            logAnalyzer,
-            historyService,
-        };
-    }
-
-    private initializeCommands(): void {
-        const { tomcatService, buildService, auditService, dashboardService, logAnalyzer } = this.services;
-
-        if (!tomcatService || !buildService || !auditService || !dashboardService || !logAnalyzer) {
-            throw new Error("Serviços não inicializados corretamente");
-        }
-
-        // Comandos que compartilham instâncias
-        const deployCmd = new DeployCommand(tomcatService, buildService);
-        const logsCmd = new LogsCommand(dashboardService, logAnalyzer);
-
-        this.commands = {
-            deploy: deployCmd,
-            dev: deployCmd, // dev reusa deploy
-            build: new BuildCommand(buildService),
-            start: new StartCommand(tomcatService),
-            logs: logsCmd,
-            audit: new AuditCommand(auditService),
-            profiles: new ProfilesCommand(this.services.projectService!),
-            run: new RunCommand(),
-            debug: new RunCommand(),
-            help: new HelpCommand(),
-            doctor: new DoctorCommand(),
-            deps: new DepsCommand(),
-            tomcat: new TomcatCommand(),
-            encoding: new EncodingCommand(),
-            docs: new DocsCommand(),
-            init: new InitCommand(),
-            config: new ConfigCommand(),
-            history: new HistoryCommand(),
-            redo: new RedoCommand(),
-            health: new HealthCommand(),
-            completion: new CompletionCommand(),
-            changelog: new ChangelogCommand(),
-            test: new TestCommand(),
-            db: new DbCommand(),
-            http: new HttpCommand(),
-            docker: new DockerCommand(),
-        };
+        
+        Logger.debug(`DI Container inicializado em ${this.initTime.toFixed(2)}ms`);
     }
 
     /**
-     * Obtém um serviço pelo nome
+     * Inicializa apenas serviços essenciais
+     */
+    private initEssentialServices(): void {
+        // ProjectService é essencial (usado por muitos outros serviços)
+        this.getService("projectService");
+    }
+
+    /**
+     * Obtém um serviço (lazy load com cache)
      */
     getService<K extends keyof Services>(name: K): Services[K] {
-        if (!this.isInitialized) {
-            this.initialize();
+        // Retorna do cache se já existe
+        if (this.serviceCache[name]) {
+            return this.serviceCache[name]!;
         }
-        const service = this.services[name];
-        if (!service) {
+
+        // Cria via factory
+        const factory = this.serviceFactories.get(name);
+        if (!factory) {
             throw new Error(`Serviço '${name}' não encontrado no container`);
         }
-        return service;
+
+        const instance = factory();
+        this.serviceCache[name] = instance;
+        return instance;
     }
 
     /**
-     * Obtém um comando pelo nome
+     * Obtém um comando (lazy load com cache)
      */
     getCommand<K extends keyof Commands>(name: K): Commands[K] {
-        if (!this.isInitialized) {
-            this.initialize();
+        // Retorna do cache se já existe
+        if (this.commandCache[name]) {
+            return this.commandCache[name]!;
         }
-        const command = this.commands[name];
-        if (!command) {
+
+        // Cria via factory
+        const factory = this.commandFactories.get(name);
+        if (!factory) {
             throw new Error(`Comando '${name}' não encontrado no container`);
         }
-        return command;
+
+        // Garante que serviços necessários estão disponíveis
+        const services = this.getAllServices();
+        const instance = factory(services);
+        this.commandCache[name] = instance;
+        return instance;
     }
 
     /**
-     * Obtém todos os serviços
+     * Obtém todos os serviços (cria todos)
      */
     getAllServices(): Services {
-        if (!this.isInitialized) {
-            this.initialize();
+        // Força criação de todos os serviços
+        const serviceNames = Array.from(this.serviceFactories.keys()) as Array<keyof Services>;
+        for (const name of serviceNames) {
+            this.getService(name);
         }
-        return this.services as Services;
+        return this.serviceCache as Services;
     }
 
     /**
-     * Obtém todos os comandos
+     * Obtém todos os comandos (cria todos)
      */
     getAllCommands(): Commands {
-        if (!this.isInitialized) {
-            this.initialize();
+        // Força criação de todos os comandos
+        const commandNames = Array.from(this.commandFactories.keys()) as Array<keyof Commands>;
+        for (const name of commandNames) {
+            this.getCommand(name);
         }
-        return this.commands as Commands;
+        return this.commandCache as Commands;
+    }
+
+    /**
+     * Verifica se um serviço está carregado
+     */
+    isServiceLoaded<K extends keyof Services>(name: K): boolean {
+        return name in this.serviceCache;
+    }
+
+    /**
+     * Lista serviços carregados
+     */
+    getLoadedServices(): Array<keyof Services> {
+        return Object.keys(this.serviceCache) as Array<keyof Services>;
     }
 
     /**
      * Registra um serviço customizado (útil para testes)
      */
     registerService<K extends keyof Services>(name: K, service: Services[K]): void {
-        this.services[name] = service;
+        this.serviceCache[name] = service;
     }
 
     /**
      * Registra um comando customizado (útil para testes)
      */
     registerCommand<K extends keyof Commands>(name: K, command: Commands[K]): void {
-        this.commands[name] = command;
+        this.commandCache[name] = command;
+    }
+
+    /**
+     * Limpa todos os caches (útil para testes)
+     */
+    reset(): void {
+        this.serviceCache = {};
+        this.commandCache = {};
+        this.isInitialized = false;
+    }
+
+    /**
+     * Obtém estatísticas do container
+     */
+    getStats(): { 
+        initialized: boolean; 
+        initTime: number; 
+        loadedServices: number; 
+        loadedCommands: number;
+        totalServices: number;
+        totalCommands: number;
+    } {
+        return {
+            initialized: this.isInitialized,
+            initTime: this.initTime,
+            loadedServices: Object.keys(this.serviceCache).length,
+            loadedCommands: Object.keys(this.commandCache).length,
+            totalServices: this.serviceFactories.size,
+            totalCommands: this.commandFactories.size,
+        };
     }
 }
 

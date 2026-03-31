@@ -1,20 +1,25 @@
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
-import { Logger } from "../utils/ui";
+import { Logger } from "../logging";
 import path from "path";
 import fs from "fs";
 import { glob } from "glob";
 import readline from "readline";
+import { BuildService } from "../services/BuildService";
 import {
-	getJavaPath,
-	getMavenCommand,
-	getGradleCommand,
-	getClasspathSeparator,
-	normalizeClasspathPath,
-	isWindows,
+    getJavaPath,
+    getMavenCommand,
+    getGradleCommand,
+    getClasspathSeparator,
+    normalizeClasspathPath,
+    isWindows,
 } from "../utils/platform";
 
 export class RunCommand implements Command {
+    private logger = Logger.getInstance();
+
+    constructor(private buildService?: BuildService) {}
+
     async execute(config: AppConfig, args?: CLIArguments): Promise<void> {
         const isDebug = args?.debug !== false; // Default to true if not specified, matching previous behavior
         let className = config.project.grep;
@@ -22,7 +27,7 @@ export class RunCommand implements Command {
         if (!className) {
             className = await this.loadFromHistory();
             if (!className) {
-                Logger.error(`Uso: xavva ${isDebug ? "debug" : "run"} NomeDaClasse`);
+                this.logger.error(`Uso: xavva ${isDebug ? "debug" : "run"} NomeDaClasse`);
                 return;
             }
         }
@@ -36,10 +41,13 @@ export class RunCommand implements Command {
         this.saveToHistory(className);
 
         if (isDebug) {
-            Logger.section(`Interactive Debug: ${className}`);
+            this.logger.section(`Interactive Debug: ${className}`);
         } else {
-            Logger.section(`Running: ${className}`);
+            this.logger.section(`Running: ${className}`);
         }
+        
+        // Verifica se as classes estão compiladas, se não, compila
+        await this.ensureCompiled(config);
         
         const { localCp, dependencyCp } = await this.getClasspath(config);
         const pathingJar = await this.createPathingJar(dependencyCp);
@@ -62,11 +70,11 @@ export class RunCommand implements Command {
         javaArgs.push(className);
 
         if (isDebug) {
-            Logger.warn(`🚀 Aguardando debugger na porta 5005 para ${className}...`);
-            Logger.log(`${Logger.C.primary}Dica:${Logger.C.reset} No VS Code ou IntelliJ, use 'Attach to Remote JVM' na porta 5005.`);
-            Logger.newline();
+            this.logger.warn(`🚀 Aguardando debugger na porta 5005 para ${className}...`);
+            console.log(`Dica: No VS Code ou IntelliJ, use 'Attach to Remote JVM' na porta 5005.`);
+            this.logger.newline();
         } else {
-            Logger.warn(`🚀 Executando ${className}...`);
+            this.logger.warn(`🚀 Executando ${className}...`);
         }
 
         const bin = getJavaPath();
@@ -82,7 +90,7 @@ export class RunCommand implements Command {
         });
 
         await proc.exited;
-        Logger.log(`Sessão de ${isDebug ? "debug" : "execução"} encerrada.`);
+        this.logger.info(`Sessão de ${isDebug ? "debug" : "execução"} encerrada.`);
     }
 
     private async discoverClass(simpleName: string): Promise<string | null> {
@@ -124,7 +132,7 @@ export class RunCommand implements Command {
                 }
             }
             if (files.length === 0) {
-                Logger.error(`Classe "${simpleName}" não encontrada nos diretórios de código (src/main/java, src/test/java, src).`);
+                this.logger.error(`Classe "${simpleName}" não encontrada nos diretórios de código (src/main/java, src/test/java, src).`);
                 return null;
             }
         }
@@ -143,9 +151,9 @@ export class RunCommand implements Command {
             return uniqueClasses[0];
         }
 
-        Logger.warn(`Múltiplas classes encontradas para "${simpleName}":`);
+        this.logger.warn(`Múltiplas classes encontradas para "${simpleName}":`);
         uniqueClasses.forEach((c, i) => {
-            Logger.log(`  [${i + 1}] ${c}`);
+            console.log(`  [${i + 1}] ${c}`);
         });
 
         const rl = readline.createInterface({
@@ -160,7 +168,7 @@ export class RunCommand implements Command {
                 if (!isNaN(idx) && uniqueClasses[idx]) {
                     resolve(uniqueClasses[idx]);
                 } else {
-                    Logger.error("Operação cancelada.");
+                    this.logger.error("Operação cancelada.");
                     resolve(null);
                 }
             });
@@ -177,9 +185,9 @@ export class RunCommand implements Command {
             const history: string[] = JSON.parse(fs.readFileSync(historyFile, "utf8"));
             if (history.length === 0) return null;
 
-            Logger.warn(`Classes executadas recentemente:`);
+            this.logger.warn(`Classes executadas recentemente:`);
             history.slice(0, 5).forEach((c, i) => {
-                Logger.log(`  [${i + 1}] ${c}${i === 0 ? " (Enter)" : ""}`);
+                console.log(`  [${i + 1}] ${c}${i === 0 ? " (Enter)" : ""}`);
             });
 
             const rl = readline.createInterface({
@@ -296,6 +304,38 @@ export class RunCommand implements Command {
         return jarPath;
     }
 
+    /**
+     * Verifica se as classes compiladas existem, se não, executa o build
+     * Usa build incremental (apenas compile, sem clean) para evitar conflitos
+     * com o Tomcat que pode estar rodando e usando arquivos em target/
+     */
+    private async ensureCompiled(config: AppConfig): Promise<void> {
+        // Usa build incremental (sem clean) para evitar problemas quando Tomcat está rodando
+        if (this.buildService) {
+            this.logger.step("Compilando projeto...");
+            await this.buildService.runBuild(true); // true = incremental, sem clean
+        } else {
+            // Fallback: executa build via comando direto (apenas compile, sem clean)
+            this.logger.step("Compilando projeto (fallback)...");
+            const buildCmd = config.project.buildTool === "maven" 
+                ? [getMavenCommand(), "compile", "-DskipTests"] 
+                : [getGradleCommand(), "classes", "-x", "test"];
+            
+            const spinner = this.logger.spinner("Compilando");
+            const proc = Bun.spawn(buildCmd, {
+                stdout: "pipe",
+                stderr: "pipe",
+            });
+            
+            await proc.exited;
+            spinner.stop();
+            
+            if (proc.exitCode !== 0) {
+                throw new Error("Falha ao compilar o projeto. Verifique os erros acima.");
+            }
+        }
+    }
+
     private async getClasspath(config: AppConfig): Promise<{ localCp: string, dependencyCp: string }> {
         const xavvaDir = path.join(process.cwd(), ".xavva");
         const cpFile = path.join(xavvaDir, "classpath.txt");
@@ -303,7 +343,7 @@ export class RunCommand implements Command {
         if (!fs.existsSync(xavvaDir)) fs.mkdirSync(xavvaDir);
 
         if (!fs.existsSync(cpFile)) {
-            const stopSpinner = Logger.spinner("Generating project classpath");
+            const spinner = this.logger.spinner("Generating project classpath");
             try {
                 if (config.project.buildTool === "maven") {
                     Bun.spawnSync([getMavenCommand(), "dependency:build-classpath", `-Dmdep.outputFile=${cpFile}`]);
@@ -337,9 +377,9 @@ export class RunCommand implements Command {
                     fs.writeFileSync(cpFile, "."); 
                 }
             } catch (e) {
-                Logger.error(`Falha ao gerar classpath: ${e}`);
+                this.logger.error(`Falha ao gerar classpath: ${e}`);
             }
-            stopSpinner();
+            spinner.stop();
         }
 
         let dependencyCp = fs.existsSync(cpFile) ? fs.readFileSync(cpFile, "utf8").trim() : "";

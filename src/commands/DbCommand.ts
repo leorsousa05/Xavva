@@ -6,28 +6,30 @@
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
 import { DbService, type DbConfig } from "../services/DbService";
-import { Logger } from "../utils/ui";
+import { Logger } from "../logging";
 import { ProcessManager } from "../utils/processManager";
 
 export class DbCommand implements Command {
+    private logger = Logger.getInstance();
+
     private showHelp(): void {
-        Logger.section("Database Command");
-        Logger.log(`${Logger.C.bold}Usage:${Logger.C.reset} xavva db <action> [options]`);
-        Logger.newline();
-        Logger.log(`${Logger.C.bold}Actions:${Logger.C.reset}`);
-        Logger.log(`  ${Logger.C.primary}status${Logger.C.reset}     Show migration status`);
-        Logger.log(`  ${Logger.C.primary}migrate${Logger.C.reset}    Run pending migrations`);
-        Logger.log(`  ${Logger.C.primary}reset${Logger.C.reset}      Reset database (⚠️ destructive)`);
-        Logger.log(`  ${Logger.C.primary}seed${Logger.C.reset}       Populate with test data`);
-        Logger.newline();
-        Logger.log(`${Logger.C.bold}Options:${Logger.C.reset}`);
-        Logger.log(`  --force           Confirm destructive operations`);
-        Logger.log(`  --env <name>      Use environment config`);
-        Logger.newline();
-        Logger.log(`${Logger.C.bold}Examples:${Logger.C.reset}`);
-        Logger.log(`  xavva db status`);
-        Logger.log(`  xavva db migrate`);
-        Logger.log(`  xavva db reset --force`);
+        this.logger.section("Database Command");
+        console.log(`Usage: xavva db <action> [options]`);
+        this.logger.newline();
+        console.log(`Actions:`);
+        console.log(`  status     Show migration status`);
+        console.log(`  migrate    Run pending migrations`);
+        console.log(`  reset      Reset database (! destructive)`);
+        console.log(`  seed       Populate with test data`);
+        this.logger.newline();
+        console.log(`Options:`);
+        console.log(`  --force           Confirm destructive operations`);
+        console.log(`  --env <name>      Use environment config`);
+        this.logger.newline();
+        console.log(`Examples:`);
+        console.log(`  xavva db status`);
+        console.log(`  xavva db migrate`);
+        console.log(`  xavva db reset --force`);
     }
 
     async execute(config: AppConfig, args?: CLIArguments, positionals?: string[]): Promise<void> {
@@ -52,7 +54,7 @@ export class DbCommand implements Command {
                 case "up":
                     const migrateResult = await service.migrate(dbConfig);
                     if (!migrateResult.success) {
-                        Logger.error(migrateResult.message);
+                        this.logger.error(migrateResult.message);
                         await processManager.shutdown(1);
                     }
                     break;
@@ -66,8 +68,8 @@ export class DbCommand implements Command {
                 case "clean":
                 case "drop":
                     if (!args?.force) {
-                        Logger.warn("This will DELETE all data in the database!");
-                        Logger.info("Use", "--force to confirm");
+                        this.logger.warn("This will DELETE all data in the database!");
+                        this.logger.info("Use --force to confirm");
                         await processManager.shutdown(1);
                         return;
                     }
@@ -82,7 +84,7 @@ export class DbCommand implements Command {
                 case "seed":
                     const seedResult = await service.seed(dbConfig, args?.src);
                     if (!seedResult.success) {
-                        Logger.error(seedResult.message);
+                        this.logger.error(seedResult.message);
                         await processManager.shutdown(1);
                     }
                     break;
@@ -92,12 +94,12 @@ export class DbCommand implements Command {
                     break;
 
                 default:
-                    Logger.error(`Unknown db action: ${action}`);
-                    Logger.info("Actions", "migrate, status, reset, seed, create");
+                    this.logger.error(`Unknown db action: ${action}`);
+                    this.logger.info("Actions: migrate, status, reset, seed, create");
                     await processManager.shutdown(1);
             }
         } catch (error) {
-            Logger.error(`Database command failed: ${(error as Error).message}`);
+            this.logger.error(`Database command failed: ${(error as Error).message}`);
             await processManager.shutdown(1);
         }
     }
@@ -130,8 +132,8 @@ export class DbCommand implements Command {
 
     private async createMigration(service: DbService, args?: CLIArguments): Promise<void> {
         const name = args?.name || "new_migration";
-        Logger.section("Create Migration");
-        Logger.info("Name", name);
+        this.logger.section("Create Migration");
+        this.logger.config("Name", name);
         
         // Detecta ferramenta
         const tool = await service.detectTool();
@@ -141,13 +143,13 @@ export class DbCommand implements Command {
             const filename = `V${timestamp}__${name}.sql`;
             const filepath = `src/main/resources/db/migration/${filename}`;
             
-            Logger.success(`Create file: ${filepath}`);
-            Logger.dim("-- Add your SQL here");
+            this.logger.success(`Create file: ${filepath}`);
+            console.log("-- Add your SQL here");
         } else if (tool === "liquibase") {
             const filename = `${name}.sql`;
-            Logger.success(`Add to changelog: db/changelog/${filename}`);
+            this.logger.success(`Add to changelog: db/changelog/${filename}`);
         } else {
-            Logger.warn("No migration tool detected");
+            this.logger.warn("No migration tool detected");
         }
     }
 }

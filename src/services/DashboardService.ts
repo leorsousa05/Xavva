@@ -1,4 +1,4 @@
-import { Logger } from "../utils/ui";
+import { Logger, Colors } from "../logging";
 import { ProcessManager } from "../utils/processManager";
 import { 
 	MAX_LOG_SCROLLBUFFER, 
@@ -8,7 +8,7 @@ import {
 import type { AppConfig } from "../types/config";
 import os from "os";
 
-const C = Logger.C;
+const C = Colors;
 
 export class DashboardService {
 	private isTui: boolean;
@@ -19,11 +19,12 @@ export class DashboardService {
 	private gitContext: { branch: string; hash: string } | null = null;
 	private actions: Map<string, () => void> = new Map();
 	private startTime = Date.now();
+	private logger = Logger.getInstance();
 
 	constructor(private config: AppConfig) {
 		this.isTui = config.project.tui;
 		if (this.isTui) {
-			this.gitContext = Logger.getGitContext();
+			this.gitContext = this.getGitContext();
 			this.maxLogLines = process.stdout.rows - 8;
 			this.setupTui();
 			this.registerShutdownHandlers();
@@ -183,5 +184,15 @@ export class DashboardService {
 	private async exit() {
 		this.restoreTerminal();
 		await ProcessManager.getInstance().shutdown(0);
+	}
+
+	private getGitContext(): { branch: string; hash: string } | null {
+		try {
+			const branch = Bun.spawnSync(["git", "rev-parse", "--abbrev-ref", "HEAD"]).stdout.toString().trim();
+			const hash = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"]).stdout.toString().trim();
+			return { branch, hash };
+		} catch {
+			return null;
+		}
 	}
 }

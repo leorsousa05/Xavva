@@ -1,4 +1,4 @@
-import { Logger } from "../utils/ui";
+import { Logger } from "../logging";
 import { ProgressBar, ThemedSpinner } from "../utils/ProgressBar";
 import { VERSIONS, getAvailableTomcatVersions, isSupportedTomcatVersion } from "../config/versions";
 import {
@@ -46,6 +46,7 @@ export class EmbeddedTomcatService {
 	private tomcatHome: string;
 	private downloadUrl: string;
 	private isInstalled: boolean = false;
+	private logger = Logger.getInstance();
 
 	// Versões agora centralizadas em src/config/versions.ts
 
@@ -110,13 +111,13 @@ export class EmbeddedTomcatService {
 	 */
 	async install(): Promise<boolean> {
 		if (this.checkInstallation()) {
-			Logger.info("Tomcat", `Versão ${this.version} já instalada`);
+			this.logger.info(`Tomcat: Versão ${this.version} já instalada`);
 			return true;
 		}
 
-		Logger.section("Instalando Tomcat Embutido");
-		Logger.info("Versão", this.version);
-		Logger.info("Destino", this.tomcatHome);
+		this.logger.section("Instalando Tomcat Embutido");
+		this.logger.info(`Versão: ${this.version}`);
+		this.logger.info(`Destino: ${this.tomcatHome}`);
 
 		// Cria diretório base
 		if (!existsSync(this.baseDir)) {
@@ -152,10 +153,10 @@ export class EmbeddedTomcatService {
 			await this.configureContextXml();
 
 			this.isInstalled = true;
-			Logger.success(`Tomcat ${this.version} instalado com sucesso!`);
+			this.logger.success(`Tomcat ${this.version} instalado com sucesso!`);
 			return true;
 		} catch (error) {
-			Logger.error(`Falha ao instalar Tomcat: ${error}`);
+			this.logger.error(`Falha ao instalar Tomcat: ${error}`);
 			// Limpa arquivos parciais
 			if (existsSync(this.tomcatHome)) {
 				await fsPromises.rm(this.tomcatHome, { recursive: true, force: true });
@@ -203,7 +204,7 @@ export class EmbeddedTomcatService {
 		);
 
 		await fsPromises.writeFile(serverXmlPath, content, "utf-8");
-		Logger.debug(`server.xml configurado na porta ${this.port}`);
+		this.logger.debug(`server.xml configurado na porta ${this.port}`);
 	}
 
 	/**
@@ -280,7 +281,7 @@ export class EmbeddedTomcatService {
 </Context>`;
 
 		writeFileSync(contextFile, content);
-		Logger.debug(`Context criado: ${contextFile}`);
+		this.logger.debug(`Context criado: ${contextFile}`);
 	}
 
 	/**
@@ -394,7 +395,7 @@ export class EmbeddedTomcatService {
 			await fsPromises.writeFile(destPath, allChunks);
 			
 			const sizeMB = (received / 1024 / 1024).toFixed(1);
-			Logger.info("Download", `${sizeMB} MB baixados`);
+			this.logger.info(`Download: ${sizeMB} MB baixados`);
 		} else {
 			// Sem content-length, usar spinner temático
 			const spinner = new ThemedSpinner();
@@ -406,7 +407,7 @@ export class EmbeddedTomcatService {
 				stop(true);
 				
 				const sizeMB = (buffer.byteLength / 1024 / 1024).toFixed(1);
-				Logger.info("Download", `${sizeMB} MB baixados`);
+				this.logger.info(`Download: ${sizeMB} MB baixados`);
 			} catch (error) {
 				stop(false);
 				throw error;
@@ -455,7 +456,7 @@ export class EmbeddedTomcatService {
 	async uninstall(): Promise<void> {
 		if (existsSync(this.tomcatHome)) {
 			await fsPromises.rm(this.tomcatHome, { recursive: true, force: true });
-			Logger.info("Tomcat", `Versão ${this.version} removida`);
+			this.logger.info(`Tomcat: Versão ${this.version} removida`);
 		}
 	}
 

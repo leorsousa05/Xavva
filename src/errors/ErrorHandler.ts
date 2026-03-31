@@ -13,7 +13,7 @@ import {
     TomcatError,
     ConfigError
 } from "./XavvaError";
-import { Logger } from "../utils/ui";
+import { Logger } from "../logging";
 import { ProcessManager } from "../utils/processManager";
 
 export interface ErrorReport {
@@ -30,6 +30,7 @@ export class ErrorHandler {
     private errorHistory: ErrorReport[] = [];
     private maxHistorySize = 10;
     private isShuttingDown = false;
+    private logger = Logger.getInstance();
 
     private constructor() {}
 
@@ -61,8 +62,8 @@ export class ErrorHandler {
 
         // Se não for erro operacional, mostra stack trace em verbose
         if (!report.isOperational) {
-            Logger.debug("Stack trace:");
-            Logger.debug(normalizedError.stack || "N/A");
+            this.logger.debug("Stack trace:");
+            this.logger.debug(normalizedError.stack || "N/A");
         }
 
         // Shutdown com código apropriado
@@ -82,7 +83,7 @@ export class ErrorHandler {
         if (normalizedError instanceof XavvaError) {
             this.logXavvaError(normalizedError, false);
         } else {
-            Logger.warn(`Erro inesperado: ${normalizedError.message}`);
+            this.logger.warn(`Erro inesperado: ${normalizedError.message}`);
         }
 
         return report;
@@ -142,42 +143,45 @@ export class ErrorHandler {
      * Loga erro Xavva com formatação adequada
      */
     private logXavvaError(error: XavvaError, isFatal: boolean): void {
-        const logMethod = isFatal ? Logger.error : Logger.warn;
+        const logMethod = isFatal ? this.logger.error.bind(this.logger) : this.logger.warn.bind(this.logger);
         
         // Cabeçalho do erro
-        logMethod.call(Logger, error.message);
+        logMethod(error.message);
         
         // Detalhes adicionais se houver
         if (error instanceof NetworkError) {
-            Logger.info("Dica", "Verifique sua conexão de internet e tente novamente");
+            this.logger.info("Dica: Verifique sua conexão de internet e tente novamente");
         } else if (error instanceof FileSystemError) {
-            Logger.info("Dica", "Verifique as permissões do arquivo/diretório");
+            this.logger.info("Dica: Verifique as permissões do arquivo/diretório");
         } else if (error instanceof BuildError) {
-            Logger.info("Dica", "Use --verbose para ver detalhes completos do build");
+            this.logger.info("Dica: Use --verbose para ver detalhes completos do build");
         } else if (error instanceof TomcatError) {
-            Logger.info("Dica", "Verifique se o Tomcat está configurado corretamente");
+            this.logger.info("Dica: Verifique se o Tomcat está configurado corretamente");
         } else if (error instanceof ConfigError) {
-            Logger.info("Dica", "Verifique seu arquivo xavva.json");
+            this.logger.info("Dica: Verifique seu arquivo xavva.json");
         }
 
         // Código do erro em debug
-        Logger.debug(`Código do erro: ${error.code} (exit ${error.exitCode})`);
+        this.logger.debug(`Código do erro: ${error.code} (exit ${error.exitCode})`);
     }
 
     /**
      * Trata erros inesperados (bugs)
      */
     private handleUnexpectedError(error: Error): void {
-        Logger.error("Erro inesperado:");
-        Logger.error(error.message);
-        Logger.newline();
-        Logger.info("Isso parece ser um bug", "Por favor, reporte em github.com/leorsousa05/Xavva/issues");
+        this.logger.error("Erro inesperado:");
+        this.logger.error(error.message);
+        this.logger.newline();
+        this.logger.info("Isso parece ser um bug", "Por favor, reporte em github.com/leorsousa05/Xavva/issues");
         
         // Sempre mostra stack trace para erros inesperados
         if (error.stack) {
-            Logger.newline();
-            Logger.dim("Stack trace:");
-            Logger.dim(error.stack.split("\n").slice(1, 5).join("\n"));
+            this.logger.newline();
+            this.logger.debug("Stack trace:");
+            const lines = error.stack.split("\n").slice(1, 5);
+            for (const line of lines) {
+                this.logger.debug(line.trim());
+            }
         }
     }
 

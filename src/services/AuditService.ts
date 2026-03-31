@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { TomcatConfig } from "../types";
-import { Logger } from "../utils/ui";
+import { Logger } from "../logging";
 import { AuditError } from "../errors/XavvaError";
 
 export interface Vulnerability {
@@ -47,6 +47,8 @@ interface OSVResponse {
 }
 
 export class AuditService {
+    private logger = Logger.getInstance();
+
     constructor(private tomcatConfig: TomcatConfig) {}
 
     async runAudit(appName: string): Promise<JarAuditResult[]> {
@@ -59,7 +61,7 @@ export class AuditService {
         const jars = fs.readdirSync(libPath).filter(f => f.endsWith(".jar"));
         const results: JarAuditResult[] = [];
 
-        const stopSpinner = Logger.spinner(`Auditando ${jars.length} dependências`);
+        const stopSpinner = this.logger.spinner(`Auditando ${jars.length} dependências`);
 
         const chunkSize = 10;
         for (let i = 0; i < jars.length; i += chunkSize) {
@@ -69,7 +71,7 @@ export class AuditService {
             results.push(...chunkResults);
         }
 
-        stopSpinner();
+        stopSpinner.stop();
         return results;
     }
 

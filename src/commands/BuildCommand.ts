@@ -1,23 +1,25 @@
 import type { Command } from "./Command";
 import type { AppConfig } from "../types/config";
 import { BuildService } from "../services/BuildService";
-import { Logger } from "../utils/ui";
+import { Logger } from "../logging";
 import { ProcessManager } from "../utils/processManager";
 
 export class BuildCommand implements Command {
+    private logger = Logger.getInstance();
+
     constructor(private buildService: BuildService) {}
 
     async execute(config: AppConfig): Promise<void> {
-        Logger.section("Build Only");
-        Logger.info("Tool", config.project.buildTool.toUpperCase());
-        if (config.project.profile) Logger.info("Profile", config.project.profile);
+        this.logger.section("Build Only");
+        this.logger.config("Tool", config.project.buildTool.toUpperCase());
+        if (config.project.profile) this.logger.config("Profile", config.project.profile);
         
         try {
             await this.buildService.runBuild();
-            Logger.success("Build completed successfully!");
+            this.logger.success("Build completed successfully!");
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            Logger.error(message);
+            this.logger.error(message);
             await ProcessManager.getInstance().shutdown(1);
         }
     }

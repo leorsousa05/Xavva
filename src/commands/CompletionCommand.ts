@@ -1,6 +1,6 @@
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
-import { Logger } from "../utils/ui";
+import { Logger, C } from "../utils/ui";
 
 export class CompletionCommand implements Command {
     private readonly commands = [
@@ -51,14 +51,14 @@ export class CompletionCommand implements Command {
                 Logger.section("Shell Completion");
                 Logger.info("Uso: xavva completion <shell>");
                 Logger.newline();
-                Logger.log(`${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.primary}xavva completion bash${Logger.C.reset}  ${Logger.C.gray}# Bash${Logger.C.reset}`);
-                Logger.log(`${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.primary}xavva completion zsh${Logger.C.reset}   ${Logger.C.gray}# Zsh${Logger.C.reset}`);
-                Logger.log(`${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.primary}xavva completion fish${Logger.C.reset}  ${Logger.C.gray}# Fish${Logger.C.reset}`);
+                Logger.log(`${C.gray}│${C.reset}  ${C.primary}xavva completion bash${C.reset}  ${C.gray}# Bash${C.reset}`);
+                Logger.log(`${C.gray}│${C.reset}  ${C.primary}xavva completion zsh${C.reset}   ${C.gray}# Zsh${C.reset}`);
+                Logger.log(`${C.gray}│${C.reset}  ${C.primary}xavva completion fish${C.reset}  ${C.gray}# Fish${C.reset}`);
                 Logger.endSection();
                 Logger.dim("Adicione ao seu shell:");
-                Logger.log(`  ${Logger.C.gray}# Bash: echo 'eval "$(xavva completion bash)"' >> ~/.bashrc${Logger.C.reset}`);
-                Logger.log(`  ${Logger.C.gray}# Zsh:  echo 'eval "$(xavva completion zsh)"' >> ~/.zshrc${Logger.C.reset}`);
-                Logger.log(`  ${Logger.C.gray}# Fish: xavva completion fish > ~/.config/fish/completions/xavva.fish${Logger.C.reset}`);
+                Logger.log(`  ${C.gray}# Bash: echo 'eval "$(xavva completion bash)"' >> ~/.bashrc${C.reset}`);
+                Logger.log(`  ${C.gray}# Zsh:  echo 'eval "$(xavva completion zsh)"' >> ~/.zshrc${C.reset}`);
+                Logger.log(`  ${C.gray}# Fish: xavva completion fish > ~/.config/fish/completions/xavva.fish${C.reset}`);
         }
     }
 

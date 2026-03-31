@@ -1,7 +1,7 @@
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
 import { ProjectService } from "../services/ProjectService";
-import { Logger } from "../utils/ui";
+import { Logger, C } from "../utils/ui";
 
 export class ProfilesCommand implements Command {
     constructor(private projectService: ProjectService) {}
@@ -15,18 +15,18 @@ export class ProfilesCommand implements Command {
 
         if (profiles.length === 0) {
             Logger.warn("Nenhum perfil específico encontrado no arquivo de configuração.");
-            Logger.log(`  ${Logger.C.dim}Dica: Perfis Maven são definidos em <profiles> no pom.xml.${Logger.C.reset}`);
+            Logger.log(`  ${C.dim}Dica: Perfis Maven são definidos em <profiles> no pom.xml.${C.reset}`);
             return;
         }
 
         Logger.log(`
-  ${Logger.C.primary}Perfis detectados:${Logger.C.reset}`);
+  ${C.primary}Perfis detectados:${C.reset}`);
         profiles.forEach(p => {
-            const active = config.project.profile === p ? ` ${Logger.C.green}(Ativo)${Logger.C.reset}` : "";
-            Logger.log(`  ${Logger.C.bold}➜${Logger.C.reset} ${p}${active}`);
+            const active = config.project.profile === p ? ` ${C.success}(Ativo)${C.reset}` : "";
+            Logger.log(`  ${C.bold}➜${C.reset} ${p}${active}`);
         });
 
         Logger.newline();
-        Logger.log(`  ${Logger.C.dim}Para usar um perfil: xavva build -P nome-do-perfil${Logger.C.reset}`);
+        Logger.log(`  ${C.dim}Para usar um perfil: xavva build -P nome-do-perfil${C.reset}`);
     }
 }

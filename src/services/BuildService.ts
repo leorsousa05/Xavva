@@ -1,11 +1,13 @@
 import { readdirSync, existsSync, statSync, mkdirSync, promises as fs } from "fs";
 import path from "path";
 import type { ProjectConfig, TomcatConfig } from "../types/config";
-import { Logger } from "../utils/ui";
+import { Logger } from "../logging";
 import { BuildCacheService } from "./BuildCacheService";
 import { ProjectService } from "./ProjectService";
 
 export class BuildService {
+	private logger = Logger.getInstance();
+
 	constructor(
 		private projectConfig: ProjectConfig, 
 		private tomcatConfig: TomcatConfig,
@@ -40,7 +42,7 @@ export class BuildService {
 		
 		if (useCache && !incremental && !this.projectConfig.skipBuild) {
 			if (!this.projectConfig.clean && !this.cache.shouldRebuild(this.projectConfig.buildTool, this.projectService)) {
-				Logger.success("Build cache hit! Skipping full build.");
+				this.logger.success("Cache de build atingido! Pulando build completo.");
 				return;
 			}
 		}
@@ -96,7 +98,7 @@ export class BuildService {
 			env.GRADLE_OPTS = "-Xmx1024m -Dorg.gradle.daemon=true";
 		}
 
-		const stopSpinner = (this.projectConfig.verbose) ? () => {} : Logger.spinner(incremental ? "Incremental compilation" : "Full project build");
+		const spinner = this.projectConfig.verbose ? null : this.logger.spinner(incremental ? "Compilação incremental" : "Build completo do projeto");
 
 		// No Windows, comandos .cmd/.bat muitas vezes precisam de shell: true no Bun.spawn ou o nome exato.
 		// Vamos usar o nome exato mvn.cmd/gradle.bat que é mais seguro que shell: true
@@ -114,14 +116,14 @@ export class BuildService {
 		}
 
 		await proc.exited;
-		stopSpinner();
+		spinner?.stop();
 
 		if (proc.exitCode !== 0) {
             if (!this.projectConfig.verbose) {
                 const err = await new Response(proc.stderr).text();
-                Logger.log(err);
+                console.log(err);
             }
-            Logger.error(`${this.projectConfig.buildTool.toUpperCase()} build failed!`);
+            this.logger.error(`${this.projectConfig.buildTool.toUpperCase()} build falhou!`);
             throw new Error("Falha no build do Java!");
         }
 
@@ -141,11 +143,11 @@ export class BuildService {
 		
 		if (existsSync(buildDir)) {
 			try {
-				Logger.step(`Cleaning ${path.basename(buildDir)}/ directory...`);
+				this.logger.debug(`Limpando diretório ${path.basename(buildDir)}/...`);
 				await fs.rm(buildDir, { recursive: true, force: true });
-				Logger.debug(`Removed ${buildDir}`);
+            // Directory removed
 			} catch (e) {
-				Logger.warn(`Could not fully remove ${buildDir}, continuing...`);
+				this.logger.warn(`Não foi possível remover completamente ${buildDir}, continuando...`);
 			}
 		}
 	}
@@ -219,7 +221,7 @@ export class BuildService {
 		if (syncedCount.value === 0) {
 			await this.fastSync(sourceDir, targetLib);
 		} else if (!this.projectConfig.quiet) {
-			Logger.info("sync", `${syncedCount.value} classe(s) sincronizada(s)`);
+			this.logger.info(`${syncedCount.value} classe(s) sincronizada(s)`);
 		}
 	}
 	
@@ -324,15 +326,11 @@ export class BuildService {
 
 				if (!this.projectConfig.verbose) {
 					// Modo não-verbose: usa sumarização existente
-					const formatted = Logger.formatBuildLog(cleanLine, buildTool);
+					const formatted = this.logger.constructor.name === 'Logger' ? '' : cleanLine;
 					if (formatted) console.log(formatted);
 				} else {
-					// Modo verbose: formata mas mantém estrutura
-					const formatted = Logger.formatBuildLog(cleanLine, buildTool);
-					if (formatted) {
-						console.log(formatted);
-					}
-					// Silencia linhas que são noise puro
+					// Modo verbose: mostra todas as linhas
+					console.log(`  ${cleanLine.slice(0, 100)}`);
 				}
 			}
 		}

@@ -1,7 +1,9 @@
 import type { TomcatConfig, AppConfig } from "../types";
 import { getHotswapAgentUrl, VERSIONS } from "../config/versions";
 import { NetworkError } from "../errors/XavvaError";
-import { Logger } from "../utils/ui";
+import { Logger } from "../logging";
+import { Logger as LoggerLegacy } from "../utils/ui";
+import { NOISE_PATTERNS } from "../logging/constants";
 import { ProgressBar, ThemedSpinner } from "../utils/ProgressBar";
 import type { Subprocess } from "bun";
 import { ProjectService } from "./ProjectService";
@@ -20,11 +22,12 @@ import {
 export class TomcatService {
 	private activeConfig: TomcatConfig;
 	private currentProcess: Subprocess | null = null;
-	private stopStartupSpinner?: (success?: boolean) => void;
+	private startupSpinner?: { stop: (success?: boolean) => void; update: (msg: string) => void };
 	public onReady?: () => void;
 	private pid: number | null = null;
 	private projectService: ProjectService | null = null;
 	private hasReadyBeenCalled: boolean = false;
+	private logger = Logger.getInstance();
 
 	constructor(customConfig: TomcatConfig) {
 		this.activeConfig = customConfig;
@@ -82,7 +85,7 @@ export class TomcatService {
 			}
 			
 			if (pid) {
-				Logger.step(`Freeing port ${this.activeConfig.port}`);
+				this.logger.step(`Liberando porta ${this.activeConfig.port}`);
 				const killCmd = getKillCommand(pid);
 				Bun.spawnSync(killCmd);
 			}
@@ -126,13 +129,13 @@ export class TomcatService {
 
 			await Promise.all(tasks);
 		} catch (e) {
-			Logger.warn("Não foi possível limpar totalmente a pasta webapps ou cache.");
+			this.logger.warn("Não foi possível limpar totalmente a pasta webapps ou cache.");
 		}
 	}
 
 	stop() {
 		if (this.currentProcess) {
-			Logger.warn("Stopping active server...");
+			this.logger.warn("Parando servidor ativo...");
 			this.currentProcess.kill();
 			this.currentProcess = null;
 		}
@@ -210,7 +213,7 @@ export class TomcatService {
 			Logger.success(`HotswapAgent v${VERSIONS.HOTSWAP_AGENT.VERSION} instalado!`);
 			return agentPath;
 		} catch (e: any) {
-			Logger.warn("Falha ao baixar HotswapAgent. Usando hot swap padrão da JVM.");
+			this.logger.warn("Falha ao baixar HotswapAgent. Usando hot swap padrão da JVM.");
 			
 			// Limpa arquivo parcial se existir
 			if (existsSync(agentPath)) {
@@ -314,13 +317,13 @@ export class TomcatService {
 		}
 
 		if (config.project.debug) {
-			Logger.debug(`Java Debugger habilitado na porta ${config.project.debugPort}`);
+			this.logger.debug(`Porta do debugger ${config.project.debugPort}`);
 			env.JPDA_ADDRESS = String(config.project.debugPort);
 			env.JPDA_TRANSPORT = "dt_socket";
 		}
 
 		if ((config.project.cleanLogs || config.project.quiet) && !config.project.verbose) {
-			this.stopStartupSpinner = Logger.spinner("Starting Tomcat server");
+			this.startupSpinner = this.logger.spinner("Iniciando servidor Tomcat");
 		}
 
 		this.currentProcess = Bun.spawn([binPath, ...args], {
@@ -359,9 +362,9 @@ export class TomcatService {
 				// Detect startup completion
 				if (cleanLine.includes("Server startup in") || cleanLine.includes("SEVERE") || cleanLine.includes("Exception")) {
 					const isSuccess = cleanLine.includes("Server startup in");
-					if (this.stopStartupSpinner) {
-						this.stopStartupSpinner(isSuccess);
-						this.stopStartupSpinner = undefined;
+					if (this.startupSpinner) {
+						this.startupSpinner.stop(isSuccess);
+						this.startupSpinner = undefined;
 					}
 					if (isSuccess && this.onReady && !this.hasReadyBeenCalled) {
 						this.hasReadyBeenCalled = true;
@@ -371,10 +374,12 @@ export class TomcatService {
 
 				// Verbose: formata logs do Tomcat
 				if (verbose) {
-					if (Logger.isTomcatNoise(cleanLine)) {
-						continue; // Silencia noise completamente
+					// No modo verbose, só filtra o noise básico (CATALINA_, JRE_HOME, etc)
+					// Logs do HOTSWAP e outros são mostrados
+					if (LoggerLegacy.isTomcatNoise(cleanLine) && !LoggerLegacy.isTomcatVerboseLog(cleanLine)) {
+						continue; // Silencia noise básico
 					}
-					const formatted = Logger.formatTomcatLog(cleanLine);
+					const formatted = LoggerLegacy.formatTomcatLog(cleanLine);
 					if (formatted) {
 						console.log(formatted);
 					}
@@ -384,30 +389,46 @@ export class TomcatService {
 				// Clean mode: filtra noise
 				if (clean) {
 					// Sempre filtra noise do sistema
-					if (Logger.isSystemNoise(cleanLine)) continue;
+					if (NOISE_PATTERNS.system.some(n => cleanLine.includes(n))) continue;
 
 					// Quiet mode: só mostra essencial
-					if (quiet && !Logger.isEssential(cleanLine)) {
+					if (quiet && !LoggerLegacy.isEssential(cleanLine)) {
 						if (cleanLine.includes("INFO") && !cleanLine.includes("ERROR")) continue;
 					}
 
 					// Grep filter
 					if (grep && !cleanLine.toLowerCase().includes(grep.toLowerCase())) {
-						if (!Logger.isEssential(cleanLine)) continue;
+						if (!LoggerLegacy.isEssential(cleanLine)) continue;
 					}
 					
-					const summarized = Logger.summarize(cleanLine);
-					if (summarized) {
-						// Só mostra se não for vazio (rate limiting)
-						if (summarized.trim()) Logger.log(summarized);
+					const summarized = LoggerLegacy.summarize(cleanLine);
+					if (summarized && summarized.trim()) {
+						// Para o spinner antes de mostrar log para não quebrar a interface
+						if (this.startupSpinner) {
+							this.startupSpinner.stop(true);
+							this.startupSpinner = undefined;
+						}
+						console.log(summarized);
 					}
 				} else {
-					// Non-clean: mostra tudo mas formata
-					if (Logger.isSystemNoise(cleanLine)) {
-						// Silencia completamente noise em non-clean também
+					// Modo normal (não verbose, não clean): filtra mais agressivamente
+					// Só mostra logs essenciais e resumos
+					if (NOISE_PATTERNS.system.some(n => cleanLine.includes(n))) {
 						continue;
 					}
-					Logger.log(cleanLine);
+					
+					// No modo normal, só mostra se for essencial ou tiver resumo
+					const summarized = LoggerLegacy.summarize(cleanLine);
+					if (summarized && summarized.trim()) {
+						// Para o spinner antes de mostrar log
+						if (this.startupSpinner) {
+							this.startupSpinner.stop(true);
+							this.startupSpinner = undefined;
+						}
+						console.log(summarized);
+					}
+					// Silencia logs não essenciais no modo normal
+					// (WARNING, ADVERTÊNCIA, INFO genérico, etc. só aparecem no verbose)
 				}
 			}
 		}

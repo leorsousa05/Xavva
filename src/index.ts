@@ -7,7 +7,7 @@ import { ErrorHandler } from "./errors/ErrorHandler";
 import { ProcessManager } from "./utils/processManager";
 import { LoggerLevel } from "./utils/LoggerLevel";
 import pkg from "../package.json";
-import { Logger } from "./utils/ui";
+import { Logger, C } from "./utils/ui";
 import type { CLIArguments } from "./types/args";
 
 async function main() {
@@ -32,7 +32,7 @@ async function main() {
         "debug", "logs", "docs", "audit", "profiles", 
         "deps", "tomcat", "encoding", "init", "config", 
         "history", "redo", "health", "completion", "changelog",
-        "test", "db", "http", "docker", "help"
+        "test", "db", "http", "docker", "help", "clean", "ide"
     ];
     const commandName = positionals.find(p => commandNames.includes(p)) || "deploy";
 
@@ -77,7 +77,7 @@ async function main() {
     if (values.tui) {
         const deployCmd = commands.deploy;
         services.dashboardService.onAction("r", () => {
-            services.dashboardService.log(Logger.C.warning + "Restart manual solicitado via TUI...");
+            services.dashboardService.log(C.warning + "Restart manual solicitado via TUI...");
             deployCmd.execute(config, { watch: true, incremental: false });
         });
     }
@@ -122,6 +122,8 @@ async function main() {
         registry.register("db", commands.db);
         registry.register("http", commands.http);
         registry.register("docker", commands.docker);
+        registry.register("clean", commands.clean);
+        registry.register("ide", commands.ide);
 
         // Configura flags específicas
         if (commandName === "debug") values.debug = true;
@@ -163,6 +165,12 @@ async function main() {
                 }
             }
         }
+    }
+
+    // Só encerra o processo se não estiver em modo watch ou TUI
+    // (esses modos precisam continuar rodando)
+    if (!values.watch && !values.tui) {
+        await ProcessManager.getInstance().shutdown(0);
     }
 }
 

@@ -1,8 +1,11 @@
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
 import pkg from "../../package.json";
+import { Logger } from "../logging";
 
 export class HelpCommand implements Command {
+    private logger = Logger.getInstance();
+
     async execute(_config: AppConfig, _args?: CLIArguments): Promise<void> {
         const v = pkg.version;
         const c = this.c;
@@ -18,6 +21,7 @@ export class HelpCommand implements Command {
    ${c("green", "deploy")}     Build and deploy to Tomcat
    ${c("green", "build")}      Compile project
    ${c("green", "start")}      Start Tomcat server
+   ${c("green", "clean")}      Clean cache, build, and logs
    ${c("green", "run")}        Run a Java class
    ${c("green", "logs")}       Stream Tomcat logs
 
@@ -37,27 +41,42 @@ export class HelpCommand implements Command {
    ${c("magenta", "redo")}         Repeat last command
    ${c("magenta", "completion")}   Shell completions
 
- ${c("yellow", "NEW v3.1")}
-   ${c("brightMagenta", "test")}        Run JUnit/TestNG tests (--watch, --coverage)
-   ${c("brightMagenta", "db")}          Database migrations (Flyway/Liquibase)
+ ${c("yellow", "TESTING & DB")}
+   ${c("brightMagenta", "test")}        Run JUnit/TestNG tests
+   ${c("brightMagenta", "db")}          Database migrations
    ${c("brightMagenta", "http")}        HTTP client for API testing
    ${c("brightMagenta", "docker")}      Docker integration
 
+ ${c("yellow", "ADVANCED")}
+   ${c("blue", "ide")}           Generate IDE config (vscode|idea|eclipse)
+   ${c("blue", "docs")}          Generate API documentation
+   ${c("blue", "changelog")}     Generate changelog from git
+
  ${c("yellow", "GLOBAL OPTIONS")}
-   -p, --path <path>      Tomcat path      --port <n>             Port (8080)
-   -t, --tool <tool>      maven|gradle     -P, --profile <p>      Build profile
-   -n, --name <name>      App name         -e, --encoding <enc>   UTF-8|cp1252
-   -w, --watch            Watch mode       --tui                  Dashboard
-   -d, --debug            JPDA debugger    -c, --clean            Clean build
-   -W, --war              Build .war       --env <name>           Environment
-   -h, --help             Show help        -v, --version          Version
+   -p, --path <path>      Tomcat path         --port <n>             Port (8080)
+   -t, --tool <tool>      maven|gradle        -P, --profile <p>      Build profile
+   -n, --name <name>      App name            -e, --encoding <enc>   UTF-8|cp1252
+   -w, --watch            Watch mode          --tui                  Dashboard mode
+   -d, --debug            JPDA debugger       -c, --clean            Clean build
+   -W, --war              Build .war          --cache                Use build cache
+   --env <name>           Environment         -y, --yes              Auto-install
+   --profile              Show performance    --dry-run              Simulate only
+   -V, --verbose          Detailed output     -h, --help             Show help
+   -v, --version          Show version
 
  ${c("yellow", "EXAMPLES")}
-   xavva dev --tui --watch           # Dev mode with dashboard
-   xavva deploy --war --port 8081    # Build WAR for port 8081
-   xavva test --watch                # Test watch mode
-   xavva deps --update-safe          # Update dependencies
+   xavva dev --tui --watch                # Dev mode with dashboard
+   xavva deploy --war --port 8081         # Build WAR for port 8081
+   xavva clean                            # Clean cache and build
+   xavva test --watch --coverage          # Test with coverage
+   xavva doctor --fix                     # Auto-fix issues
+   xavva ide --ide vscode                 # Generate VS Code config
+   xavva deps --update-safe               # Update dependencies
+   xavva deploy --dry-run                 # Simulate deployment
+   xavva build --profile                  # Show performance profile
    xavva docker init && xavva docker up   # Docker setup
+   xavva tomcat install 10.1.52 --mirror auto   # Install with best mirror
+   xavva tomcat cache stats               # Show download cache stats
 
  ${c("gray", "Run 'xavva <command> --help' for detailed options")}
  ${c("gray", "Docs: github.com/leorsousa05/Xavva")}
@@ -74,6 +93,7 @@ export class HelpCommand implements Command {
             green: "\x1b[32m",
             yellow: "\x1b[33m",
             blue: "\x1b[34m",
+            magenta: "\x1b[35m",
             cyan: "\x1b[36m",
             brightMagenta: "\x1b[95m",
         };

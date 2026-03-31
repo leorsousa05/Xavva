@@ -3,16 +3,26 @@ import { BuildService } from "../src/services/BuildService";
 import { ProjectService } from "../src/services/ProjectService";
 import { BuildCacheService } from "../src/services/BuildCacheService";
 import type { ProjectConfig, TomcatConfig } from "../src/types/config";
-import { Logger } from "../src/utils/ui";
 
-// Mocking Logger to avoid noise
-mock.module("../src/utils/ui", () => ({
+// Mocking Logger do novo sistema
+mock.module("../src/logging", () => ({
     Logger: {
-        success: mock(() => {}),
-        error: mock(() => {}),
-        warn: mock(() => {}),
-        log: mock(() => {}),
-        spinner: mock(() => (() => {}))
+        getInstance: () => ({
+            success: mock(() => {}),
+            error: mock(() => {}),
+            warn: mock(() => {}),
+            info: mock(() => {}),
+            debug: mock(() => {}),
+            step: mock(() => {}),
+            spinner: mock(() => ({ stop: mock(() => {}), update: mock(() => {}) })),
+        })
+    },
+    Colors: {
+        success: '\x1b[32m',
+        error: '\x1b[31m',
+        warning: '\x1b[33m',
+        reset: '\x1b[0m',
+        gray: '\x1b[90m',
     }
 }));
 
@@ -29,9 +39,6 @@ describe("BuildService", () => {
         projectService = new ProjectService(projectConfig);
         cacheService = new BuildCacheService();
         buildService = new BuildService(projectConfig, tomcatConfig, projectService, cacheService);
-        
-        // Mock global Bun.spawn
-        // Note: Bun.spawn is a global, mocking it requires careful handling
     });
 
     test("deve chamar maven com os argumentos corretos para build completo", async () => {

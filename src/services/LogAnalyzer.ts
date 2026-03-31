@@ -1,8 +1,9 @@
-import { Logger } from "../utils/ui";
+import { Logger, Colors } from "../logging";
 import type { ProjectConfig } from "../types/config";
 
 export class LogAnalyzer {
     private projectPrefixes: string[] = [];
+    private logger = Logger.getInstance();
 
     constructor(private config: ProjectConfig) {
         // Tentamos inferir prefixos comuns do projeto. 
@@ -20,18 +21,18 @@ export class LogAnalyzer {
     }
 
     public summarize(line: string): string {
-        if (Logger.isSystemNoise(line)) return "";
+        if (line.includes("CATALINA") || line.includes("Using JRE_HOME") || line.includes("Using CLASSPATH")) return "";
 
         // Reuso da lógica existente no Logger.summarize, mas aprimorada
         const startupMatch = line.match(/Server startup in (\[?)(.*?)(\]?)\s*ms/);
         if (startupMatch) {
             const time = (parseInt(startupMatch[2]) / 1000).toFixed(1);
-            return `${Logger.C.green}✔ ${Logger.C.bold}Server started in ${time}s`;
+            return `${Colors.success}✔ ${Colors.bold}Servidor iniciado em ${time}s`;
         }
 
         const deployMatch = line.match(/Deployment of web application archive \[(.*?)\] has finished in \[(.*?)\] ms/);
         if (deployMatch) {
-            return `${Logger.C.green}✔ Artifacts deployed`;
+            return `${Colors.success}✔ Artefatos implantados`;
         }
 
         // Smart Folding para Stack Traces
@@ -40,7 +41,7 @@ export class LogAnalyzer {
         }
 
         if (line.includes("Caused by:")) {
-            return `${Logger.C.bgRed}${Logger.C.white}${Logger.C.bold} ROOT CAUSE ${Logger.C.reset} ${Logger.C.red}${line.trim()}${Logger.C.reset}`;
+            return `${Colors.bgRed}${Colors.white}${Colors.bold} CAUSA RAIZ ${Colors.reset} ${Colors.error}${line.trim()}${Colors.reset}`;
         }
 
         // Hotswap
@@ -66,7 +67,7 @@ export class LogAnalyzer {
 
         // Se a linha contém Exception mas não é o 'at ', destaca
         if (line.includes("Exception:")) {
-            return `${Logger.C.red}${Logger.C.bold}${line.trim()}${Logger.C.reset}`;
+            return `${Colors.error}${Colors.bold}${line.trim()}${Colors.reset}`;
         }
 
         return "";
@@ -77,9 +78,9 @@ export class LogAnalyzer {
         const isProject = this.projectPrefixes.some(p => trimmed.includes(p));
         
         if (isProject) {
-            return `    ${Logger.C.bold}${Logger.C.warning}${trimmed}${Logger.C.reset}`;
+            return `    ${Colors.bold}${Colors.warning}${trimmed}${Colors.reset}`;
         } else {
-            return `    ${Logger.C.dim}${trimmed}${Logger.C.reset}`;
+            return `    ${Colors.dim}${trimmed}${Colors.reset}`;
         }
     }
 
@@ -87,7 +88,10 @@ export class LogAnalyzer {
         const level = match[1];
         let msg = match[3];
 
-        if (msg.includes("plugin initialized")) return "";
+        // Ignora mensagens de plugin inicializado (são muito verbosas)
+        if (msg.toLowerCase().includes("plugin") && msg.toLowerCase().includes("initialized")) {
+            return "";
+        }
         
         if (msg.includes("redefinition") || msg.includes("reloaded") || level === 'RELOAD') {
             if (msg.includes("Reloading classes [")) {
@@ -95,26 +99,26 @@ export class LogAnalyzer {
                 const classCount = classes.split(",").length;
                 if (classCount > 3) msg = `Reloading ${classCount} classes...`;
             }
-            return `${Logger.C.magenta}👀 ${Logger.C.bold}Hotswap:${Logger.C.reset} ${msg.replace(/Class '.*?'/, (m) => Logger.C.bold + m + Logger.C.reset)}`;
+            return `${Colors.magenta}👀 ${Colors.bold}Hotswap:${Colors.reset} ${msg.replace(/Class '.*?'/, (m) => Colors.bold + m + Colors.reset)}`;
         }
 
-        let color = Logger.C.primary;
+        let color = Colors.primary;
         let symbol = "●";
-        if (level === "WARN") { color = Logger.C.warning; symbol = "▲"; }
-        else if (level === "ERROR") { color = Logger.C.red; symbol = "✖"; }
+        if (level === "WARN") { color = Colors.warning; symbol = "▲"; }
+        else if (level === "ERROR") { color = Colors.error; symbol = "✖"; }
         
-        return `${color}${symbol} ${Logger.C.bold}Hotswap:${Logger.C.reset} ${msg}`;
+        return `${color}${symbol} ${Colors.bold}Hotswap:${Colors.reset} ${msg}`;
     }
 
     private formatTomcatLine(match: RegExpMatchArray): string {
         const label = match[2];
         let msg = match[4].trim();
-        if (Logger.isSystemNoise(msg)) return "";
+        if (msg.includes("CATALINA") || msg.includes("Using JRE_HOME")) return "";
         
-        let color = Logger.C.dim;
+        let color = Colors.dim;
         let symbol = "ℹ";
-        if (label === "WARNING") { color = Logger.C.warning; symbol = "▲"; }
-        else if (label === "SEVERE" || label === "ERROR") { color = Logger.C.red; symbol = "✖"; }
+        if (label === "WARNING") { color = Colors.warning; symbol = "▲"; }
+        else if (label === "SEVERE" || label === "ERROR") { color = Colors.error; symbol = "✖"; }
         
         msg = msg.replace(/^(org\.apache|com\.sun|java\..*?|org\.glassfish)\.[a-zA-Z0-9.]+\s/, "").trim();
         if (!msg) return "";
@@ -127,13 +131,13 @@ export class LogAnalyzer {
         let msg = match[2].trim();
         if (msg.includes("Total time:") || msg.includes("Finished at:") || msg.includes("Final Memory:") || msg.includes("-----------------------")) return "";
         
-        let color = Logger.C.dim;
+        let color = Colors.dim;
         let symbol = "ℹ";
-        if (label === "WARNING" || label === "WARN") { color = Logger.C.warning; symbol = "▲"; }
-        else if (label === "SEVERE" || label === "ERROR") { color = Logger.C.red; symbol = "✖"; }
+        if (label === "WARNING" || label === "WARN") { color = Colors.warning; symbol = "▲"; }
+        else if (label === "SEVERE" || label === "ERROR") { color = Colors.error; symbol = "✖"; }
         
         msg = msg.replace(/^(org\.apache|com\.sun|java\..*?)\.[a-zA-Z0-9.]+\s/, "").trim();
-        if (!msg || msg === "]" || msg.includes("Compilation failure")) return "";
+        if (!msg || msg === "]") return "";
         
         return `${color}${symbol} ${msg}`;
     }

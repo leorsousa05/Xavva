@@ -1,6 +1,6 @@
 {
 	"name": "@archznn/xavva",
-	"version": "3.1.3",
+	"version": "3.2.0",
 	"description": "Ultra-fast CLI tool for Java/Tomcat development with Hot-Reload and Zero Config. Supports Windows, Linux and macOS.",
 	"module": "src/index.ts",
 	"type": "module",
@@ -43,6 +43,7 @@
 	"dependencies": {
 		"@inquirer/prompts": "^8.3.2",
 		"glob": "^13.0.6",
-		"node-notifier": "^10.0.1"
+		"node-notifier": "^10.0.1",
+		"zod": "^4.3.6"
 	}
 }

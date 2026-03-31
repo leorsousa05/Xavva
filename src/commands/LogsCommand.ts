@@ -2,11 +2,13 @@ import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
 import { DashboardService } from "../services/DashboardService";
 import { LogAnalyzer } from "../services/LogAnalyzer";
-import { Logger } from "../utils/ui";
+import { Logger } from "../logging";
 import path from "path";
 import fs from "fs";
 
 export class LogsCommand implements Command {
+    private logger = Logger.getInstance();
+
     constructor(private dashboard?: DashboardService, private logAnalyzer?: LogAnalyzer) {}
 
     async execute(config: AppConfig, args?: CLIArguments): Promise<void> {
@@ -14,18 +16,18 @@ export class LogsCommand implements Command {
 
         if (!fs.existsSync(logPath)) {
             const errorMsg = `Arquivo de log não encontrado: ${logPath}`;
-            if (this.dashboard) this.dashboard.log(Logger.C.red + errorMsg);
-            else Logger.error(errorMsg);
+            if (this.dashboard) this.dashboard.log(errorMsg);
+            else this.logger.error(errorMsg);
             return;
         }
 
         const analyzer = this.logAnalyzer || new LogAnalyzer(config.project);
         const dashboard = this.dashboard || new DashboardService(config);
 
-        dashboard.setStatus("LOGGING", Logger.C.green);
+        dashboard.setStatus("LOGGING", "running");
         
         if (args?.grep) {
-            dashboard.log(`${Logger.C.dim}Filter:${Logger.C.reset} ${Logger.C.bold}${args.grep}${Logger.C.reset}`);
+            dashboard.log(`Filter: ${args.grep}`);
         }
 
         const stats = fs.statSync(logPath);
@@ -60,7 +62,7 @@ export class LogsCommand implements Command {
                     currentSize = newStats.size;
                 } else if (newStats.size < currentSize) {
                     currentSize = newStats.size;
-                    dashboard.log(Logger.C.warning + "Arquivo de log foi resetado/rotacionado.");
+                    dashboard.log("Arquivo de log foi resetado/rotacionado.");
                 }
             }
         });

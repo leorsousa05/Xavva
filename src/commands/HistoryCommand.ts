@@ -1,7 +1,7 @@
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
 import { HistoryService } from "../services/HistoryService";
-import { Logger } from "../utils/ui";
+import { Logger, C } from "../utils/ui";
 
 export class HistoryCommand implements Command {
     private historyService = new HistoryService();
@@ -33,13 +33,13 @@ export class HistoryCommand implements Command {
             const date = new Date(entry.timestamp);
             const time = date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
             const icon = entry.success 
-                ? `${Logger.C.success}✓${Logger.C.reset}` 
-                : `${Logger.C.error}✗${Logger.C.reset}`;
+                ? `${C.success}✓${C.reset}` 
+                : `${C.error}✗${C.reset}`;
             
             const args = entry.args.length > 0 ? entry.args.join(" ") : "";
-            const duration = entry.duration ? `${Logger.C.gray}(${entry.duration.toFixed(1)}s)${Logger.C.reset}` : "";
+            const duration = entry.duration ? `${C.gray}(${entry.duration.toFixed(1)}s)${C.reset}` : "";
             
-            Logger.log(`${Logger.C.gray}│${Logger.C.reset}  ${Logger.C.dim}${time}${Logger.C.reset} ${icon} ${Logger.C.white}xavva ${entry.command}${Logger.C.reset} ${Logger.C.gray}${args}${Logger.C.reset} ${duration}`);
+            Logger.log(`${C.gray}│${C.reset}  ${C.dim}${time}${C.reset} ${icon} ${C.white}xavva ${entry.command}${C.reset} ${C.gray}${args}${C.reset} ${duration}`);
         }
 
         Logger.endSection();

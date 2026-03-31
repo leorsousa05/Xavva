@@ -1,0 +1,46 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "xavva: build",
+            "type": "shell",
+            "command": "xavva build",
+            "group": "build",
+            "problemMatcher": [
+                "$javac"
+            ]
+        },
+        {
+            "label": "xavva: deploy",
+            "type": "shell",
+            "command": "xavva deploy",
+            "group": "build",
+            "problemMatcher": [
+                "$javac"
+            ]
+        },
+        {
+            "label": "xavva: dev",
+            "type": "shell",
+            "command": "xavva dev",
+            "group": "build",
+            "isBackground": true,
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "."
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".",
+                    "endsPattern": "."
+                }
+            }
+        },
+        {
+            "label": "xavva: test",
+            "type": "shell",
+            "command": "xavva test",
+            "group": "test"
+        }
+    ]
+}

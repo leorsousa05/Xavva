@@ -15,6 +15,8 @@ import {
     TIMEOUT_SHUTDOWN_MS 
 } from "./constants";
 
+import { Logger } from "../logging";
+
 export type ExitCode = 
     | typeof EXIT_SUCCESS
     | typeof EXIT_GENERIC_ERROR
@@ -32,6 +34,7 @@ export class ProcessManager {
     private shutdownHandlers: Set<ShutdownHandler> = new Set();
     private isShuttingDown = false;
     private exitCode: ExitCode = 0;
+    private logger = Logger.getInstance();
 
     private constructor() {
         this.setupSignalHandlers();
@@ -85,19 +88,23 @@ export class ProcessManager {
         }
 
         // Executa handlers em paralelo com timeout
+        this.logger.debug("Iniciando graceful shutdown...");
+        
         const timeoutMs = TIMEOUT_SHUTDOWN_MS;
         const handlerPromises = Array.from(this.shutdownHandlers).map(async (handler) => {
             try {
                 const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Shutdown handler timeout')), timeoutMs)
+                    setTimeout(() => reject(new Error('Timeout do shutdown handler')), timeoutMs)
                 );
                 await Promise.race([handler(), timeoutPromise]);
             } catch (e) {
-                console.error('Erro em shutdown handler:', e);
+                this.logger.error(`Erro em shutdown handler: ${(e as Error).message}`);
             }
         });
 
         await Promise.all(handlerPromises);
+        
+        this.logger.debug(`Shutdown completo (exit code: ${this.exitCode})`);
 
         // Em ambiente de teste, não chama process.exit()
         if (process.env.NODE_ENV === 'test' || process.env.BUN_ENV === 'test') {
@@ -112,6 +119,8 @@ export class ProcessManager {
      * Use apenas em casos críticos onde não é seguro continuar.
      */
     exit(code: ExitCode): never {
+        this.logger.error(`Exit imediato solicitado (código: ${code})`);
+        
         if (process.env.NODE_ENV === 'test' || process.env.BUN_ENV === 'test') {
             throw new ProcessExitError(code);
         }
@@ -119,16 +128,23 @@ export class ProcessManager {
     }
 
     private setupSignalHandlers(): void {
-        process.on('SIGINT', () => this.shutdown(EXIT_SIGINT));
-        process.on('SIGTERM', () => this.shutdown(0));
+        process.on('SIGINT', () => {
+            this.logger.debug("SIGINT recebido");
+            this.shutdown(EXIT_SIGINT);
+        });
+        
+        process.on('SIGTERM', () => {
+            this.logger.debug("SIGTERM recebido");
+            this.shutdown(0);
+        });
         
         process.on('unhandledRejection', (reason, promise) => {
-            console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+            this.logger.error("Unhandled Rejection:", { reason: String(reason) });
             this.shutdown(1);
         });
 
         process.on('uncaughtException', (error) => {
-            console.error('Uncaught Exception:', error);
+            this.logger.error("Uncaught Exception:", { message: error.message, stack: error.stack });
             this.shutdown(1);
         });
     }
@@ -139,7 +155,7 @@ export class ProcessManager {
  */
 export class ProcessExitError extends Error {
     constructor(public readonly code: ExitCode) {
-        super(`Process exited with code ${code}`);
+        super(`Processo encerrou com código ${code}`);
         this.name = 'ProcessExitError';
     }
 }

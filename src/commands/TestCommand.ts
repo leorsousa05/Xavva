@@ -6,7 +6,7 @@
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
 import { TestService } from "../services/TestService";
-import { Logger } from "../utils/ui";
+import { Logger, C } from "../utils/ui";
 import { ProcessManager } from "../utils/processManager";
 
 export class TestCommand implements Command {
@@ -14,16 +14,16 @@ export class TestCommand implements Command {
 
     private showHelp(): void {
         Logger.section("Test Runner");
-        Logger.log(`${Logger.C.bold}Usage:${Logger.C.reset} xavva test [options] [filter]`);
+        Logger.log(`${C.bold}Usage:${C.reset} xavva test [options] [filter]`);
         Logger.newline();
-        Logger.log(`${Logger.C.bold}Options:${Logger.C.reset}`);
+        Logger.log(`${C.bold}Options:${C.reset}`);
         Logger.log(`  -w, --watch          Watch mode (run on file change)`);
         Logger.log(`      --coverage       Generate JaCoCo coverage report`);
         Logger.log(`      --fail-fast      Stop on first failure`);
         Logger.log(`      --parallel       Run tests in parallel`);
         Logger.log(`  -V, --verbose        Verbose output`);
         Logger.newline();
-        Logger.log(`${Logger.C.bold}Examples:${Logger.C.reset}`);
+        Logger.log(`${C.bold}Examples:${C.reset}`);
         Logger.log(`  xavva test                    # Run all tests`);
         Logger.log(`  xavva test --watch            # Watch mode`);
         Logger.log(`  xavva test --coverage         # With coverage`);

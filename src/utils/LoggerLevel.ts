@@ -1,4 +1,10 @@
-import { Logger } from "./ui";
+/**
+ * LoggerLevel - Adaptador para o novo sistema de logging
+ * 
+ * @deprecated Use o Logger de src/logging/ diretamente
+ */
+
+import { Logger } from "../logging";
 
 export type LogLevel = "silent" | "error" | "warn" | "info" | "verbose" | "trace" | "silly";
 
@@ -8,20 +14,28 @@ interface LogLevelConfig {
     prefix: string;
 }
 
+/**
+ * @deprecated Use Logger de src/logging/
+ * 
+ * LoggerLevel - Adaptador que delega para o novo sistema de logging
+ */
 export class LoggerLevel {
     private static currentLevel: LogLevel = "info";
+    private static logger = Logger.getInstance();
+    
     private static readonly levels: Record<LogLevel, LogLevelConfig> = {
         silent: { value: 0, color: "", prefix: "" },
-        error: { value: 1, color: Logger.C.error, prefix: "ERR" },
-        warn: { value: 2, color: Logger.C.warning, prefix: "WRN" },
-        info: { value: 3, color: Logger.C.info, prefix: "INF" },
-        verbose: { value: 4, color: Logger.C.primary, prefix: "VRB" },
-        trace: { value: 5, color: Logger.C.gray, prefix: "TRC" },
-        silly: { value: 6, color: Logger.C.darkGray, prefix: "SLY" },
+        error: { value: 1, color: Logger.getInstance()['config'].colors ? "\x1b[31m" : "", prefix: "ERR" },
+        warn: { value: 2, color: Logger.getInstance()['config'].colors ? "\x1b[33m" : "", prefix: "WRN" },
+        info: { value: 3, color: Logger.getInstance()['config'].colors ? "\x1b[34m" : "", prefix: "INF" },
+        verbose: { value: 4, color: Logger.getInstance()['config'].colors ? "\x1b[36m" : "", prefix: "VRB" },
+        trace: { value: 5, color: Logger.getInstance()['config'].colors ? "\x1b[90m" : "", prefix: "TRC" },
+        silly: { value: 6, color: Logger.getInstance()['config'].colors ? "\x1b[38;5;240m" : "", prefix: "SLY" },
     };
 
     static setLevel(level: LogLevel): void {
         this.currentLevel = level;
+        this.logger.setLevel(level);
     }
 
     static getLevel(): LogLevel {
@@ -35,17 +49,27 @@ export class LoggerLevel {
     private static log(level: LogLevel, message: string, ...args: unknown[]): void {
         if (!this.shouldLog(level)) return;
         
-        const config = this.levels[level];
         const formatted = args.length > 0 
             ? this.formatMessage(message, args)
             : message;
         
-        if (level === "error") {
-            Logger.error(formatted);
-        } else if (level === "warn") {
-            Logger.warn(formatted);
-        } else {
-            console.log(`${Logger.C.gray}│${Logger.C.reset}  ${config.color}[${config.prefix}]${Logger.C.reset} ${formatted}`);
+        switch (level) {
+            case "error":
+                this.logger.error(formatted);
+                break;
+            case "warn":
+                this.logger.warn(formatted);
+                break;
+            case "info":
+                this.logger.info(formatted);
+                break;
+            case "verbose":
+                this.logger.debug(formatted);
+                break;
+            case "trace":
+            case "silly":
+                this.logger.trace(formatted);
+                break;
         }
     }
 
@@ -87,13 +111,13 @@ export class LoggerLevel {
     // Utility methods for specific debug scenarios
     static debugCommand(command: string, args: string[]): void {
         if (this.shouldLog("verbose")) {
-            this.verbose("Executing: %1 %2", command, args.join(" "));
+            this.verbose("Executando: %1 %2", command, args.join(" "));
         }
     }
 
     static debugSpawn(cmd: string, options: Record<string, unknown>): void {
         if (this.shouldLog("trace")) {
-            this.trace("Spawn: %1 with options: %2", cmd, options);
+            this.trace("Spawn: %1 com opções: %2", cmd, options);
         }
     }
 
@@ -106,7 +130,7 @@ export class LoggerLevel {
 
     static debugFile(operation: string, path: string, details?: unknown): void {
         if (this.shouldLog("trace")) {
-            this.trace("File %1: %2 %3", operation, path, details || "");
+            this.trace("Arquivo %1: %2 %3", operation, path, details || "");
         }
     }
 
@@ -118,7 +142,7 @@ export class LoggerLevel {
 
     static debugPerformance(operation: string, durationMs: number): void {
         if (this.shouldLog("verbose")) {
-            this.verbose("Performance: %1 took %2ms", operation, durationMs);
+            this.verbose("Performance: %1 levou %2ms", operation, durationMs);
         }
     }
 
@@ -128,11 +152,11 @@ export class LoggerLevel {
         }
         
         const start = performance.now();
-        this.verbose("Timing started: %1", label);
+        this.verbose("Timing iniciado: %1", label);
         
         return () => {
             const duration = Math.round(performance.now() - start);
-            this.verbose("Timing ended: %1 took %2ms", label, duration);
+            this.verbose("Timing finalizado: %1 levou %2ms", label, duration);
         };
     }
 }

@@ -1,0 +1,67 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: bun-linux-x64
+            ext: ""
+          - os: windows-latest
+            target: bun-windows-x64
+            ext: ".exe"
+          - os: macos-latest
+            target: bun-macos-x64
+            ext: ""
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build binary
+        run: bun build --compile --minify --target ${{ matrix.target }} ./src/index.ts --outfile xavva${{ matrix.ext }}
+
+      - name: Test binary
+        run: ./xavva${{ matrix.ext }} --version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: xavva-${{ matrix.target }}
+          path: xavva${{ matrix.ext }}
+
+  release:
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            xavva-bun-linux-x64/xavva
+            xavva-bun-windows-x64/xavva.exe
+            xavva-bun-macos-x64/xavva
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

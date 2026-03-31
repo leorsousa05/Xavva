@@ -3,7 +3,7 @@
  * Similar ao Postman/curl mas integrado com o projeto
  */
 
-import { Logger } from "../utils/ui";
+import { Logger, C } from "../utils/ui";
 import type { ApiEndpoint } from "../types/endpoint";
 
 export interface HttpRequest {
@@ -195,12 +195,12 @@ export class HttpService {
     }
 
     private printResponse(res: HttpResponse): void {
-        const statusColor = res.status < 300 ? Logger.C.success 
-            : res.status < 400 ? Logger.C.warning 
-            : Logger.C.error;
+        const statusColor = res.status < 300 ? C.success 
+            : res.status < 400 ? C.warning 
+            : C.error;
 
         Logger.divider();
-        Logger.info("Status", `${statusColor}${res.status} ${res.statusText}${Logger.C.reset}`);
+        Logger.info("Status", `${statusColor}${res.status} ${res.statusText}${C.reset}`);
         Logger.info("Duration", `${res.duration}ms`);
         Logger.info("Size", `${this.formatBytes(res.size)}`);
 

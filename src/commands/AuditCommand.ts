@@ -3,13 +3,15 @@ import fs from "fs";
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
 import { AuditService, type JarAuditResult } from "../services/AuditService";
-import { Logger } from "../utils/ui";
+import { Logger } from "../logging";
 
 export class AuditCommand implements Command {
+    private logger = Logger.getInstance();
+
     constructor(private auditService: AuditService) {}
 
     async execute(config: AppConfig, args?: CLIArguments): Promise<void> {
-        Logger.section("Vulnerability & JAR Audit");
+        this.logger.section("Vulnerability & JAR Audit");
 
         let appName = args?.name || config.project.appName;
         
@@ -26,7 +28,7 @@ export class AuditCommand implements Command {
                 if (folders.length === 1) {
                     appName = folders[0].name;
                 } else if (folders.length > 1) {
-                    Logger.error("Vários apps encontrados no Tomcat:");
+                    this.logger.error("Vários apps encontrados no Tomcat:");
                     folders.forEach(f => console.log(`    ${"\x1b[90m"}➜${"\x1b[0m"} ${f.name}`));
                     console.log(`\n  Use ${"\x1b[33m"}xavva audit -n <nome>${"\x1b[0m"} para especificar.`);
                     return;
@@ -35,8 +37,8 @@ export class AuditCommand implements Command {
         }
 
         if (!appName) {
-            Logger.error("Não foi possível identificar o app automaticamente.");
-            Logger.warn("Certifique-se de que o projeto foi buildado ou use -n <nome>.");
+            this.logger.error("Não foi possível identificar o app automaticamente.");
+            this.logger.warn("Certifique-se de que o projeto foi buildado ou use -n <nome>.");
             return;
         }
 
@@ -45,11 +47,11 @@ export class AuditCommand implements Command {
             const vulnerable = results.filter(r => r.vulnerabilities.length > 0);
 
             if (vulnerable.length === 0) {
-                Logger.success(`Nenhuma vulnerabilidade conhecida encontrada em ${results.length} JARs.`);
+                this.logger.success(`Nenhuma vulnerabilidade conhecida encontrada em ${results.length} JARs.`);
                 return;
             }
 
-            Logger.warn(`Encontradas vulnerabilidades em ${vulnerable.length} de ${results.length} dependências.`);
+            this.logger.warn(`Encontradas vulnerabilidades em ${vulnerable.length} de ${results.length} dependências.`);
             console.log("");
 
             for (const res of vulnerable) {
@@ -57,12 +59,12 @@ export class AuditCommand implements Command {
             }
 
             const totalVulns = vulnerable.reduce((acc, r) => acc + r.vulnerabilities.length, 0);
-            Logger.info("Total de Falhas", totalVulns);
-            Logger.info("Relatório gerado via", "OSV.dev (Open Source Vulnerability Database)");
+            this.logger.config("Total de Falhas", totalVulns);
+            this.logger.config("Relatório gerado via", "OSV.dev (Open Source Vulnerability Database)");
 
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
-            Logger.error(message);
+            this.logger.error(message);
         }
     }
 

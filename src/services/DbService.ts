@@ -3,7 +3,7 @@
  * Suporta Flyway e Liquibase
  */
 
-import { Logger } from "../utils/ui";
+import { Logger } from "../logging";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -36,6 +36,7 @@ export interface MigrationResult {
 export class DbService {
     private buildTool: "maven" | "gradle";
     private projectPath: string;
+    private logger = Logger.getInstance();
 
     constructor(buildTool: "maven" | "gradle", projectPath: string = process.cwd()) {
         this.buildTool = buildTool;
@@ -82,15 +83,15 @@ export class DbService {
      */
     async migrate(config?: DbConfig): Promise<MigrationResult> {
         const tool = await this.detectTool();
-        Logger.section("Database Migration");
-        Logger.info("Tool", tool === "auto" ? "auto-detect" : tool);
+        this.logger.section("Database Migration");
+        this.logger.info(`Tool: ${tool === "auto" ? "auto-detect" : tool}`);
 
         if (tool === "auto") {
             return {
                 success: false,
-                message: "No migration tool detected. Please add Flyway or Liquibase to your project.",
+                message: "Nenhuma ferramenta de migração detectada. Adicione Flyway ou Liquibase ao projeto.",
                 migrationsApplied: 0,
-                errors: ["No migration tool found"]
+                errors: ["Nenhuma ferramenta de migração encontrada"]
             };
         }
 
@@ -98,7 +99,7 @@ export class DbService {
             ? await this.runFlywayMigrate(config)
             : await this.runLiquibaseUpdate(config);
 
-        Logger.endSection();
+        this.logger.newline();
         return result;
     }
 
@@ -107,12 +108,12 @@ export class DbService {
      */
     async status(config?: DbConfig): Promise<MigrationStatus[]> {
         const tool = await this.detectTool();
-        Logger.section("Migration Status");
-        Logger.info("Tool", tool);
+        this.logger.section("Migration Status");
+        this.logger.info(`Tool: ${tool}`);
 
         if (tool === "auto") {
-            Logger.warn("No migration tool detected");
-            Logger.endSection();
+            this.logger.warn("Nenhuma ferramenta de migração detectada");
+            this.logger.newline();
             return [];
         }
 
@@ -122,18 +123,18 @@ export class DbService {
 
         // Print status table
         if (statuses.length > 0) {
-            Logger.divider();
+            this.logger.divider();
             for (const status of statuses) {
-                const stateColor = status.state === "applied" ? Logger.C.success 
-                    : status.state === "failed" ? Logger.C.error 
-                    : Logger.C.warning;
-                Logger.info(status.version, `${stateColor}${status.state}${Logger.C.reset} - ${status.description}`);
+                const stateStr = status.state === "applied" ? "✓ aplicada" 
+                    : status.state === "failed" ? "✗ falhou" 
+                    : "⏳ pendente";
+                this.logger.info(`${status.version}: ${stateStr} - ${status.description}`);
             }
         } else {
-            Logger.info("Status", "No migrations found");
+            this.logger.info("Status: Nenhuma migração encontrada");
         }
 
-        Logger.endSection();
+        this.logger.newline();
         return statuses;
     }
 
@@ -141,8 +142,8 @@ export class DbService {
      * Reseta o banco (drop all + migrate)
      */
     async reset(config?: DbConfig): Promise<MigrationResult> {
-        Logger.section("Database Reset");
-        Logger.warn("This will DROP ALL DATA in the database!");
+        this.logger.section("Database Reset");
+        this.logger.warn("Isso vai APAGAR TODOS OS DADOS do banco!");
 
         const tool = await this.detectTool();
         
@@ -152,10 +153,10 @@ export class DbService {
             return await this.runLiquibaseDropAll(config);
         }
 
-        Logger.endSection();
+        this.logger.newline();
         return {
             success: false,
-            message: "No migration tool detected",
+            message: "Nenhuma ferramenta de migração detectada",
             migrationsApplied: 0,
             errors: []
         };
@@ -165,7 +166,7 @@ export class DbService {
      * Popula dados de teste/seed
      */
     async seed(config?: DbConfig, seedFile?: string): Promise<MigrationResult> {
-        Logger.section("Database Seed");
+        this.logger.section("Database Seed");
 
         // Procurar arquivos de seed
         const seedPaths = [
@@ -179,18 +180,18 @@ export class DbService {
         if (!seedPath) {
             return {
                 success: false,
-                message: "No seed file found. Create seed.sql in src/test/resources/ or project root.",
+                message: "Arquivo seed não encontrado. Crie seed.sql em src/test/resources/ ou raiz do projeto.",
                 migrationsApplied: 0,
-                errors: ["Seed file not found"]
+                errors: ["Arquivo seed não encontrado"]
             };
         }
 
-        Logger.info("Seed file", seedPath);
+        this.logger.info(`Seed file: ${seedPath}`);
 
         // Executar seed via JDBC ou comando SQL
         const result = await this.executeSeed(seedPath, config);
         
-        Logger.endSection();
+        this.logger.newline();
         return result;
     }
 
@@ -237,7 +238,7 @@ export class DbService {
                 : [process.platform === "win32" ? "gradle.bat" : "gradle", gradleTask, "-q"];
 
             const env = config ? this.buildEnv(config) : process.env;
-            const spinner = Logger.spinner("Running migrations");
+            const spinner = this.logger.spinner("Executando migrações");
 
             const child = spawn(cmd, args, {
                 cwd: this.projectPath,
@@ -252,13 +253,13 @@ export class DbService {
             child.stderr?.on("data", (data) => stderr += data.toString());
 
             child.on("close", (code) => {
-                spinner(code === 0);
+                spinner.stop(code === 0);
                 
                 if (code === 0) {
-                    Logger.success("Migrations completed successfully");
+                    this.logger.success("Migrações concluídas com sucesso");
                 } else {
-                    Logger.error("Migration failed");
-                    if (stderr) Logger.dim(stderr.slice(0, 500));
+                    this.logger.error("Falha na migração");
+                    if (stderr) this.logger.debug(stderr.slice(0, 500));
                 }
 
                 resolve({
@@ -304,9 +305,9 @@ export class DbService {
         const sql = fs.readFileSync(seedPath, "utf-8");
         const statements = sql.split(";").filter(s => s.trim());
 
-        Logger.info("Statements", statements.length);
-        Logger.success("Seed file ready for execution");
-        Logger.dim("Use your database client to execute the seed file");
+        this.logger.info(`Statements: ${statements.length}`);
+        this.logger.success("Arquivo seed pronto para execução");
+        this.logger.debug("Use seu cliente de banco de dados para executar o seed");
 
         return {
             success: true,

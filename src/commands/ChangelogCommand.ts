@@ -1,7 +1,7 @@
 import type { Command } from "./Command";
 import type { AppConfig, CLIArguments } from "../types/config";
 import { ChangelogGenerator } from "../utils/ChangelogGenerator";
-import { Logger } from "../utils/ui";
+import { Logger, C } from "../utils/ui";
 import { existsSync } from "fs";
 
 export class ChangelogCommand implements Command {
@@ -117,12 +117,12 @@ export class ChangelogCommand implements Command {
         Logger.info("Usage: xavva changelog <action> [options]");
         Logger.newline();
         Logger.log("Actions:");
-        Logger.log(`  ${Logger.C.primary}generate${Logger.C.reset}  Generate CHANGELOG.md (default)`);
-        Logger.log(`  ${Logger.C.primary}check${Logger.C.reset}     Validate conventional commits`);
-        Logger.log(`  ${Logger.C.primary}preview${Logger.C.reset}   Preview changelog without saving`);
+        Logger.log(`  ${C.primary}generate${C.reset}  Generate CHANGELOG.md (default)`);
+        Logger.log(`  ${C.primary}check${C.reset}     Validate conventional commits`);
+        Logger.log(`  ${C.primary}preview${C.reset}   Preview changelog without saving`);
         Logger.newline();
         Logger.log("Options:");
-        Logger.log(`  ${Logger.C.primary}-o, --output${Logger.C.reset}  Output file (default: CHANGELOG.md)`);
+        Logger.log(`  ${C.primary}-o, --output${C.reset}  Output file (default: CHANGELOG.md)`);
         Logger.done();
     }
 }
