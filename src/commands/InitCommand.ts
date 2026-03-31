@@ -212,13 +212,55 @@ export class InitCommand implements Command {
         if (!existsSync(srcDir)) return false;
 
         try {
-            // Procura arquivos que importam Spring Boot
-            const files = await readFile(srcDir, "utf-8");
-            // Simplificação - na prática usaria glob
+            // Procura recursivamente por arquivos .java
+            const javaFiles = this.findJavaFilesRecursive(srcDir);
+            
+            for (const file of javaFiles.slice(0, 50)) { // Limite para performance
+                try {
+                    const content = await readFile(file, "utf-8");
+                    // Verifica se contém @SpringBootApplication
+                    if (content.includes("@SpringBootApplication") ||
+                        content.includes("SpringApplication.run")) {
+                        // Extrai o nome da classe
+                        const classMatch = content.match(/class\s+(\w+)/);
+                        const packageMatch = content.match(/package\s+([\w.]+)/);
+                        
+                        if (classMatch) {
+                            const className = classMatch[1];
+                            const packageName = packageMatch ? packageMatch[1] : "";
+                            info.packageName = packageName;
+                            return true;
+                        }
+                    }
+                } catch {}
+            }
+            
             return false;
         } catch {
             return false;
         }
+    }
+
+    /**
+     * Encontra arquivos .java recursivamente
+     */
+    private findJavaFilesRecursive(dir: string): string[] {
+        const files: string[] = [];
+        
+        try {
+            const entries = fs.readdirSync(dir, { withFileTypes: true });
+            
+            for (const entry of entries) {
+                const fullPath = join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    files.push(...this.findJavaFilesRecursive(fullPath));
+                } else if (entry.name.endsWith(".java")) {
+                    files.push(fullPath);
+                }
+            }
+        } catch {}
+        
+        return files;
     }
 
     /**
@@ -439,6 +481,20 @@ export class InitCommand implements Command {
         await writeFile(configPath, JSON.stringify(config, null, 2));
 
         this.logger.success(`Configuração salva em ${configPath}`);
+        
+        // Mostra resumo do modo configurado
+        const executionMode = config.executionMode as string;
+        if (executionMode === "springboot") {
+            this.logger.info("Modo: Spring Boot");
+            if (config.springBoot && (config.springBoot as any).mainClass === "") {
+                this.logger.warn("⚠️  Classe principal não configurada");
+                this.logger.info("O Xavva tentará detectar automaticamente ou você pode configurar:");
+                console.log('  "springBoot": { "mainClass": "com.exemplo.MinhaAplicacao" }');
+            }
+        } else if (executionMode) {
+            this.logger.info(`Modo: ${executionMode}`);
+        }
+        
         this.logger.newline();
     }
 
@@ -472,13 +528,21 @@ export class InitCommand implements Command {
         console.log("  │   xavva health       # Verifica ambiente");
         console.log("  │   xavva --help       # Ajuda completa");
 
-        if (info.isSpringBoot && !info.hasApplicationClass) {
+        if (executionMode === "springboot" && !info.hasApplicationClass) {
             this.logger.newline();
-            this.logger.warn("⚠️  Não detectei a classe @SpringBootApplication");
-            this.logger.info("Adicione no xavva.json:");
+            this.logger.warn("⚠️  Spring Boot configurado, mas não encontrei a classe @SpringBootApplication");
+            this.logger.info("Isso pode acontecer se:");
+            console.log("  • A classe está em um diretório não padrão");
+            console.log("  • O projeto usa uma estrutura diferente");
+            console.log("  • A anotação tem um nome diferente");
+            this.logger.newline();
+            this.logger.info("Para configurar manualmente, edite o xavva.json:");
             console.log('  "springBoot": {');
-            console.log('    "mainClass": "com.example.MinhaAplicacao"');
+            console.log('    "mainClass": "com.seu.pacote.SuaAplicacao"');
             console.log('  }');
+        } else if (executionMode === "springboot" && info.hasApplicationClass) {
+            this.logger.newline();
+            this.logger.success("✓ Spring Boot configurado com sucesso!");
         }
 
         this.logger.newline();
