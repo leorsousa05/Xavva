@@ -24,6 +24,7 @@ export interface ProjectConfig {
     appName: string;
     buildTool: "maven" | "gradle";
     profile: string;
+    executionMode?: "springboot" | "embedded" | "external" | "war";
     skipBuild: boolean;
     skipScan: boolean;
     clean: boolean;
@@ -37,8 +38,14 @@ export interface ProjectConfig {
     encoding?: string;
     war?: boolean;
     cache?: boolean;
+    hotReload?: boolean;
     environment?: string;
     environments?: Record<string, EnvironmentConfig>;
+    springBoot?: {
+        mainClass?: string;
+        args?: string;
+        profile?: string;
+    };
 }
 
 export interface AppConfig {

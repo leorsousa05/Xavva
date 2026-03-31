@@ -280,6 +280,10 @@ export class ConfigManager {
                 cache: !!(cli.cache ?? file.cache),
                 environment,
                 environments: (file as any).environments,
+                // Novos campos para Spring Boot
+                executionMode: (file as any).executionMode || "embedded",
+                springBoot: (file as any).springBoot,
+                hotReload: (file as any).hotReload ?? true,
             },
         };
     }
