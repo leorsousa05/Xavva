@@ -97,13 +97,17 @@ export class RunCommand implements Command {
 
         javaArgs.push(className);
 
+        // Gerenciamento do debug attachment
         if (isDebug && !attachLater) {
             if (waitSeconds > 0) {
+                // Modo countdown: espera N segundos
                 await this.waitCountdown(waitSeconds);
-            } else if (usePrompt || true) {
+            } else {
+                // Modo prompt: espera ENTER (padrão ou explicitamente com --prompt)
                 await this.waitForPrompt();
             }
-        } else {
+        } else if (!isDebug && !attachLater) {
+            // Modo normal sem debug
             this.logger.warn(`🚀 Executando ${className}...`);
         }
 
@@ -321,21 +325,25 @@ export class RunCommand implements Command {
      * Aguarda usuário pressionar ENTER
      */
     private async waitForPrompt(): Promise<void> {
-        this.logger.warn(`🚀 Debugger configurado na porta 5005`);
-        this.logger.info("Dica: No VS Code ou IntelliJ, use 'Attach to Remote JVM' na porta 5005.");
+        this.logger.warn(`🚀 Modo debug ativado na porta 5005`);
+        this.logger.info("Configure seu IDE para 'Attach to Remote JVM' na porta 5005");
         this.logger.newline();
 
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout
-        });
-
         return new Promise((resolve) => {
-            rl.question("  Pressione ENTER depois de conectar o debugger...", () => {
-                rl.close();
-                this.logger.newline();
-                resolve();
-            });
+            // Usa process.stdin diretamente para maior compatibilidade
+            process.stdout.write("  Pressione ENTER depois de conectar o debugger... ");
+            
+            const onData = (data: Buffer) => {
+                const input = data.toString().trim();
+                if (input === "" || input === "\n" || input === "\r\n") {
+                    process.stdin.removeListener("data", onData);
+                    process.stdin.setRawMode && process.stdin.setRawMode(false);
+                    this.logger.newline();
+                    resolve();
+                }
+            };
+            
+            process.stdin.on("data", onData);
         });
     }
 
