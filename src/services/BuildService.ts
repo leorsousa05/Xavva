@@ -87,9 +87,21 @@ export class BuildService {
 			// Sempre define encoding para evitar erros
 			command.push(`-Dproject.build.sourceEncoding=${encoding}`);
 			command.push(`-Dproject.reporting.outputEncoding=${encoding}`);
+			command.push(`-Dmaven.resources.encoding=${encoding}`);
+			command.push(`-Dfile.encoding=${encoding}`);
+			command.push(`-Dsun.jnu.encoding=${encoding}`);
+			command.push(`-Dsun.stdout.encoding=${encoding}`);
+			command.push(`-Dsun.stderr.encoding=${encoding}`);
+			command.push(`-Dnative.encoding=${encoding}`);
+			
+			// Desabilita filtering de resources para evitar erros de encoding em arquivos XML
+			command.push(`-Dmaven.resources.filtering=false`);
 
 			// MAVEN_OPTS com encoding e memory settings
-			env.MAVEN_OPTS = `-Xms512m -Xmx1024m -XX:+UseParallelGC -Dfile.encoding=${encoding}`;
+			env.MAVEN_OPTS = `-Xms512m -Xmx1024m -XX:+UseParallelGC -Dfile.encoding=${encoding} -Dsun.jnu.encoding=${encoding}`;
+			
+			// Define encoding no ambiente para garantir consistência
+			env.JAVA_TOOL_OPTIONS = `-Dfile.encoding=${encoding} -Dsun.jnu.encoding=${encoding}`;
 		} else {
 			command.push(process.platform === "win32" ? "gradle.bat" : "gradle");
 			if (incremental || isSpringBoot) {
