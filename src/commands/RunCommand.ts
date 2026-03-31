@@ -329,21 +329,22 @@ export class RunCommand implements Command {
         this.logger.info("Configure seu IDE para 'Attach to Remote JVM' na porta 5005");
         this.logger.newline();
 
+        // Limpa qualquer input residual no stdin (ex: do discoverClass)
+        if (process.stdin.isTTY) {
+            process.stdin.setRawMode && process.stdin.setRawMode(false);
+        }
+        
         return new Promise((resolve) => {
-            // Usa process.stdin diretamente para maior compatibilidade
-            process.stdout.write("  Pressione ENTER depois de conectar o debugger... ");
-            
-            const onData = (data: Buffer) => {
-                const input = data.toString().trim();
-                if (input === "" || input === "\n" || input === "\r\n") {
-                    process.stdin.removeListener("data", onData);
-                    process.stdin.setRawMode && process.stdin.setRawMode(false);
-                    this.logger.newline();
-                    resolve();
-                }
-            };
-            
-            process.stdin.on("data", onData);
+            const rl = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout
+            });
+
+            rl.question("  Pressione ENTER depois de conectar o debugger... ", () => {
+                rl.close();
+                this.logger.newline();
+                resolve();
+            });
         });
     }
 

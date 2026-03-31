@@ -126,8 +126,10 @@ async function main() {
         registry.register("ide", commands.ide);
 
         // Configura flags específicas
+        // Comando 'debug' sempre ativa modo debug
         if (commandName === "debug") values.debug = true;
-        if (commandName === "run") values.debug = false;
+        // Comando 'run' só ativa debug se --debug for passado explicitamente
+        // Não sobrescreve values.debug para permitir 'xavva run --debug'
 
         // Registra comando no histórico antes da execução
         const startTime = Date.now();
