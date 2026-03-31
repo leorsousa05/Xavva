@@ -6,6 +6,7 @@ import fs from "fs";
 import { glob } from "glob";
 import readline from "readline";
 import { BuildService } from "../services/BuildService";
+import { BuildCacheService } from "../services/BuildCacheService";
 import {
     getJavaPath,
     getMavenCommand,
@@ -15,13 +16,30 @@ import {
     isWindows,
 } from "../utils/platform";
 
+interface CompilationCheck {
+    needsCompile: boolean;
+    reason: string;
+    changedFiles: string[];
+}
+
 export class RunCommand implements Command {
     private logger = Logger.getInstance();
+    private buildCache: BuildCacheService;
 
-    constructor(private buildService?: BuildService) {}
+    constructor(private buildService?: BuildService) {
+        this.buildCache = new BuildCacheService();
+    }
 
     async execute(config: AppConfig, args?: CLIArguments): Promise<void> {
-        const isDebug = args?.debug !== false; // Default to true if not specified, matching previous behavior
+        const isDebug = args?.debug !== false;
+        const attachLater = args?.["attach-later"] === true;
+        const waitSeconds = args?.wait ? parseInt(args.wait) : 0;
+        const usePrompt = args?.prompt === true;
+        
+        // Opções de build
+        const fastMode = args?.fast === true || args?.["no-build"] === true;
+        const forceBuild = args?.build === true;
+        
         let className = config.project.grep;
         
         if (!className) {
@@ -46,8 +64,8 @@ export class RunCommand implements Command {
             this.logger.section(`Running: ${className}`);
         }
         
-        // Verifica se as classes estão compiladas, se não, compila
-        await this.ensureCompiled(config);
+        // Verifica/compila conforme modo
+        await this.handleCompilation(config, { fastMode, forceBuild });
         
         const { localCp, dependencyCp } = await this.getClasspath(config);
         const pathingJar = await this.createPathingJar(dependencyCp);
@@ -64,15 +82,27 @@ export class RunCommand implements Command {
         }
 
         if (isDebug) {
-            javaArgs.push("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005");
+            let debugOptions: string;
+            
+            if (attachLater) {
+                debugOptions = "transport=dt_socket,server=y,suspend=n,address=5005";
+                this.logger.info("Modo attach-later: aplicação vai iniciar imediatamente");
+                this.logger.info("Você pode conectar o debugger a qualquer momento na porta 5005");
+            } else {
+                debugOptions = "transport=dt_socket,server=y,suspend=y,address=5005";
+            }
+            
+            javaArgs.push(`-agentlib:jdwp=${debugOptions}`);
         }
 
         javaArgs.push(className);
 
-        if (isDebug) {
-            this.logger.warn(`🚀 Aguardando debugger na porta 5005 para ${className}...`);
-            console.log(`Dica: No VS Code ou IntelliJ, use 'Attach to Remote JVM' na porta 5005.`);
-            this.logger.newline();
+        if (isDebug && !attachLater) {
+            if (waitSeconds > 0) {
+                await this.waitCountdown(waitSeconds);
+            } else if (usePrompt || true) {
+                await this.waitForPrompt();
+            }
         } else {
             this.logger.warn(`🚀 Executando ${className}...`);
         }
@@ -91,6 +121,231 @@ export class RunCommand implements Command {
 
         await proc.exited;
         this.logger.info(`Sessão de ${isDebug ? "debug" : "execução"} encerrada.`);
+    }
+
+    /**
+     * Gerencia compilação com base nas opções
+     */
+    private async handleCompilation(
+        config: AppConfig, 
+        options: { fastMode: boolean; forceBuild: boolean }
+    ): Promise<void> {
+        const { fastMode, forceBuild } = options;
+
+        // Modo fast: pula compilação completamente
+        if (fastMode) {
+            this.logger.info("Modo fast: pulando verificação de compilação");
+            return;
+        }
+
+        // Forçar build
+        if (forceBuild) {
+            this.logger.step("Forçando compilação...");
+            await this.runCompilation(config);
+            return;
+        }
+
+        // Verificação inteligente padrão
+        const check = await this.checkCompilationNeeded(config);
+        
+        if (!check.needsCompile) {
+            this.logger.success(`✓ ${check.reason}`);
+            return;
+        }
+
+        if (check.changedFiles.length > 0) {
+            this.logger.info(`Arquivos modificados: ${check.changedFiles.length}`);
+            if (check.changedFiles.length <= 5) {
+                check.changedFiles.forEach(f => {
+                    this.logger.info(`  • ${path.basename(f)}`);
+                });
+            }
+        }
+
+        await this.runCompilation(config);
+    }
+
+    /**
+     * Verifica se compilação é necessária comparando timestamps
+     */
+    private async checkCompilationNeeded(config: AppConfig): Promise<CompilationCheck> {
+        const srcDirs = this.getSourceDirectories();
+        const outputDirs = this.getOutputDirectories(config);
+
+        // Se não existe diretório de saída, precisa compilar
+        const hasOutput = outputDirs.some(dir => fs.existsSync(dir));
+        if (!hasOutput) {
+            return {
+                needsCompile: true,
+                reason: "Diretório de classes não existe",
+                changedFiles: []
+            };
+        }
+
+        // Verifica timestamp dos arquivos fonte vs classes
+        const changedFiles: string[] = [];
+        let maxClassTimestamp = 0;
+
+        // Encontra o timestamp mais recente dos arquivos .class
+        for (const outDir of outputDirs) {
+            if (fs.existsSync(outDir)) {
+                const classes = this.findFiles(outDir, ".class");
+                for (const cls of classes.slice(0, 100)) { // Limite para performance
+                    try {
+                        const stat = fs.statSync(cls);
+                        if (stat.mtimeMs > maxClassTimestamp) {
+                            maxClassTimestamp = stat.mtimeMs;
+                        }
+                    } catch {}
+                }
+            }
+        }
+
+        // Verifica se algum .java é mais novo que as classes
+        for (const srcDir of srcDirs) {
+            if (fs.existsSync(srcDir)) {
+                const javaFiles = this.findFiles(srcDir, ".java");
+                for (const javaFile of javaFiles) {
+                    try {
+                        const stat = fs.statSync(javaFile);
+                        if (stat.mtimeMs > maxClassTimestamp) {
+                            changedFiles.push(javaFile);
+                        }
+                    } catch {}
+                }
+            }
+        }
+
+        if (changedFiles.length === 0) {
+            return {
+                needsCompile: false,
+                reason: "Nenhuma alteração desde última compilação",
+                changedFiles: []
+            };
+        }
+
+        return {
+            needsCompile: true,
+            reason: `${changedFiles.length} arquivo(s) modificado(s)`,
+            changedFiles
+        };
+    }
+
+    /**
+     * Retorna diretórios de código fonte
+     */
+    private getSourceDirectories(): string[] {
+        return [
+            path.join(process.cwd(), "src/main/java"),
+            path.join(process.cwd(), "src/test/java"),
+            path.join(process.cwd(), "src"),
+        ];
+    }
+
+    /**
+     * Retorna diretórios de saída (classes compiladas)
+     */
+    private getOutputDirectories(config: AppConfig): string[] {
+        if (config.project.buildTool === "maven") {
+            return [
+                path.join(process.cwd(), "target/classes"),
+                path.join(process.cwd(), "target/test-classes"),
+            ];
+        } else if (config.project.buildTool === "gradle") {
+            return [
+                path.join(process.cwd(), "build/classes/java/main"),
+                path.join(process.cwd(), "build/classes/java/test"),
+                path.join(process.cwd(), "build/classes/kotlin/main"),
+            ];
+        }
+        return [path.join(process.cwd(), "bin"), path.join(process.cwd(), "target/classes")];
+    }
+
+    /**
+     * Encontra arquivos recursivamente
+     */
+    private findFiles(dir: string, extension: string): string[] {
+        try {
+            const pattern = path.join(dir, "**", `*${extension}`).replace(/\\/g, "/");
+            return glob.sync(pattern);
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Executa compilação
+     */
+    private async runCompilation(config: AppConfig): Promise<void> {
+        if (this.buildService) {
+            this.logger.step("Compilando projeto...");
+            await this.buildService.runBuild(true); // incremental
+        } else {
+            this.logger.step("Compilando projeto...");
+            const buildCmd = config.project.buildTool === "maven" 
+                ? [getMavenCommand(), "compile", "-DskipTests"] 
+                : [getGradleCommand(), "classes", "-x", "test"];
+            
+            const spinner = this.logger.spinner("Compilando");
+            const proc = Bun.spawn(buildCmd, {
+                stdout: "pipe",
+                stderr: "pipe",
+            });
+            
+            await proc.exited;
+            spinner.stop();
+            
+            if (proc.exitCode !== 0) {
+                throw new Error("Falha ao compilar o projeto. Verifique os erros acima.");
+            }
+        }
+    }
+
+    /**
+     * Aguarda countdown com mensagem visual
+     */
+    private async waitCountdown(seconds: number): Promise<void> {
+        this.logger.warn(`🚀 Aguardando ${seconds} segundos para conectar o debugger...`);
+        this.logger.info("Dica: No VS Code ou IntelliJ, use 'Attach to Remote JVM' na porta 5005.");
+        this.logger.newline();
+
+        for (let i = seconds; i > 0; i--) {
+            process.stdout.write(`\r  ${this.getSpinnerFrame(i)} Conecte o debugger agora... ${i}s `);
+            await this.sleep(1000);
+        }
+        process.stdout.write("\r  ✓ Iniciando aplicação...                    \n");
+        this.logger.newline();
+    }
+
+    /**
+     * Aguarda usuário pressionar ENTER
+     */
+    private async waitForPrompt(): Promise<void> {
+        this.logger.warn(`🚀 Debugger configurado na porta 5005`);
+        this.logger.info("Dica: No VS Code ou IntelliJ, use 'Attach to Remote JVM' na porta 5005.");
+        this.logger.newline();
+
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+
+        return new Promise((resolve) => {
+            rl.question("  Pressione ENTER depois de conectar o debugger...", () => {
+                rl.close();
+                this.logger.newline();
+                resolve();
+            });
+        });
+    }
+
+    private getSpinnerFrame(index: number): string {
+        const frames = ["◐", "◓", "◑", "◒"];
+        return frames[index % frames.length];
+    }
+
+    private sleep(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     private async discoverClass(simpleName: string): Promise<string | null> {
@@ -242,7 +497,6 @@ export class RunCommand implements Command {
         const relativePaths = paths.map(p => {
             let rel = normalizeClasspathPath(path.relative(xavvaDir, p));
             if (fs.existsSync(p) && fs.statSync(p).isDirectory() && !rel.endsWith("/")) rel += "/";
-            // Robust URL encoding for Class-Path as per Java Spec
             return encodeURI(rel)
                 .replace(/#/g, '%23')
                 .replace(/\?/g, '%3F')
@@ -259,15 +513,12 @@ export class RunCommand implements Command {
         for (let i = 0; i < parts.length; i++) {
             const part = parts[i] + (i < parts.length - 1 ? " " : "");
             
-            // Se adicionar o próximo 'part' exceder 70 bytes (margem de segurança antes do CRLF)
             if (Buffer.from(currentLine + part).length > 70) {
-                // Se a parte em si for muito longa, precisamos quebrá-la
                 if (Buffer.from(" " + part).length > 70) {
                     let remainingPart = part;
                     while (remainingPart.length > 0) {
                         const spaceLeft = 70 - Buffer.from(currentLine).length;
                         
-                        // Encontra quantos caracteres de 'remainingPart' cabem no espaço restante
                         let fitCount = 0;
                         let fitBytes = 0;
                         for (let j = 0; j < remainingPart.length; j++) {
@@ -304,38 +555,6 @@ export class RunCommand implements Command {
         return jarPath;
     }
 
-    /**
-     * Verifica se as classes compiladas existem, se não, executa o build
-     * Usa build incremental (apenas compile, sem clean) para evitar conflitos
-     * com o Tomcat que pode estar rodando e usando arquivos em target/
-     */
-    private async ensureCompiled(config: AppConfig): Promise<void> {
-        // Usa build incremental (sem clean) para evitar problemas quando Tomcat está rodando
-        if (this.buildService) {
-            this.logger.step("Compilando projeto...");
-            await this.buildService.runBuild(true); // true = incremental, sem clean
-        } else {
-            // Fallback: executa build via comando direto (apenas compile, sem clean)
-            this.logger.step("Compilando projeto (fallback)...");
-            const buildCmd = config.project.buildTool === "maven" 
-                ? [getMavenCommand(), "compile", "-DskipTests"] 
-                : [getGradleCommand(), "classes", "-x", "test"];
-            
-            const spinner = this.logger.spinner("Compilando");
-            const proc = Bun.spawn(buildCmd, {
-                stdout: "pipe",
-                stderr: "pipe",
-            });
-            
-            await proc.exited;
-            spinner.stop();
-            
-            if (proc.exitCode !== 0) {
-                throw new Error("Falha ao compilar o projeto. Verifique os erros acima.");
-            }
-        }
-    }
-
     private async getClasspath(config: AppConfig): Promise<{ localCp: string, dependencyCp: string }> {
         const xavvaDir = path.join(process.cwd(), ".xavva");
         const cpFile = path.join(xavvaDir, "classpath.txt");
@@ -369,7 +588,7 @@ export class RunCommand implements Command {
                                 }
                             }
                         }
-                    `.trim().replace(/^ {24}/gm, ""); // Remove excess indentation
+                    `.trim().replace(/^ {24}/gm, "");
                     fs.writeFileSync(initScriptPath, initScriptContent);
                     Bun.spawnSync([gradleCmd, "-q", "printClasspath", "-I", initScriptPath]);
                     if (fs.existsSync(initScriptPath)) fs.unlinkSync(initScriptPath);
@@ -384,7 +603,6 @@ export class RunCommand implements Command {
 
         let dependencyCp = fs.existsSync(cpFile) ? fs.readFileSync(cpFile, "utf8").trim() : "";
         
-        // Normalize platform specific separators para o separador consistente
         const sep = getClasspathSeparator();
         if (path.delimiter !== sep) {
             dependencyCp = dependencyCp.split(path.delimiter).join(sep);

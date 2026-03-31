@@ -106,6 +106,14 @@ export interface CLIArguments {
     detached?: boolean;
     registry?: string;
     namespace?: string;
+    // Debug options
+    "attach-later"?: boolean;
+    wait?: string;
+    prompt?: boolean;
+    // Build options for run command
+    fast?: boolean;
+    "no-build"?: boolean;
+    build?: boolean;
 }
 
 export interface CommandContext {

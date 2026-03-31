@@ -161,6 +161,55 @@ eval "$(xavva completion bash)"
 | `xavva run <class>`   | Execute a Java class with automatic classpath |
 | `xavva debug <class>` | Debug a Java class (port 5005)                |
 
+#### Debug Options
+
+When running with `--debug`, you can control how the debugger attaches:
+
+```bash
+# Default mode - waits for you to press ENTER after connecting debugger
+xavva debug MinhaClasse
+
+# Wait mode - countdown timer before starting (gives you time to connect)
+xavva debug MinhaClasse --wait 5
+
+# Prompt mode - explicitly wait for ENTER key (useful in scripts)
+xavva debug MinhaClasse --prompt
+
+# Attach-later mode - start immediately, debug whenever you want
+xavva run MinhaClasse --attach-later
+```
+
+**Tip:** In VS Code, use "Attach to Remote JVM" on port 5005. In IntelliJ, use "Remote JVM Debug" configuration.
+
+#### Build Options
+
+Control compilation behavior when running classes:
+
+```bash
+# Default - smart compilation check (compares .java vs .class timestamps)
+xavva run MinhaClasse
+# → ✓ Nenhuma alteração desde última compilação (skips build)
+# ou
+# → Compilando projeto... (builds only if needed)
+
+# Fast mode - skip compilation check entirely
+xavva run MinhaClasse --fast
+# → Executando imediatamente (fastest)
+
+# Force rebuild - compile even if not needed
+xavva run MinhaClasse --build
+# → Compilando projeto... (always builds)
+
+# No-build alias (same as --fast)
+xavva run MinhaClasse --no-build
+```
+
+**How it works:**
+- Compares timestamps of `.java` files vs `.class` files
+- Only compiles if source files are newer than compiled classes
+- Lists modified files when compilation is needed
+- Supports both Maven and Gradle projects
+
 ### Analysis & Monitoring
 
 | Command          | Description                                               |

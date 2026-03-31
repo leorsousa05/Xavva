@@ -77,6 +77,11 @@ export class HelpCommand implements Command {
    xavva docker init && xavva docker up   # Docker setup
    xavva tomcat install 10.1.52 --mirror auto   # Install with best mirror
    xavva tomcat cache stats               # Show download cache stats
+   xavva run MinhaClasse --debug --wait 5       # Debug with 5s countdown
+   xavva run MinhaClasse --debug --prompt       # Debug, wait for ENTER
+   xavva run MinhaClasse --attach-later         # Run then attach debugger
+   xavva run MinhaClasse --fast           # Skip compilation check (fast)
+   xavva run MinhaClasse --build          # Force recompilation
 
  ${c("gray", "Run 'xavva <command> --help' for detailed options")}
  ${c("gray", "Docs: github.com/leorsousa05/Xavva")}
