@@ -160,7 +160,6 @@ export class DeployCommand implements Command {
 	 */
 	private async executeSpringBoot(config: AppConfig, args?: CLIArguments): Promise<void> {
 		const isWatching = !!args?.watch;
-		const builder = this.builder;
 		
 		this.logger.section("Spring Boot Development");
 		this.logger.newline();
@@ -172,10 +171,10 @@ export class DeployCommand implements Command {
 		const operation = new OperationLogger('springboot');
 		operation.start('Iniciando Spring Boot');
 
-		// Build
+		// Build específico para Spring Boot (sem war:exploded)
 		if (!config.project.skipBuild) {
 			const buildStep = operation.step('build', 'Compilando projeto...');
-			await builder.runBuild(false);
+			await this.buildSpringBoot(config);
 			buildStep.success('Compilação concluída');
 		}
 
@@ -192,6 +191,67 @@ export class DeployCommand implements Command {
 		}
 		
 		runStep.success('Aplicação iniciada');
+	}
+
+	/**
+	 * Build específico para Spring Boot (sem gerar WAR)
+	 */
+	private async buildSpringBoot(config: AppConfig): Promise<void> {
+		const { getMavenCommand, getGradleCommand } = await import('../utils/platform');
+		
+		const env = { ...process.env };
+		if (config.project.encoding) {
+			env.MAVEN_OPTS = `${env.MAVEN_OPTS || ''} -Dfile.encoding=${config.project.encoding}`;
+		}
+
+		if (config.project.buildTool === 'maven') {
+			const args = [
+				getMavenCommand(),
+				'compile',
+				'-DskipTests',
+				'-Dmaven.test.skip=true'
+			];
+			
+			if (config.project.profile) {
+				args.push(`-P${config.project.profile}`);
+			}
+			
+			if (config.project.encoding) {
+				args.push(`-Dproject.build.sourceEncoding=${config.project.encoding}`);
+			}
+
+			const proc = Bun.spawn(args, {
+				stdout: 'inherit',
+				stderr: 'inherit',
+				env
+			});
+
+			const exitCode = await proc.exited;
+			if (exitCode !== 0) {
+				throw new Error(`Maven build falhou com código ${exitCode}`);
+			}
+		} else {
+			const args = [
+				getGradleCommand(),
+				'classes',
+				'-x', 'test'
+			];
+			
+			if (config.project.profile) {
+				args.push(`-Pprofile=${config.project.profile}`);
+			}
+
+			const proc = Bun.spawn(args, {
+				stdout: 'inherit',
+				stderr: 'inherit',
+				env
+			});
+
+			const exitCode = await proc.exited;
+			if (exitCode !== 0) {
+				throw new Error(`Gradle build falhou com código ${exitCode}`);
+			}
+		}
 	}
 
 	/**
